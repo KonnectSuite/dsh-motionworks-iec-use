@@ -1620,7 +1620,18 @@ function defineTools() {
         + 'mw_code_pou_create is not assigned to anything, so without this it is inert: nothing '
         + 'calls it and a clean build says nothing about whether it is correct. Task names come '
         + 'from mw_code_tasks (for example Start, FastTsk, MedTsk, SlowTsk, BG). '
-        + '**dry_run defaults to true.**',
+        + '**dry_run defaults to true.**'
+        + 'REFUSED, on measurement. Writing the instance node into PROJECT.TRE makes the '
+        + 'IDE rewrite the tree at open and lose a line from each of the Start, '
+        + 'Global_Variables and IO_Configuration blocks - three malformed nodes, then '
+        + '125 No-matching-global-variable errors, because the Globals node is gone and '
+        + 'the compiler has no global table. Writing only NODES.LST does no harm but the '
+        + 'IDE discards the assignment, so the tool would report success for an effect '
+        + 'that does not persist. Add the program to the task in the MotionWorks Project '
+        + 'Tree (right-click the task, add the program), then confirm with mw_code_tasks. '
+        + 'This is the same limitation as .VGR writes: this plugin cannot write '
+        + 'MotionWorks binary structures from a reconstruction, and the IDE rejects them '
+        + 'silently. ',
       parameters: {
         type: 'object',
         additionalProperties: false,
