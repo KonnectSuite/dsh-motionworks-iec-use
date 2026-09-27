@@ -994,8 +994,9 @@ export function apply(ctx) {
   ctx.on?.('dispose', () => { void stopBridge(); });
 }
 
-/** Exported for tests: the bridge helpers, without needing a Cordis context. */
+/** Exported for tests: the bridge and code helpers, without needing a Cordis context. */
 export const __internals = {
   call, ensureBridge, stopBridge, verb, assertStaged, defineTools,
-  STAGE_ROOT, BRIDGE_DIR, BRIDGE_SCRIPT,
+  runCode, pythonExe, codeSrc,
+  STAGE_ROOT, BRIDGE_DIR, BRIDGE_SCRIPT, CODE_DIR, CODE_HELPER,
 };
