@@ -569,9 +569,11 @@ def apply_assignment(
     through :class:`CompoundFile` -- reading or writing the file as raw text would
     corrupt the container.
     """
-    _refuse_tree_assignment()
+    _refuse_tree_assignment(
+        'unassign' if not getattr(plan, 'assign', True) else 'assign'
+    )
 
-def _refuse_tree_assignment() -> None:
+def _refuse_tree_assignment(action: str = 'assign') -> None:
     """Refuse writing a program instance into PROJECT.TRE.
 
     Isolated, which is what settles it. Assign writes two things - an instance node in the
@@ -601,12 +603,13 @@ def _refuse_tree_assignment() -> None:
     What works instead: add the program to the task in the MotionWorks Project Tree, which
     is a right-click and a pick, and then use mw_code_tasks to confirm it landed.
     """
+    verb = "unassign" if action == "unassign" else "assign"
     raise TreeWriteRefused(
-        "refusing to assign a program to a task from the files.\n"
+        f"refusing to {verb} a program from the files.\n"
         "\n"
         "WHAT THE USER SHOULD DO INSTEAD - it takes a moment:\n"
         "  1. In the MotionWorks Project Tree, find the task.\n"
-        "  2. Right-click it and add the program.\n"
+        f"  2. Right-click it and {'remove the program' if action == 'unassign' else 'add the program'}.\n"
         "  3. Call mw_code_tasks to confirm - it reads the assignments from the tree, so a\n"
         "     successful assignment appears there.\n"
         "\n"

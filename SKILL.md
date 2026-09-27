@@ -511,3 +511,43 @@ and measured, the middle step stalls even when the variable is never used:
 Stalling while unused is the informative one: it is not about the use, so the missing half is
 the global's own record here. That is the next implementation, and it is now a known format
 with a known catch rather than an unknown one.
+
+
+### Verify your own writes with `mw_ide_variables`
+
+The most useful thing found by sweeping the tools that had never been exercised. `mw_ide_variables`
+reads the IDE's OWN live variable model over COM - not the files this plugin wrote - so it is an
+independent check rather than the plugin vouching for itself:
+
+    mw_ide_variables                      -> {"pous":[{"pou":"TopCutterFFCamSetup","count":24,...}]}
+    mw_ide_variables {pou:"TopCutterCamSetup"} -> count=12, each with data_type, initial_value,
+                                                  iec_address
+
+Measured: after `mw_code_var_add` declared a variable, asking the IDE reported it **present**.
+So the sequence an agent should use to be sure a write landed is:
+
+    write it       mw_code_var_add / mw_code_var_edit / mw_code_write_st
+    confirm it     mw_ide_variables, or mw_code_read_st for the file view
+    compile it     mw_ide_build, then mw_ide_errors
+
+A file read proves the bytes are there; `mw_ide_variables` proves the IDE agrees.
+
+### Also verified by the same sweep
+
+| tool | what it does |
+|---|---|
+| `mw_ide_pous` | 7 POUs from the live model, with language codes |
+| `mw_ide_make` | Make (Compile 1): `accepted=true, settled=true, is_compiled=true` |
+| `mw_ide_errors` | every pane works - Errors 19 lines, Warnings 8, Infos 8, Build 19 |
+| `mw_ide_variables` | the live model, whole project or one POU |
+
+`mw_code_pou_unassign` was exercised for the first time and REFUSES, like assign - writing a tree
+is what triggers the IDE to rewrite it. Its message now names the direction the caller asked for
+rather than always saying "assign"; before this it answered an unassign request with instructions
+for assigning, which is confusing in exactly the place an agent is already stuck.
+
+Removing a node renders cleanly (-9 lines for one instance, structurally valid) but the
+open-and-build check could not be completed when it was tried: the IDE's COM state returns
+"Internal error in OpenProject" after a force-kill and needs the environment restarted. So
+unassign stays refused on the evidence that ADDING damages the tree, not on evidence that
+removing does.
