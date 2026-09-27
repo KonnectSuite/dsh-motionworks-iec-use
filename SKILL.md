@@ -715,3 +715,53 @@ correctly rejected the result. **The hypothesis remains untested.**
 The next attempt should revert **record by record**, using the same per-record tail offset
 ``localize_variable_grid`` uses, and restore ``VAR_EXTERNAL`` only for the declarations the template
 actually declares that way - **never by replacing text.**
+
+
+### Create-then-declare: the complete elimination list
+
+Thirteen rounds have gone into this one defect. Every candidate below looked plausible, was
+tested by **removing the supposed cause**, and failed. Written down so the next attempt starts
+here rather than repeating it.
+
+**The failure, measured identically every time:**
+
+    create a POU from a template      works        .VB=1094B  .VGR=1565B
+    add one declaration               applied=true, reads back, reopens, 13 declarations
+    assign it to a task               assigned=true
+    BUILD                             is_compiled=false  stalled=true
+      on disk afterwards              .VB=0B   .VGR=79,432,063B
+
+    the identical add on an EXISTING POU survives and compiles.
+
+The **Build pane** names every POU including the created one and then **stops** during
+'Compiling variables', with Errors, Warnings and Infos all empty. **A compiler dying mid-walk**,
+not a rejected declaration.
+
+**Eliminated by removing the cause and re-running:**
+
+| candidate | result |
+|---|---|
+| tree nodes | the IDE's own markers 7, 42, 8, 23; only id, name, path and GUID differ |
+| sidecar files | NodeProperties.xml checked **by content** - only the GUID, and it matches the tree node |
+| NODES.LST, .mwt | an assignment registry that correctly omits an unassigned POU; a 4 KB container |
+| **the grid localizer** | a **real bug** - usage moved without the marker - fixed in round 40; the fix did not cure this |
+| function-block instances | the clone builds **clean** with them duplicated; they are warnings |
+| the body | emptying it changes nothing |
+| **the stale COM cache** | a **real bug**, fixed in round 45; retested in 47 with a fresh bridge at every step |
+| the appended record's row | validated with the IDE closed, so the numbers are the writer's own |
+| record handles | last_handle=1059 >= 1058 and declares=13; handles are shared across POUs here anyway |
+| block placement | lands inside the existing block, growing it from three lines to four |
+| the declaration text | exactly **two** differing lines - the VAR_EXTERNAL -> VAR renames |
+| **the localization** | all four globals' records reverted to usage 5 **and** their markers **and** their block headers - the build failed **identically** |
+
+**What remains.** The clone and its template differ, after all of that, in **nothing that can be
+read out of the files**. One accepts a declaration and compiles; the other destroys itself when
+compiled. The remaining suspects cannot be diffed this way: **state the IDE holds about a POU
+that is not in its directory, or a compiler assumption about a POU it created versus one that
+appeared.**
+
+**The one experiment that would settle it needs a person.** Create a POU in the MotionWorks
+Project Tree by hand, add a declaration in the editor, and build. **If that works**, the IDE
+writes something on creation this plugin does not, and the two directories can be diffed to find
+it. **If it fails too**, it is a vendor defect and no amount of file archaeology will locate it.
+Every other avenue is exhausted; that one is one right-click and one dialog.
