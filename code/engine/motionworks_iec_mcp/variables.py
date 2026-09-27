@@ -385,37 +385,46 @@ def parse_grid_records(grid: bytes) -> list[dict]:
 
 
 def read_grid_record(grid: bytes, offset: int) -> dict:
-    """Decode one record's strings and the offsets needed to rewrite them.
+    """Decode one record's four length-prefixed strings and their byte ranges.
 
-    Returns the type, the name, and the byte ranges of each length-prefixed string so a
-    caller can rebuild the record while touching nothing it does not understand.
+    A record holds FOUR strings, measured on a real grid:
+
+        1  the TYPE
+        2  always empty
+        3  the INITIAL VALUE   - "" for an external, "FALSE" for a local BOOL, "0" for a
+                                 local INT, "" for a struct
+        4  the NAME
+
+    An earlier version skipped a fixed 12 bytes between the type and the name. That is the
+    size of strings 2 and 3 when BOTH are empty, so it worked for every external record and
+    quietly broke for every local one - records holding "FALSE", "0" and their names
+    decoded as garbage, and the name of a freshly written record came back shifted.
+
+    Returns the type, the initial value, the name, and the byte ranges needed to rebuild
+    the record while touching nothing that is not understood.
     """
     pos = offset + 24
-    type_len = struct.unpack_from("<I", grid, pos)[0]
-    type_at = pos
-    type_raw = grid[pos + 4 : pos + 4 + type_len]
-    pos += 4 + type_len
+    spans = []
+    for _ in range(4):
+        length = struct.unpack_from("<I", grid, pos)[0]
+        spans.append((pos, pos + 4, pos + 4 + length))
+        pos += 4 + length
 
-    # Three uint32 sit between the type and the name's length. Counted from the bytes:
-    # type ends at 160, the name's length 36 is at 172, and the name itself at 176.
-    # Reading +16 instead of +12 lands ON the name, so the length is taken from the
-    # name's own first characters and every record decodes two bytes short.
-    between_at = pos
-    pos += 12
-    name_len = struct.unpack_from("<I", grid, pos)[0]
-    name_at = pos
-    name_raw = grid[pos + 4 : pos + 4 + name_len]
-    pos += 4 + name_len
+    def text(span):
+        start, _, end = span
+        return grid[start + 4:end].decode("utf-16-le", "replace").rstrip("\x00")
 
     return {
-        "type": type_raw.decode("utf-16-le", "replace").rstrip("\x00"),
-        "name": name_raw.decode("utf-16-le", "replace").rstrip("\x00"),
-        "type_at": type_at,
-        "between_at": between_at,
-        "name_at": name_at,
-        "after_name": pos,
+        "type": text(spans[0]),
+        "initial_value": text(spans[2]),
+        "name": text(spans[3]),
+        "type_at": spans[0][0],
+        "between_at": spans[0][2],
+        "initial_at": spans[2][0],
+        "name_at": spans[3][0],
+        "after_name": spans[3][2],
+        "strings_end": pos,
     }
-
 
 def _record_extent(grid: bytes, records: list[dict], index: int) -> int:
     """Byte length of the record at ``index``, bounded by the next record."""
@@ -424,6 +433,24 @@ def _record_extent(grid: bytes, records: list[dict], index: int) -> int:
         return records[index + 1]["offset"] - start
     return len(grid) - start
 
+
+def default_initial_value(type_name: str) -> str:
+    """The initial value a LOCAL scalar declaration carries.
+
+    Measured: a local BOOL record holds "FALSE" where an external one holds nothing, and a
+    local INT holds "0". A struct holds nothing, because a struct has no scalar default.
+    Writing an empty third string for a local scalar leaves a record that does not match
+    anything MotionWorks writes itself.
+    """
+    table = {
+        "BOOL": "FALSE",
+        "BYTE": "0", "SINT": "0", "USINT": "0", "INT": "0", "UINT": "0",
+        "WORD": "0", "DINT": "0", "UDINT": "0", "DWORD": "0",
+        "LINT": "0", "ULINT": "0", "LWORD": "0",
+        "REAL": "0.0", "LREAL": "0.0",
+        "TIME": "T#0s", "DATE": "D#1970-01-01",
+    }
+    return table.get((type_name or "").upper(), "")
 
 def append_grid_variable(grid: bytes, name: str, type_name: str) -> tuple[bytes, int]:
     """Append one LOCAL variable record to a POU's ``.VGR`` grid.
@@ -500,38 +527,46 @@ def append_grid_variable(grid: bytes, name: str, type_name: str) -> tuple[bytes,
     info = decoded(donor)
     start = records[donor]["offset"]
     extent = _record_extent(grid, records, donor)
-    chunk = bytearray(grid[start : start + extent])
+    tail = grid[start + (info["after_name"] - start): start + extent]
 
     new_handle = max(r["handle"] for r in records) + 1
     new_row = max(r["row"] for r in records) + 1
-    struct.pack_into("<I", chunk, 0, new_handle)                    # handle
-    struct.pack_into("<I", chunk, 4, 1)                             # usage: local
-    struct.pack_into("<I", chunk, 16, new_row)                      # worksheet row
 
+    # SYNTHESISE the record rather than patching a clone.
+    #
+    # A record is FOUR length-prefixed UTF-16LE strings, and the third is the INITIAL
+    # VALUE - measured on a real grid:
+    #
+    #   external scalar : "BOOL", "",        "",        "TopCutterCamReady"
+    #   LOCAL scalar    : "BOOL", "",        "FALSE",   "xGenerate"
+    #   local struct    : "CamSegmentStruct","",        "",     "CamData"
+    #
+    # Cloning an external donor gives the wrong third string: empty, where a local scalar
+    # carries a default. Patching one field at a time kept leaving another wrong - first
+    # the trailing run's external marker (ffffffff), now the initial value - and each wrong
+    # guess does not fail politely, it makes MotionWorks rewrite the POU into garbage. So
+    # the record is built from the layout directly, taking only the TRAILING RUN from the
+    # donor, which is the part whose meaning is least understood and which is identical
+    # across records of the same usage.
     def encoded(text: str) -> bytes:
         raw = text.encode("utf-16-le") + b"\x00\x00"
         return struct.pack("<I", len(raw)) + raw
 
-    # Rebuild relative to the record start, keeping the four uint32 and the trailing run
-    # exactly as the donor had them.
-    rel_type = info["type_at"] - start
-    rel_name = info["name_at"] - start
-    rebuilt = (
-        bytes(chunk[:rel_type])
+    header = struct.pack(
+        "<6I", new_handle, 1, 1, 0, new_row, 0     # handle, usage=local, group, flags, row
+    )
+    record = (
+        header
         + encoded(type_name)
-        + bytes(chunk[info["between_at"] - start : rel_name])
+        + encoded("")                               # the always-empty second field
+        + encoded(default_initial_value(type_name))
         + encoded(name)
-        + bytes(chunk[info["after_name"] - start :])
+        + tail
     )
 
-    # The donor supplies the SHAPE; it does not decide where the record goes. Appending
-    # at the donor's end splices into the middle of the grid whenever the donor is not
-    # the last record, displacing everything after it - which is why choosing a small
-    # donor made the result worse rather than better. A new record always goes after the
-    # LAST record, just before the grid's trailer.
     last = records[-1]
     insert_at = last["offset"] + _record_extent(grid, records, len(records) - 1)
-    out = bytearray(grid[:insert_at]) + rebuilt + bytearray(grid[insert_at:])
+    out = bytearray(grid[:insert_at]) + record + bytearray(grid[insert_at:])
     struct.pack_into("<I", out, 4, new_handle)
     struct.pack_into("<I", out, 8, struct.unpack_from("<I", grid, 8)[0] + 1)
     return bytes(out), new_handle
