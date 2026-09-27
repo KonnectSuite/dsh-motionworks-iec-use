@@ -1379,7 +1379,24 @@ public class KILLW {
             #   accepted=false                  -> the compile never ran
             #   accepted=true, is_compiled=false -> compiled and FAILED
             #   accepted=true, is_compiled=true  -> compiled cleanly
-            $settled = $true
+            # A third outcome exists, and it is the one an agent most needs to see.
+            #
+            # Polling IsCompiled gives two states - true, or still false when the window
+            # closes. But "still false" covers two very different situations: the compiler
+            # FINISHED and rejected the code, or it NEVER FINISHED. IsModified separates
+            # them. Measured on a project that would not compile after a declaration was
+            # added: IsCompiled stayed false and IsModified stayed TRUE for 135+ seconds
+            # with an EMPTY Errors pane - the compiler was still working, not reporting a
+            # verdict. Calling that "compiled and failed" sends an agent hunting for
+            # errors that are not there.
+            #
+            #   is_compiled=false, is_modified=false -> compiled and REJECTED (read Errors)
+            #   is_compiled=false, is_modified=true  -> STALLED (the pane proves nothing)
+            $stalled = $false
+            try {
+                if (-not $isCompiled -and [bool]$app.ActiveProject.IsModified) { $stalled = $true }
+            } catch { }
+            $settled = -not $stalled
 
             # Undo the damage a failed build does to the project tree.
             #
@@ -1441,6 +1458,7 @@ public class KILLW {
                 compile_type  = $mode
                 accepted      = $accepted
                 settled       = $settled
+                stalled       = $stalled
                 is_compiled   = $isCompiled
                 is_modified   = $(try { [bool]$app.ActiveProject.IsModified } catch { $null })
                 elapsed_s     = [Math]::Round($sw.Elapsed.TotalSeconds, 1)

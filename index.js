@@ -356,6 +356,14 @@ const BUILD_SCHEMA = {
       type: 'boolean',
       description: 'A second compile was accepted, proving the previous one finished.',
     },
+    stalled: {
+      oneOf: [{ type: 'boolean' }, { type: 'null' }],
+      description:
+        'The compiler never finished. is_compiled=false with is_modified=TRUE is a STALL, '
+        + 'not a rejection: the compiler is still working, so the Errors pane proves nothing '
+        + 'and hunting it for messages wastes the turn. Only is_modified=false means the '
+        + 'compiler finished and REJECTED the code.',
+    },
     is_compiled: { oneOf: [{ type: 'boolean' }, { type: 'null' }] },
     is_modified: { oneOf: [{ type: 'boolean' }, { type: 'null' }] },
     elapsed_s: { type: 'number' },
@@ -372,6 +380,14 @@ const BUILD_SCHEMA = {
  */
 function renderBuild(_a, v) {
   if (!v.accepted) return text(`${v.mode}: the IDE never accepted the compile request.`);
+  if (v.stalled) {
+    return text(
+      `${v.mode}: COMPILER DID NOT FINISH (is_compiled=false, is_modified=true, ${v.elapsed_s}s). `
+      + 'This is a STALL, not a rejection - the compiler is still running, so the Errors '
+      + 'pane proves nothing. Re-check with mw_ide_compile_state, and do NOT go hunting '
+      + 'the Errors pane for messages that were never produced.',
+    );
+  }
   return text(
     v.is_compiled
       ? `${v.mode}: compiled cleanly (is_compiled=true, ${v.elapsed_s}s).`
