@@ -71,7 +71,14 @@ def add(project: Path, pou_name: str, var: str, type_name: str) -> dict:
     W.apply_declaration(plan, project, dry_run=False)
     cf, vg, vb = streams(project, pou_name)
     raw = cf.read_stream(vg)
-    new_grid, handle = V.append_grid_variable(raw, var, type_name)
+    # The worksheet ROW is the declaration's 1-based line number in the .VB text, so it has
+    # to be read out of the text that was just written rather than guessed.
+    text = cf.read_stream(vb).decode("latin1").splitlines()
+    row = next((i + 1 for i, line in enumerate(text)
+                if line.lstrip().startswith(var) and ":" in line), None)
+    if row is None:
+        raise SystemExit("could not locate the new declaration in the .VB text")
+    new_grid, handle = V.append_grid_variable(raw, var, type_name, row=row)
     cf.replace_streams({vg: new_grid})
     # Re-read from disk so the result reflects what was actually written.
     return {"added": var, "handle": handle, **report(project, pou_name, var)}

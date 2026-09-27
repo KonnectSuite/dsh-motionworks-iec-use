@@ -452,7 +452,9 @@ def default_initial_value(type_name: str) -> str:
     }
     return table.get((type_name or "").upper(), "")
 
-def append_grid_variable(grid: bytes, name: str, type_name: str) -> tuple[bytes, int]:
+def append_grid_variable(
+    grid: bytes, name: str, type_name: str, row: int | None = None
+) -> tuple[bytes, int]:
     """Append one LOCAL variable record to a POU's ``.VGR`` grid.
 
     Why this is needed: a POU's declarations live in TWO stores - the ``.VB`` text and
@@ -530,7 +532,13 @@ def append_grid_variable(grid: bytes, name: str, type_name: str) -> tuple[bytes,
     tail = grid[start + (info["after_name"] - start): start + extent]
 
     new_handle = max(r["handle"] for r in records) + 1
-    new_row = max(r["row"] for r in records) + 1
+    # The worksheet ROW is the declaration's 1-based LINE NUMBER in the .VB text.
+    #
+    # Measured over a whole project: row 6 is text line 5, row 14 is line 13, row 18 is
+    # line 17, row 25 is line 24 - always one more than the line index. The grid and the
+    # text are two views of one list, and the row is the link between them. Guessing
+    # max(row) + 1 instead produces a number that corresponds to no line at all.
+    new_row = row if row is not None else max(r["row"] for r in records) + 1
 
     # SYNTHESISE the record rather than patching a clone.
     #

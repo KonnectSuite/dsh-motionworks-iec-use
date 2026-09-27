@@ -55,6 +55,85 @@ mw_ide_errors  -> 24 message(s)
 
 `mw_ide_compile_state` reports `is_compiled` / `is_modified` without building, which
 is the cheap check before deciding whether a build is needed at all.
+## The .VGR variable grid, fully decoded
+
+A POU's declarations live in **two** stores, and the compiler reads both:
+
+| Where | What |
+|---|---|
+| `<POU>V.VB` | the text: `VAR` / `VAR_EXTERNAL` blocks |
+| `<POU>V.VGR` | a binary grid: a header and one record per variable |
+
+**The `row` field in each record is the declaration's 1-based LINE NUMBER in the `.VB`.**
+Verified across a whole POU, 12 records for 12 declarations:
+
+```
+row=6  -> text line 5   TopCutterCamTableID      row=18 -> line 17  xGenerate
+row=14 -> line 13       fbCamGen                 row=20 -> line 19  iState
+row=25 -> line 24       TopCutterEyeToKnifeDistance
+```
+
+The grid and the text are two views of one list; `row` is the link between them.
+
+### Record layout
+
+```
++0    6 x uint32   handle, usage, group, flags, WORKSHEET ROW, final flags
++24   uint32 len + string 1  TYPE
+      uint32 len + string 2  always empty
+      uint32 len + string 3  INITIAL VALUE  ("" external, "FALSE" local BOOL,
+                                             "0" local INT, "" for a struct)
+      uint32 len + string 4  NAME
+      trailing run           the EXTERNAL marker lives here: ffffffff for usage=5,
+                             zeros for usage=1
+```
+
+Strings are UTF-16LE with a NUL terminator, so `len` counts bytes and is always even.
+
+`usage` is **1** local, **5** external, **0x00040001** a function-block instance.
+Records are found by their field pattern, not a fixed stride, because the strings make it
+uneven (84 to 258 bytes in the project measured).
+
+### Reading is reliable
+
+`variables.parse_grid_records` and `variables.read_grid_record` decode every record,
+including the initial value. Measured across the project: **239 records, 239 clean names,
+0 failures** - where the earlier reader, which skipped a fixed 12 bytes between the type
+and the name, produced garbage for every local record because 12 is only correct when
+strings 2 AND 3 are both empty.
+
+### Writing is NOT, and is refused
+
+Adding a declaration is **refused by `mw_code_var_add` for POU scope**, and this is the
+evidence rather than caution:
+
+```
+baseline (nothing changed)         is_compiled=true   stalled=false
++ ONE declaration, nothing else    is_compiled=false  stalled=true
+```
+
+The declaration was written correctly to both stores - text present, record matching a real
+local record field for field (`BOOL` / `''` / `FALSE` / name, zeros in the trailing run,
+handle, and a row equal to the declaration's line number) - and the Errors pane stayed
+**silent**. Afterwards the POU was wrecked:
+
+```
+pristine : V.VB  1112 bytes    V.VGR    1,565 bytes
+after    : V.VB     0 bytes    V.VGR 79,432,063 bytes
+```
+
+MotionWorks rejects a record it disagrees with by REWRITING the POU, with no diagnostic. So
+something beyond the text and the grid carries a declaration, and it has not been found.
+
+**What to do instead:** add variables in the MotionWorks variable worksheet, then read them
+back with `mw_code_read_st` (which shows type, initial value and description) and use them
+in the body. The body is the part that matters for writing code, and `mw_code_write_st` is
+verified clean.
+
+`test/declaration_helper.py` runs the declaration path outside the shipped tool, so the
+refusal does not block the experiment that will decide whether it can be lifted. The
+decisive experiment is to have the IDE add one variable itself and diff the result - the
+same approach that resolved the import/export question.
 ## Global variables ARE writable - with one harmless quirk
 
 Add a global by calling `mw_code_var_add` **without** `pou`:
