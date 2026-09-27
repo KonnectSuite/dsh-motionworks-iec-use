@@ -64,6 +64,45 @@ const RES = join(BRIDGE_DIR, 'res.json');
 const LOG = join(BRIDGE_DIR, 'bridge.log');
 const STAGE_ROOT = join(HERE, 'stage');
 
+// ── POUs this plugin created ─────────────────────────────────────────────────────
+//
+// A POU made by mw_code_pou_create cannot accept an added declaration: the build stalls, silently
+// and only at the next build. The names are recorded here so mw_code_var_add can refuse instead of
+// letting an agent walk into it.
+const CREATED_FILE = join(STAGE_ROOT, 'created-pous.json');
+
+function createdPous() {
+  try {
+    const raw = readFileSync(CREATED_FILE, 'utf8');
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function rememberCreated(name) {
+  if (!name) return;
+  try {
+    mkdirSync(STAGE_ROOT, { recursive: true });
+    const known = createdPous();
+    if (!known.includes(name)) known.push(name);
+    writeFileSync(CREATED_FILE, JSON.stringify(known, null, 2));
+  } catch {
+    // best effort: failing to record must never fail the creation itself
+  }
+}
+
+function forgetCreated(name) {
+  try {
+    const known = createdPous().filter((n) => n !== name);
+    writeFileSync(CREATED_FILE, JSON.stringify(known, null, 2));
+  } catch {
+    // best effort
+  }
+}
+
+
 const PS32 = join(
   process.env.SystemRoot ?? 'C:\\Windows',
   'SysWOW64', 'WindowsPowerShell', 'v1.0', 'powershell.exe',
@@ -1644,9 +1683,28 @@ function defineTools() {
       },
       output: { schema: WRITE_SCHEMA, render: renderWrite },
       presentCall: (a) => ({ card: 'generic', title: `Add variable ${a.name}`, kind: 'edit' }),
-      execute: (args) => runCode('var_add', {
-        ...(args ?? {}), project: projectOf(args), dry_run: args?.dry_run !== false,
-      }),
+      execute: (args) => {
+
+      // A declaration added to a POU this plugin created stalls the build - silently, and only at
+      // the next build. Refusing here is the difference between an error an agent can act on and
+      // one it cannot see. Measured: 28 of 29 runs, every body tried, including a body that never
+      // mentions the added declaration.
+      if (args?.pou && createdPous().includes(String(args.pou)) && args?.dry_run === false) {
+        throw new Error(
+          `mw_code_var_add refuses to add '${args.name}' to '${args.pou}': this POU was created by `
+          + 'mw_code_pou_create, and adding a declaration to a created POU STALLS the build. The '
+          + 'add itself would report success and the declaration would read back correctly, then '
+          + 'the next build would stall with an EMPTY Errors pane - a silent, delayed failure with '
+          + 'no diagnostic. What works instead: (1) choose a template that ALREADY declares what '
+          + 'the POU needs and write the body over those inherited declarations - that is the '
+          + 'supported path; (2) add the declaration to an EXISTING POU, which builds; or (3) add '
+          + 'it once in the MotionWorks editor and edit the POU from here afterwards.',
+        );
+      }
+        return runCode('var_add', {
+          ...(args ?? {}), project: projectOf(args), dry_run: args?.dry_run !== false,
+        });
+      },
     },
 
     {
@@ -1743,9 +1801,16 @@ function defineTools() {
       },
       output: { schema: WRITE_SCHEMA, render: renderWrite },
       presentCall: (a) => ({ card: 'generic', title: `Create POU ${a.name}`, kind: 'edit' }),
-      execute: (args) => runCode('pou_create', {
-        ...(args ?? {}), project: projectOf(args), dry_run: args?.dry_run !== false,
-      }),
+      // Record the name so mw_code_var_add can refuse later. A declaration added to a POU this
+      // tool created stalls the build - silently, and only at the next build - so the add is
+      // blocked up front and the creation has to be remembered for that to work.
+      execute: async (args) => {
+        const out = await runCode('pou_create', {
+          ...(args ?? {}), project: projectOf(args), dry_run: args?.dry_run !== false,
+        });
+        if (args?.dry_run === false && out?.result?.pou) rememberCreated(out.result.pou);
+        return out;
+      },
     },
 
     {
