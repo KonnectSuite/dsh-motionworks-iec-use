@@ -123,39 +123,49 @@ until a licence is available.
 
 ## Install
 
-Two things must line up, and the package name has to match in both.
+**Requirements:** Windows, MotionWorks IEC 3 Pro, Node ≥ 20.
 
-**1. Make the package resolvable** — clone anywhere and junction it in:
+Python is needed by the code engine, but you do **not** have to install it: the
+engine is stdlib-only (`win32com` is imported lazily inside a single function), and
+the plugin auto-discovers the interpreter AryaAI already ships. `MW_PYTHON`
+overrides it; `MW_SRC` points the engine at a different tree for development.
 
-```powershell
-git clone https://github.com/KphungFROMM/dsh-motionworks-iec-use.git "$env:USERPROFILE\dsh-plugins\dsh-motionworks-iec-use"
+### Use the plugin manager
 
-$nm = "$env:USERPROFILE\profiles\desktop\node_modules"
-New-Item -ItemType Junction -Path "$nm\dsh-motionworks-iec-use" `
-  -Target "$env:USERPROFILE\dsh-plugins\dsh-motionworks-iec-use"
+Install it **through the harness's own plugin manager**, not by hand — it manages
+the profile's dependency and lockfile, which is what the loader actually reads:
+
+```
+plugin_manager install_bundle  file:C:\path\to\your\clone
 ```
 
-**2. Register the bundle** — add it to `dsh.profile.bundles` in
-`profiles\desktop\package.json`:
+or the equivalent in the UI (Settings → Plugins). Point it at a clone of this
+repository, or at the published package once it exists.
 
-```jsonc
-{
-  "dsh": {
-    "profile": {
-      "bundles": [
-        // …your existing bundles…
-        "dsh-motionworks-iec-use"
-      ]
-    }
-  }
-}
+That single step makes the package resolvable, records it as a profile
+dependency, and enables it as a bundle. **Then restart DSH** — bundles are read at
+boot, so the tools will *not* appear in the session that installed them.
+
+DSH cannot hot-load a bundle; there is no way to activate one in a running
+session.
+
+### Do not hand-wire it
+
+A manual junction into `profiles\<p>\node_modules\` looks like it works — the
+package resolves, and `node -e "import(...)"` loads it fine — but it is **not** how
+DSH resolves bundles, and it actively breaks the install: pnpm cannot manage a path
+it does not own, so installing over the junction fails with
+
+```
+[ERR_PNPM_EPERM] rename '…\dsh-motionworks-iec-use_tmp_…' -> '…\dsh-motionworks-iec-use'
 ```
 
-The third piece — the plugin's row in the composition tree — is contributed by
-the package's own `cordis.patch.yml`. Nothing else needs editing.
+which surfaces to the user as **"the plugin failed to start"**. If you have already
+done that, delete the junction, then install through the plugin manager.
 
-**3. Restart DSH.** Bundles are read at boot, so the tools will *not* appear in
-the session that installed them.
+Built-in bundles (`dsh-better-sidebar`, `dshmarket`, …) are not in the profile's
+`node_modules` at all — they ship inside the app. Only third-party and local
+bundles are installed into the profile.
 
 > **If you want the agent to know the workflow**, copy `SKILL.md` into your
 > project's `.dsh/skills/motionworks-iec-use/SKILL.md`. The plugin supplies the

@@ -51,24 +51,31 @@ Requirements:
   in `ide.py`), and the plugin auto-discovers the interpreter that ships with
   AryaAI. Override with `MW_PYTHON` if you want a different one.
 
-Install it into your DSH profile the same way any local bundle is installed:
+Install it into your DSH profile **through the plugin manager**, which manages the
+profile's dependency and lockfile — that is what the loader actually reads:
 
-```powershell
-# 1. make the package resolvable
-$nm  = "$env:USERPROFILE\profiles\desktop\node_modules"
-$src = "C:\path\to\this\repo"
-New-Item -ItemType Junction -Path "$nm\dsh-motionworks-iec-use" -Target $src
-
-# 2. register the bundle — add "dsh-motionworks-iec-use" to `dsh.profile.bundles`
-#    in profiles\desktop\package.json
+```
+plugin_manager install_bundle  file:C:\path\to\this\repo
 ```
 
-Restart DSH. Bundles are read at boot, so the tools will not appear until then.
+Then restart DSH; bundles are read at boot.
+
+⚠ **Do not install it by hand with a junction.** A junction into
+`profiles\<p>\node_modules\` appears to work — the package resolves, and a direct
+`import()` succeeds — but it is not how DSH resolves bundles, and it breaks the
+real install: pnpm cannot manage a path it does not own, so installing over it
+fails with `ERR_PNPM_EPERM` while renaming, which the user sees as *"the plugin
+failed to start"*. If you hit that, delete the junction and install via the plugin
+manager.
+
+Also note: DSH cannot hot-load a bundle, so always budget for a restart when
+testing install changes.
 
 ## Tests
 
 ```powershell
-node test/verify.mjs          # structural: loads, 16 tools, JSON Schema, guards
+node test/verify.mjs          # structural: loads, 21 tools, JSON Schema, guards
+node test/demo.mjs            # runnable end-to-end demo — no IDE, no licence
 node test/selfcontained.mjs   # must pass with MW_SRC and MW_PYTHON unset
 node test/verbs.mjs           # live COM verbs — needs a running IDE
 node test/code_loop.mjs       # full loop — needs a running IDE + a project you own
