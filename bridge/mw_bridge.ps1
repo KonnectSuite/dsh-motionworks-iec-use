@@ -586,6 +586,9 @@ while ($true) {
             }
 
             'open' {
+                # The cached Application can describe a project that no longer
+                # exists once this has run; drop it so the next verb reconnects.
+                $script:App = $null
                 $path = [string]$req.path
                 if ([string]::IsNullOrWhiteSpace($path)) { throw 'open requires "path"' }
                 # Fresh dialog budget for this call, so a long session of opens cannot
@@ -772,6 +775,95 @@ while ($true) {
                 }
                 $ok = $true
                 $data = [ordered]@{ tasks = $tasks; source = 'com' }
+            }
+
+            'create_task' {
+                $app = Connect-App
+                if (-not $app.IsProjectOpen()) { throw 'no project is open in the IDE' }
+                $name = [string]$req.name
+                $kind = [string]$req.kind
+                if ([string]::IsNullOrWhiteSpace($name)) { throw 'create_task requires "name"' }
+                if ([string]::IsNullOrWhiteSpace($kind)) { $kind = 'CYCLIC' }
+
+                $resource = $app.ActiveProject.GetObjectByLogicalName(
+                    'Hardware/Configuration/Resource', 10)
+                if ($resource -eq $null) { throw 'no resource found in the active project' }
+                $tasks = $resource.Tasks
+                $before = $tasks.Count
+
+                foreach ($i in 1..$before) {
+                    if ([string]$tasks.Item($i).Name -eq $name) {
+                        throw "a task named '$name' already exists"
+                    }
+                }
+
+                $tasks.GetType().InvokeMember('Create', 'InvokeMethod', $null, $tasks,
+                    @([string]$name, [string]$kind)) | Out-Null
+                $after = $tasks.Count
+
+                $app.ActiveProject.Save()
+                Start-Sleep -Milliseconds 400
+
+                $names = @()
+                for ($i = 1; $i -le $tasks.Count; $i++) { $names += [string]$tasks.Item($i).Name }
+                $made = $null
+                for ($i = 1; $i -le $tasks.Count; $i++) {
+                    if ([string]$tasks.Item($i).Name -eq $name) { $made = $tasks.Item($i) }
+                }
+                $ok = $true
+                $data = [ordered]@{
+                    created      = $true
+                    name         = $name
+                    cycle        = $kind
+                    before       = $before
+                    after        = $after
+                    tasks        = $names
+                    logical_name = if ($made) { [string]$made.LogicalName } else { $null }
+                }
+            }
+
+            'delete_task' {
+                $app = Connect-App
+                if (-not $app.IsProjectOpen()) { throw 'no project is open in the IDE' }
+                $name = [string]$req.name
+                if ([string]::IsNullOrWhiteSpace($name)) { throw 'delete_task requires "name"' }
+
+                $resource = $app.ActiveProject.GetObjectByLogicalName(
+                    'Hardware/Configuration/Resource', 10)
+                if ($resource -eq $null) { throw 'no resource found in the active project' }
+                $tasks = $resource.Tasks
+                $before = $tasks.Count
+
+                $hit = -1
+                for ($i = 1; $i -le $tasks.Count; $i++) {
+                    if ([string]$tasks.Item($i).Name -eq $name) { $hit = $i; break }
+                }
+                if ($hit -lt 0) {
+                    $names = @()
+                    for ($i = 1; $i -le $tasks.Count; $i++) { $names += [string]$tasks.Item($i).Name }
+                    throw "no task named '$name'. Tasks: $($names -join ', ')"
+                }
+                $task = $tasks.Item($hit)
+                $kids = $task.ProgramInstances.Count
+                if ($kids -gt 0) {
+                    throw "task '$name' still has $kids program instance(s) assigned; unassign them first"
+                }
+                $task.Delete()
+                $after = $tasks.Count
+
+                $app.ActiveProject.Save()
+                Start-Sleep -Milliseconds 400
+
+                $names = @()
+                for ($i = 1; $i -le $tasks.Count; $i++) { $names += [string]$tasks.Item($i).Name }
+                $ok = $true
+                $data = [ordered]@{
+                    deleted = $true
+                    name    = $name
+                    before  = $before
+                    after   = $after
+                    tasks   = $names
+                }
             }
 
             'assign_pou' {
@@ -1317,6 +1409,9 @@ while ($true) {
             # process enumeration is unreliable in this environment and omits Mwt
             # entirely, which would make this report success while nothing closed.
             'close_ide' {
+                # The cached Application can describe a project that no longer
+                # exists once this has run; drop it so the next verb reconnects.
+                $script:App = $null
                 $psapi = @'
 using System; using System.Runtime.InteropServices;
 public class KILLW {

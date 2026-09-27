@@ -1766,6 +1766,90 @@ function defineTools() {
     },
 
     {
+      name: 'mw_code_task_create',
+      description:
+        'Create a task in the project, through the IDE\'s own object model - '
+        + 'resource.Tasks.Create(name, cycle) then Save(), so the IDE writes the project tree '
+        + 'itself and nothing here edits a file. This is the counterpart of mw_code_pou_assign: '
+        + 'assign puts a program INTO a task, and this makes the task to put it in. Measured: the '
+        + 'task survives the save, appears to mw_code_tasks (which reads the tree) and to '
+        + 'mw_code_task_model (which reads COM), and is still there after a close and reopen. '
+        + 'The cycle is the task\'s Type as the IDE reports it - this project uses DEFAULT for the '
+        + 'background task, CYCLIC for the periodic ones, and SYSTEM for Start. A task starts with '
+        + 'no programs assigned; use mw_code_pou_assign to add them. **dry_run defaults to true.**',
+      parameters: {
+        type: 'object',
+        additionalProperties: false,
+        required: ['name'],
+        properties: {
+          name: { type: 'string', description: 'Name for the new task, e.g. "MyTsk".' },
+          kind: { type: 'string', description: 'Cycle type: CYCLIC (default), DEFAULT or SYSTEM.' },
+          dry_run: { type: 'boolean', description: 'Defaults to true.' },
+        },
+      },
+      output: { schema: WRITE_SCHEMA_NULLABLE, render: renderWrite },
+      presentCall: (a) => ({ card: 'generic', title: `Create task ${a.name}`, kind: 'edit' }),
+      execute: async (args) => {
+        const name = args?.name;
+        if (args?.dry_run !== false) {
+          let existing = null;
+          try { existing = (await verb('task_model', {}, 60000)).tasks ?? null; } catch { /* */ }
+          const names = existing ? Object.keys(existing) : null;
+          return {
+            dry_run: true,
+            would_create: { name, kind: args?.kind ?? 'CYCLIC' },
+            existing_tasks: names,
+            note: names?.includes(name)
+              ? `a task named ${name} already exists`
+              : `This would call Tasks.Create('${name}', '${args?.kind ?? 'CYCLIC'}') then save. Pass dry_run:false to do it.`,
+          };
+        }
+        return verb('create_task', {
+          name: String(name),
+          ...(args?.kind ? { kind: String(args.kind) } : {}),
+        }, 120000);
+      },
+    },
+
+    {
+      name: 'mw_code_task_delete',
+      description:
+        'Delete a task, through the IDE\'s own object model - Task.Delete() then Save(). Refuses '
+        + 'while programs are still assigned to it, and names them, because deleting a task that '
+        + 'is running code should be deliberate. Unassign first with mw_code_pou_unassign, or use '
+        + 'mw_code_pou_delete to remove the programs themselves. **dry_run defaults to true.**',
+      parameters: {
+        type: 'object',
+        additionalProperties: false,
+        required: ['name'],
+        properties: {
+          name: { type: 'string', description: 'Task to delete.' },
+          dry_run: { type: 'boolean', description: 'Defaults to true.' },
+        },
+      },
+      output: { schema: WRITE_SCHEMA_NULLABLE, render: renderWrite },
+      presentCall: (a) => ({ card: 'generic', title: `Delete task ${a.name}`, kind: 'edit' }),
+      execute: async (args) => {
+        const name = args?.name;
+        if (args?.dry_run !== false) {
+          let info = null;
+          try { info = (await verb('task_model', {}, 60000)).tasks?.[name] ?? null; } catch { /* */ }
+          return {
+            dry_run: true,
+            would_delete: name,
+            currently: info,
+            note: !info
+              ? `no task named ${name}`
+              : (info.instances ?? []).length
+                ? `task ${name} has ${info.instances.length} program(s) assigned; unassign them first`
+                : `This would delete task ${name} and save. Pass dry_run:false to do it.`,
+          };
+        }
+        return verb('delete_task', { name: String(name) }, 120000);
+      },
+    },
+
+    {
       name: 'mw_code_task_model',
       description:
         'Read every task and its assigned programs through the IDE\'s own COM object model - a '
