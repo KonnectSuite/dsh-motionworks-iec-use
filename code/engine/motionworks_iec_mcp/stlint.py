@@ -332,6 +332,7 @@ def lint(
     known_symbols: set[str] | None = None,
     fb_instance_types: set[str] | None = None,
     local_vars: set[str] | None = None,
+    project_globals: set[str] | None = None,
 ) -> LintResult:
     """Lint one Structured Text body.
 
@@ -344,6 +345,9 @@ def lint(
         local_vars: Names declared in a plain ``VAR`` block, used for the
             unused-local check.  Externals are excluded: they are owned
             elsewhere and may legitimately be unused here.
+        project_globals: Names of the project's VAR_GLOBAL declarations.  A
+            global is reachable ONLY if this POU declares it as VAR_EXTERNAL,
+            and MotionWorks does not say so - it stalls the build silently.
     """
     result = LintResult()
     declared_u = {n.upper() for n in (declared or set())}
@@ -353,6 +357,7 @@ def lint(
     # upper-cased comparison key.
     declared_display = {n.upper(): n for n in (local_vars or set())}
     locals_u = set(declared_display)
+    globals_u = {n.upper() for n in (project_globals or set())}
 
     clean = strip_comments_and_strings(body)
     if not clean.strip():
@@ -383,7 +388,32 @@ def lint(
     # ------------------------------------------------------------------
     for start, name in assignment_targets(code):
         upper = name.upper()
-        if upper in KEYWORDS or upper in declared_u or upper in known_u:
+        if upper in KEYWORDS or upper in declared_u:
+            continue
+        if upper in globals_u:
+            # THE SILENT STALL.  This name exists - it is a project global - so the
+            # old check let it through via known_u.  But MotionWorks only reaches a
+            # global from a POU that declares it VAR_EXTERNAL, and when it does not
+            # it does not report an undeclared symbol: the build STALLS with
+            # is_compiled=false, is_modified=true and an EMPTY Errors pane, so the
+            # agent sees a hang and no reason.  Measured with PLCMODE_ON, a system
+            # global present in the project from the start.
+            line = code_start + code.count("\n", 0, start)
+            result.add(
+                "error",
+                "global-not-declared-external",
+                f"{name!r} is a project global but this POU does not declare it as "
+                f"VAR_EXTERNAL, so the compiler cannot resolve it and the build STALLS "
+                f"with an empty error list",
+                line,
+                hint=(
+                    "Add it to this POU's VAR_EXTERNAL block, or use a variable this "
+                    "POU already declares - read them with mw_code_read_st. MotionWorks "
+                    "does not report this as an error; it simply never finishes."
+                ),
+            )
+            continue
+        if upper in known_u:
             continue
         if upper in ELEMENTARY_TYPES or upper in members:
             continue
@@ -398,6 +428,37 @@ def lint(
                 "Check the spelling, or declare it. If another POU owns it, that "
                 "POU must declare it in VAR and this POU must declare it as "
                 "VAR_EXTERNAL. Use the symbol index to confirm the real name."
+            ),
+        )
+
+    # ------------------------------------------------------------------
+    # The silent stall, for READS as well as writes.
+    #
+    # The assignment check above catches `X := ...`.  Reading an undeclared global stalls
+    # the build just as hard - `IF PLCMODE_ON THEN` never finishes either - so the same
+    # rule has to be applied to every reference, not only to assignment targets.
+    # ------------------------------------------------------------------
+    reported = {f.line for f in result.findings if f.code == "global-not-declared-external"}
+    for name in sorted(used, key=str.casefold):
+        if name not in globals_u or name in declared_u:
+            continue
+        if name in KEYWORDS or name in fb_instances:
+            continue
+        line = code_start + code.count("\n", 0, code.upper().find(name))
+        if line in reported:
+            continue
+        reported.add(line)
+        result.add(
+            "error",
+            "global-not-declared-external",
+            f"{name} is a project global but this POU does not declare it as "
+            f"VAR_EXTERNAL, so the compiler cannot resolve it and the build STALLS "
+            f"with an empty error list",
+            line,
+            hint=(
+                "Add it to this POU's VAR_EXTERNAL block, or use a variable this POU "
+                "already declares - read them with mw_code_read_st. MotionWorks does "
+                "not report this as an error; it simply never finishes."
             ),
         )
 
@@ -453,7 +514,8 @@ def lint(
     return result
 
 
-def lint_pou(pou: object, known_symbols: set[str] | None = None) -> LintResult:
+def lint_pou(pou: object, known_symbols: set[str] | None = None,
+            project_globals: set[str] | None = None) -> LintResult:
     """Lint a POU by combining its declarations with its body.
 
     ``pou`` is a :class:`motionworks_iec_mcp.project.PouInfo`.  Typed loosely to
@@ -489,4 +551,5 @@ def lint_pou(pou: object, known_symbols: set[str] | None = None) -> LintResult:
         known_symbols=known_symbols,
         fb_instance_types=fb_types,
         local_vars=locals_only,
+        project_globals=project_globals,
     )

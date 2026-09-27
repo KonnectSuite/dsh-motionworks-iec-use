@@ -622,6 +622,22 @@ def known_symbol_names(project: Project) -> set[str]:
     return names
 
 
+def global_names(project: Project) -> set[str]:
+    """The names of the project's VAR_GLOBAL declarations.
+
+    Separate from ``known_symbol_names``, which is deliberately generous, because a
+    global is reachable from a POU ONLY if that POU declares it as VAR_EXTERNAL.  The
+    linter needs to tell the two apart: a name that resolves nowhere is a spelling
+    mistake, while a global this POU has not imported is a build that STALLS with an
+    empty Errors pane.  Measured with PLCMODE_ON, a system global the project has had
+    from the first byte.
+    """
+    try:
+        return {v.name for v in project.global_variables().variables}
+    except UnsupportedFormat:
+        return set()
+
+
 def find_symbol(project: Project, symbol: str) -> list[Variable]:
     """Return every declaration of ``symbol`` anywhere in the project."""
     found: list[Variable] = []

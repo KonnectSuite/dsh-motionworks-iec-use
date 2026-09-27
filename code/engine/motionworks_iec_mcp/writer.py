@@ -766,6 +766,7 @@ def plan_st_body(
             known_symbols=P.known_symbol_names(proj),
             fb_instance_types=fb_types,
             local_vars=locals_only,
+            project_globals=P.global_names(proj),
         )
         errors = [f for f in result.findings if f.severity == "error"]
         if errors:
