@@ -1,0 +1,36 @@
+# Runtime state — MUST NOT be committed.
+#
+# stage/ holds a COPY OF A YASKAWA SAMPLE PROJECT. Publishing it would ship
+# Yaskawa's own example code inside this repository. It is created at runtime by
+# mw_ide_stage and must never be tracked.
+stage/
+
+# Backups taken before every code write: copies of the same project files.
+backups/
+
+# Screenshots of the IDE, including customer project content.
+shots/
+
+# Request/response scratch for the bridge and the code engine. Also transient,
+# and they carry absolute local paths.
+bridge/req.json
+bridge/res.json
+bridge/req.json.tmp
+bridge/res.json.tmp
+bridge/bridge.log
+code/req.json
+code/res.json
+code/req.json.tmp
+code/res.json.tmp
+
+# Python bytecode from the vendored engine, regenerated on use.
+__pycache__/
+*.py[cod]
+
+# Node / tooling
+node_modules/
+*.log
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

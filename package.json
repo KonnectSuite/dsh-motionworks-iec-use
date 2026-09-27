@@ -1,0 +1,56 @@
+{
+  "name": "dsh-motionworks-iec-use",
+  "version": "0.1.0",
+  "description": "MotionWorks Use: a DeepSeek Harness plugin that lets an agent operate a running Yaskawa MotionWorks IEC 3 Pro IDE and edit its code — live object model, Structured Text read/write, compile verdicts, and compiler error capture. Never downloads to a controller and never commands motion.",
+  "keywords": [
+    "dsh",
+    "deepseek-harness",
+    "cordis",
+    "cordis-plugin",
+    "motionworks",
+    "yaskawa",
+    "iec-61131-3",
+    "plc",
+    "industrial-automation"
+  ],
+  "license": "MIT",
+  "type": "module",
+  "exports": {
+    ".": "./index.js"
+  },
+  "files": [
+    "index.js",
+    "SKILL.md",
+    "README.md",
+    "LICENSE",
+    "cordis.patch.yml",
+    "bridge/",
+    "code/",
+    "docs/"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "os": [
+    "win32"
+  ],
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  },
+  "scripts": {
+    "test": "node test/verify.mjs",
+    "test:selfcontained": "node test/selfcontained.mjs",
+    "test:live": "node test/verbs.mjs",
+    "test:loop": "node test/code_loop.mjs"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/KphungFROMM/dsh-motionworks-iec-use.git"
+  },
+  "bugs": {
+    "url": "https://github.com/KphungFROMM/dsh-motionworks-iec-use/issues"
+  },
+  "homepage": "https://github.com/KphungFROMM/dsh-motionworks-iec-use#readme"
+}

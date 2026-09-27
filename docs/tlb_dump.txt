@@ -1,0 +1,436 @@
+﻿C:\Program Files (x86)\Yaskawa\MotionWorks IEC 3 Pro\Ade.tlb
+typeinfos: 172
+
+=== AdeProjectProperty  (funcs=0, vars=4) ===
+  adePpSecurityActivated = 1
+  adePpCurrentLocale = 2
+  adePpSourceStoragesValid = 3
+  adePpSealedProject = 4
+
+=== AdeApplicationProperty  (funcs=0, vars=12) ===
+  adeApCurrentLocale = 1
+  adeApOnlineOn = 2
+  adeApCompilerRunning = 3
+  adeApFirstInstance = 4
+  adeApMonitorMode = 5
+  adeApStartModeAutomation = 6
+  adeApTheme = 7
+  adeApUseDinIdentifiers = 8
+  adeApNotOnPlcActive = 9
+  adeApRedundancyAvailable = 10
+  adeApIsMultiprogExpress = 11
+  adeApCompilerRunningExt = 12
+
+=== AdeVariableAction  (funcs=0, vars=4) ===
+  adeVaCreate = 1
+  adeVaDelete = 2
+  adeVaChange = 4
+  adeVaMove = 8
+
+=== AdeVariableBlockType  (funcs=0, vars=13) ===
+  adeVarBlockVar = 1
+  adeVarBlockVarInput = 2
+  adeVarBlockVarOutput = 3
+  adeVarBlockVarInOut = 4
+  adeVarBlockVarExternal = 5
+  adeVarBlockVarGlobal = 6
+  adeVarBlockVarAccess = 7
+  adeVarBlockVarAuto = 8
+  adeVarBlockVarAlias = 9
+  adeVarBlockVarExternalPg = 10
+  adeVarBlockVarGlobalPg = 11
+  adeVarBlockVarExternalFb = 12
+  adeVarBlockVarGlobalFb = 13
+
+=== AdePouLanguage  (funcs=0, vars=7) ===
+  adePlIl = 1
+  adePlSt = 2
+  adePlFbd = 3
+  adePlLd = 4
+  adePlSfc = 5
+  adePlMsfc = 6
+  adePlFfld = 7
+
+=== AdeProjectCompareOptions  (funcs=0, vars=2) ===
+  adePcoNone = 0
+  adePcoNoWorkspaceSwitch = 1
+
+=== AdeApplicationStates  (funcs=0, vars=8) ===
+  adeASIdle = 0
+  adeASOnlineMode = 1
+  adeASCompiling = 2
+  adeASMultiUser = 4
+  adeASImportExport = 8
+  adeASBuildingCrossReferences = 16
+  adeASDownloading = 32
+  adeASUnspecifiedLongOperation = 1073741824
+
+=== IAdeProjectObserver  (funcs=4, vars=0) ===
+  BeforeProjectOpen(Name:?'tuple' object has no attribute 'vt', Cancel:?'tuple' object has no attribute 'vt')  ret=?'tuple' object has no attribute 'vt' 
+  AfterProjectOpen(Name:?'tuple' object has no attribute 'vt')  ret=?'tuple' object has no attribute 'vt' 
+  BeforeProjectClose(Name:?'tuple' object has no attribute 'vt', Cancel:?'tuple' object has no attribute 'vt')  ret=?'tuple' object has no attribute 'vt' 
+  AfterProjectClose(Name:?'tuple' object has no attribute 'vt')  ret=?'tuple' object has no attribute 'vt' 
+
+=== IAdeProjectObserver2  (funcs=5, vars=0) ===
+  BeforeProjectOpen(Name:?'tuple' object has no attribute 'vt', Cancel:?'tuple' object has no attribute 'vt')  ret=?'tuple' object has no attribute 'vt' 
+  AfterProjectOpen(Name:?'tuple' object has no attribute 'vt')  ret=?'tuple' object has no attribute 'vt' 
+  BeforeProjectClose(Name:?'tuple' object has no attribute 'vt', Cancel:?'tuple' object has no attribute 'vt')  ret=?'tuple' object has no attribute 'vt' 
+  AfterProjectClose(Name:?'tuple' object has no attribute 'vt')  ret=?'tuple' object has no attribute 'vt' 
+  ProjectOpenComplete(Name:?'tuple' object has no attribute 'vt')  ret=?'tuple' object has no attribute 'vt' 
+
+=== IAdeProjectStructureObserver  (funcs=6, vars=0) ===
+  BeforeInsert(ObjectType:?'tuple' object has no attribute 'vt', Object:?'tuple' object has no attribute 'vt', Cancel:?'tuple' object has no attribute 'vt')  ret=?'tuple' object has no attribute 'vt' 
+  AfterInsert(ObjectType:?'tuple' object has no attribute 'vt', Object:?'tuple' object has no attribute 'vt')  ret=?'tuple' object has no attribute 'vt' 
+  BeforeChange(ObjectType:?'tuple' object has no attribute 'vt', OldObject:?'tuple' object has no attribute 'vt', NewObject:?'tuple' object has no attribute 'vt', Cancel:?'tuple' object has no attribute 'vt')  ret=?'tuple' object has no attribute 'vt' 
+  AfterChange(ObjectType:?'tuple' object has no attribute 'vt', NewObject:?'tuple' object has no attribute 'vt')  ret=?'tuple' object has no attribute 'vt' 
+  BeforeDelete(ObjectType:?'tuple' object has no attribute 'vt', Object:?'tuple' object has no attribute 'vt', Cancel:?'tuple' object has no attribute 'vt')  ret=?'tuple' object has no attribute 'vt' 
+  AfterDelete(ObjectType:?'tuple' object has no attribute 'vt', OldObject:?'tuple' object has no attribute 'vt')  ret=?'tuple' object has no attribute 'vt' 
+
+=== IAdeVariableObserver  (funcs=7, vars=0) ===
+  BeforeInsert(ObjectType:?'tuple' object has no attribute 'vt', Variable:?'tuple' object has no attribute 'vt', Cancel:?'tuple' object has no attribute 'vt')  ret=?'tuple' object has no attribute 'vt' 
+  AfterInsert(ObjectType:?'tuple' object has no attribute 'vt', Variable:?'tuple' object has no attribute 'vt')  ret=?'tuple' object has no attribute 'vt' 
+  BeforeDelete(ObjectType:?'tuple' object has no attribute 'vt', Variable:?'tuple' object has no attribute 'vt', Cancel:?'tuple' object has no attribute 'vt')  ret=?'tuple' object has no attribute 'vt' 
+  AfterDelete(ObjectType:?'tuple' object has no attribute 'vt', Variable:?'tuple' object has no attribute 'vt')  ret=?'tuple' object has no attribute 'vt' 
+  BeforeChange(ObjectType:?'tuple' object has no attribute 'vt', OldVariable:?'tuple' object has no attribute 'vt', NewVariable:?'tuple' object has no attribute 'vt', Cancel:?'tuple' object has no attribute 'vt')  ret=?'tuple' object has no attribute 'vt' 
+  AfterChange(ObjectType:?'tuple' object has no attribute 'vt', OldVariable:?'tuple' object has no attribute 'vt', NewVariable:?'tuple' object has no attribute 'vt')  ret=?'tuple' object has no attribute 'vt' 
+  OnErrorCodeChanged(ObjectType:?'tuple' object has no attribute 'vt', Variable:?'tuple' object has no attribute 'vt')  ret=?'tuple' object has no attribute 'vt' 
+
+=== Variable  (funcs=0, vars=0) ===
+
+=== _Variable  (funcs=44, vars=0) ===
+  QueryInterface(riid:?'tuple' object has no attribute 'vt', ppvObj:?'tuple' object has no attribute 'vt')  ret=?'tuple' object has no attribute 'vt' 
+  AddRef()  ret=?'tuple' object has no attribute 'vt' 
+  Release()  ret=?'tuple' object has no attribute 'vt' 
+  GetTypeInfoCount(pctinfo:?'tuple' object has no attribute 'vt')  ret=?'tuple' object has no attribute 'vt' 
+  GetTypeInfo(itinfo:?'tuple' object has no attribute 'vt', lcid:?'tuple' object has no attribute 'vt', pptinfo:?'tuple' object has no attribute 'vt')  ret=?'tuple' object has no attribute 'vt' 
+  GetIDsOfNames(riid:?'tuple' object has no attribute 'vt', rgszNames:?'tuple' object has no attribute 'vt', cNames:?'tuple' object has no attribute 'vt', lcid:?'tuple' object has no attribute 'vt', rgdispid:?'tuple' object has no attribute 'vt')  ret=?'tuple' object has no attribute 'vt' 
+  Invoke(dispidMember:?'tuple' object has no attribute 'vt', riid:?'tuple' object has no attribute 'vt', lcid:?'tuple' object has no attribute 'vt', wFlags:?'tuple' object has no attribute 'vt', pdispparams:?'tuple' object has no attribute 'vt', pvarResult:?'tuple' object has no attribute 'vt', pexcepinfo:?'tuple' object has no attribute 'vt', puArgErr:?'tuple' object has no attribute 'vt')  ret=?'tuple' object has no attribute 'vt' 
+  Delete()  ret=?'tuple' object has no attribute 'vt' 
+  SetAttribute(Id:?'tuple' object has no attribute 'vt', Value:?'tuple' object has no attribute 'vt')  ret=?'tuple' object has no attribute 'vt' 
+  GetAttribute(Id:?'tuple' object has no attribute 'vt')  ret=?'tuple' object has no attribute 'vt' 
+  GetSizeOnPlc(PlcType:?'tuple' object has no attribute 'vt', ProcessorType:?'tuple' object has no attribute 'vt')  ret=?'tuple' object has no attribute 'vt' 
+  GetAlignmentOnPlc(PlcType:?'tuple' object has no attribute 'vt', ProcessorType:?'tuple' object has no attribute 'vt')  ret=?'tuple' object has no attribute 'vt' 
+  GetSizePrefix(PlcType:?'tuple' object has no attribute 'vt', ProcessorType:?'tuple' object has no attribute 'vt')  ret=?'tuple' object has no attribute 'vt' 
+  Name()  ret=?'tuple' object has no attribute 'vt' propget
+  Name(arg0:?'tuple' object has no attribute 'vt')  ret=?'tuple' object has no attribute 'vt' propput
+  DataType()  ret=?'tuple' object has no attribute 'vt' propget
+  DataType(arg0:?'tuple' object has no attribute 'vt')  ret=?'tuple' object has no attribute 'vt' propput
+  InitialValue()  ret=?'tuple' object has no attribute 'vt' propget
+  InitialValue(arg0:?'tuple' object has no attribute 'vt')  ret=?'tuple' object has no attribute 'vt' propput
+  IecAddress()  ret=?'tuple' object has no attribute 'vt' propget
+  IecAddress(arg0:?'tuple' object has no attribute 'vt')  ret=?'tuple' object has no attribute 'vt' propput
+  Comment()  ret=?'tuple' object has no attribute 'vt' propget
+  Comment(arg0:?'tuple' object has no attribute 'vt')  ret=?'tuple' object has no attribute 'vt' propput
+  BlockType()  ret=?'tuple' object has no attribute 'vt' propget
+  BlockType(arg0:?'tuple' object has no attribute 'vt')  ret=?'tuple' object has no attribute 'vt' propput
+  Group()  ret=?'tuple' object has no attribute 'vt' propget
+  Retain()  ret=?'tuple' object has no attribute 'vt' propget
+  Retain(arg0:?'tuple' object has no attribute 'vt')  ret=?'tuple' object has no attribute 'vt' propput
+  Error()  ret=?'tuple' object has no attribute 'vt' propget
+  Error(arg0:?'tuple' object has no attribute 'vt')  ret=?'tuple' object has no attribute 'vt' propput
+  FbInstance()  ret=?'tuple' object has no attribute 'vt' propget
+  Id()  ret=?'tuple' object has no attribute 'vt' propget
+  PDD()  ret=?'tuple' object has no attribute 'vt' propget
+  PDD(arg0:?'tuple' object has no attribute 'vt')  ret=?'tuple' object has no attribute 'vt' propput
+  OPC()  ret=?'tuple' object has no attribute 'vt' propget
+  OPC(arg0:?'tuple' object has no attribute 'vt')  ret=?'tuple' object has no attribute 'vt' propput
+  Application()  ret=?'tuple' object has no attribute 'vt' propget
+  Parent()  ret=?'tuple' object has no attribute 'vt' propget
+  Disabled()  ret=?'tuple' object has no attribute 'vt' propget
+  Disabled(arg0:?'tuple' object has no attribute 'vt')  ret=?'tuple' object has no attribute 'vt' propput
+  NotOnPlc()  ret=?'tuple' object has no attribute 'vt' propget
+  NotOnPlc(arg0:?'tuple' object has no attribute 'vt')  ret=?'tuple' object has no attribute 'vt' propput
+  Redundant()  ret=?'tuple' object has no attribute 'vt' propget
+  Redundant(arg0:?'tuple' object has no attribute 'vt')  ret=?'tuple' object has no attribute 'vt' propput
+
+=== VariableGroup  (funcs=0, vars=0) ===
+
+=== _VariableGroup  (funcs=15, vars=0) ===
+  QueryInterface(riid:?'tuple' object has no attribute 'vt', ppvObj:?'tuple' object has no attribute 'vt')  ret=?'tuple' object has no attribute 'vt' 
+  AddRef()  ret=?'tuple' object has no attribute 'vt' 
+  Release()  ret=?'tuple' object has no attribute 'vt' 
+  GetTypeInfoCount(pctinfo:?'tuple' object has no attribute 'vt')  ret=?'tuple' object has no attribute 'vt' 
+  GetTypeInfo(itinfo:?'tuple' object has no attribute 'vt', lcid:?'tuple' object has no attribute 'vt', pptinfo:?'tuple' object has no attribute 'vt')  ret=?'tuple' object has no attribute 'vt' 
+  GetIDsOfNames(riid:?'tuple' object has no attribute 'vt', rgszNames:?'tuple' object has no attribute 'vt', cNames:?'tuple' object has no attribute 'vt', lcid:?'tuple' object has no attribute 'vt', rgdispid:?'tuple' object has no attribute 'vt')  ret=?'tuple' object has no attribute 'vt' 
+  Invoke(dispidMember:?'tuple' object has no attribute 'vt', riid:?'tuple' object has no attribute 'vt', lcid:?'tuple' object has no attribute 'vt', wFlags:?'tuple' object has no attribute 'vt', pdispparams:?'tuple' object has no attribute 'vt', pvarResult:?'tuple' object has no attribute 'vt', pexcepinfo:?'tuple' object has no attribute 'vt', puArgErr:?'tuple' object has no attribute 'vt')  ret=?'tuple' object has no attribute 'vt' 
+  Delete()  ret=?'tuple' object has no attribute 'vt' 
+  Name()  ret=?'tuple' object has no attribute 'vt' propget
+  Name(arg0:?'tuple' object has no attribute 'vt')  ret=?'tuple' object has no attribute 'vt' propput
+  ReadOnly()  ret=?'tuple' object has no attribute 'vt' propget
+  ReadOnly(arg0:?'tuple' object has no attribute 'vt')  ret=?'tuple' object has no attribute 'vt' propput
+  Variables()  ret=?'tuple' object has no attribute 'vt' propget
+  Application()  ret=?'tuple' object has no attribute 'vt' propget
+  Parent()  ret=?'tuple' object has no attribute 'vt' propget
+
+=== Variables  (funcs=0, vars=0) ===
+
+=== _Variables  (funcs=16, vars=0) ===
+  QueryInterface(riid:?'tuple' object has no attribute 'vt', ppvObj:?'tuple' object has no attribute 'vt')  ret=?'tuple' object has no attribute 'vt' 
+  AddRef()  ret=?'tuple' object has no attribute 'vt' 
+  Release()  ret=?'tuple' object has no attribute 'vt' 
+  GetTypeInfoCount(pctinfo:?'tuple' object has no attribute 'vt')  ret=?'tuple' object has no attribute 'vt' 
+  GetTypeInfo(itinfo:?'tuple' object has no attribute 'vt', lcid:?'tuple' object has no attribute 'vt', pptinfo:?'tuple' object has no attribute 'vt')  ret=?'tuple' object has no attribute 'vt' 
+  GetIDsOfNames(riid:?'tuple' object has no attribute 'vt', rgszNames:?'tuple' object has no attribute 'vt', cNames:?'tuple' object has no attribute 'vt', lcid:?'tuple' object has no attribute 'vt', rgdispid:?'tuple' object has no attribute 'vt')  ret=?'tuple' object has no attribute 'vt' 
+  Invoke(dispidMember:?'tuple' object has no attribute 'vt', riid:?'tuple' object has no attribute 'vt', lcid:?'tuple' object has no attribute 'vt', wFlags:?'tuple' object has no attribute 'vt', pdispparams:?'tuple' object has no attribute 'vt', pvarResult:?'tuple' object has no attribute 'vt', pexcepinfo:?'tuple' object has no attribute 'vt', puArgErr:?'tuple' object has no attribute 'vt')  ret=?'tuple' object has no attribute 'vt' 
+  Item(Index:?'tuple' object has no attribute 'vt')  ret=?'tuple' object has no attribute 'vt' 
+  ItemById(Id:?'tuple' object has no attribute 'vt')  ret=?'tuple' object has no attribute 'vt' 
+  Create(Name:?'tuple' object has no attribute 'vt', Type:?'tuple' object has no attribute 'vt', BlockType:?'tuple' object has no attribute 'vt', Description:?'tuple' object has no attribute 'vt', InitialValue:?'tuple' object has no attribute 'vt', IecAddress:?'tuple' object has no attribute 'vt', Retain:?'tuple' object has no attribute 'vt')  ret=?'tuple' object has no attribute 'vt' 
+  Count()  ret=?'tuple' object has no attribute 'vt' propget
+  _NewEnum()  ret=?'tuple' object has no attribute 'vt' 
+  Groups()  ret=?'tuple' object has no attribute 'vt' propget
+  LogicalName()  ret=?'tuple' object has no attribute 'vt' propget
+  Application()  ret=?'tuple' object has no attribute 'vt' propget
+  Parent()  ret=?'tuple' object has no attribute 'vt' propget
+
+=== VariableGroups  (funcs=0, vars=0) ===
+
+=== _VariableGroups  (funcs=13, vars=0) ===
+  QueryInterface(riid:?'tuple' object has no attribute 'vt', ppvObj:?'tuple' object has no attribute 'vt')  ret=?'tuple' object has no attribute 'vt' 
+  AddRef()  ret=?'tuple' object has no attribute 'vt' 
+  Release()  ret=?'tuple' object has no attribute 'vt' 
+  GetTypeInfoCount(pctinfo:?'tuple' object has no attribute 'vt')  ret=?'tuple' object has no attribute 'vt' 
+  GetTypeInfo(itinfo:?'tuple' object has no attribute 'vt', lcid:?'tuple' object has no attribute 'vt', pptinfo:?'tuple' object has no attribute 'vt')  ret=?'tuple' object has no attribute 'vt' 
+  GetIDsOfNames(riid:?'tuple' object has no attribute 'vt', rgszNames:?'tuple' object has no attribute 'vt', cNames:?'tuple' object has no attribute 'vt', lcid:?'tuple' object has no attribute 'vt', rgdispid:?'tuple' object has no attribute 'vt')  ret=?'tuple' object has no attribute 'vt' 
+  Invoke(dispidMember:?'tuple' object has no attribute 'vt', riid:?'tuple' object has no attribute 'vt', lcid:?'tuple' object has no attribute 'vt', wFlags:?'tuple' object has no attribute 'vt', pdispparams:?'tuple' object has no attribute 'vt', pvarResult:?'tuple' object has no attribute 'vt', pexcepinfo:?'tuple' object has no attribute 'vt', puArgErr:?'tuple' object has no attribute 'vt')  ret=?'tuple' object has no attribute 'vt' 
+  Item(Index:?'tuple' object has no attribute 'vt')  ret=?'tuple' object has no attribute 'vt' 
+  Create(Name:?'tuple' object has no attribute 'vt')  ret=?'tuple' object has no attribute 'vt' 
+  Count()  ret=?'tuple' object has no attribute 'vt' propget
+  _NewEnum()  ret=?'tuple' object has no attribute 'vt' 
+  Application()  ret=?'tuple' object has no attribute 'vt' propget
+  Parent()  ret=?'tuple' object has no attribute 'vt' propget
+
+=== Application  (funcs=0, vars=0) ===
+
+=== _Application  (funcs=102, vars=0) ===
+  QueryInterface(riid:?'tuple' object has no attribute 'vt', ppvObj:?'tuple' object has no attribute 'vt')  ret=?'tuple' object has no attribute 'vt' 
+  AddRef()  ret=?'tuple' object has no attribute 'vt' 
+  Release()  ret=?'tuple' object has no attribute 'vt' 
+  GetTypeInfoCount(pctinfo:?'tuple' object has no attribute 'vt')  ret=?'tuple' object has no attribute 'vt' 
+  GetTypeInfo(itinfo:?'tuple' object has no attribute 'vt', lcid:?'tuple' object has no attribute 'vt', pptinfo:?'tuple' object has no attribute 'vt')  ret=?'tuple' object has no attribute 'vt' 
+  GetIDsOfNames(riid:?'tuple' object has no attribute 'vt', rgszNames:?'tuple' object has no attribute 'vt', cNames:?'tuple' object has no attribute 'vt', lcid:?'tuple' object has no attribute 'vt', rgdispid:?'tuple' object has no attribute 'vt')  ret=?'tuple' object has no attribute 'vt' 
+  Invoke(dispidMember:?'tuple' object has no attribute 'vt', riid:?'tuple' object has no attribute 'vt', lcid:?'tuple' object has no attribute 'vt', wFlags:?'tuple' object has no attribute 'vt', pdispparams:?'tuple' object has no attribute 'vt', pvarResult:?'tuple' object has no attribute 'vt', pexcepinfo:?'tuple' object has no attribute 'vt', puArgErr:?'tuple' object has no attribute 'vt')  ret=?'tuple' object has no attribute 'vt' 
+  AdviseProjectObserver(Observer:?'tuple' object has no attribute 'vt')  ret=?'tuple' object has no attribute 'vt' 
+  UnadviseProjectObserver(Cookie:?'tuple' object has no attribute 'vt')  ret=?'tuple' object has no attribute 'vt' 
+  AdviseProjectStructureObserver(Observer:?'tuple' object has no attribute 'vt', SafeArrayOfObjectType:?'tuple' object has no attribute 'vt')  ret=?'tuple' object has no attribute 'vt' 
+  UnadviseProjectStructureObserver(Cookie:?'tuple' object has no attribute 'vt')  ret=?'tuple' object has no attribute 'vt' 
+  _reserved5()  ret=?'tuple' object has no attribute 'vt' 
+  _reserved6()  ret=?'tuple' object has no attribute 'vt' 
+  AdviseContextMenuExtension(Extension:?'tuple' object has no attribute 'vt', ObjectType:?'tuple' object has no attribute 'vt')  ret=?'tuple' object has no attribute 'vt' 
+  UnadviseContextMenuExtension(Cookie:?'tuple' object has no attribute 'vt')  ret=?'tuple' object has no attribute 'vt' 
+  AdvisePrintExtension(Extension:?'tuple' object has no attribute 'vt', PrintPosition:?'tuple' object has no attribute 'vt', SafeArrayOfObjectType:?'tuple' object has no attribute 'vt')  ret=?'tuple' object has no attribute 'vt' 
+  UnadvisePrintExtension(Cookie:?'tuple' object has no attribute 'vt')  ret=?'tuple' object has no attribute 'vt' 
+  AdviseCompileExtension(Extension:?'tuple' object has no attribute 'vt', ObjectType:?'tuple' object has no attribute 'vt')  ret=?'tuple' object has no attribute 'vt' 
+  UnadviseCompileExtension(Cookie:?'tuple' object has no attribute 'vt')  ret=?'tuple' object has no attribute 'vt' 
+  AdviseSaveObserver(Observer:?'tuple' object has no attribute 'vt', SafeArrayOfObjectType:?'tuple' object has no attribute 'vt')  ret=?'tuple' object has no attribute 'vt' 
+  UnadviseSaveObserver(Cookie:?'tuple' object has no attribute 'vt')  ret=?'tuple' object has no attribute 'vt' 
+  AdvisePropertyObserver(Observer:?'tuple' object has no attribute 'vt', ObjectType:?'tuple' object has no attribute 'vt', SafeArrayOfPropertyIds:?'tuple' object has no attribute 'vt')  ret=?'tuple' object has no attribute 'vt' 
+  UnadvisePropertyObserver(Cookie:?'tuple' object has no attribute 'vt')  ret=?'tuple' object has no attribute 'vt' 
+  AdviseVariableObserver(Observer:?'tuple' object has no attribute 'vt', Actions:?'tuple' object has no attribute 'vt', SafeArrayOfObjectType:?'tuple' object has no attribute 'vt')  ret=?'tuple' object has no attribute 'vt' 
+  UnadviseVariableObserver(Cookie:?'tuple' object has no attribute 'vt')  ret=?'tuple' object has no attribute 'vt' 
+  _reserved19()  ret=?'tuple' object has no attribute 'vt' 
+  _reserved20()  ret=?'tuple' object has no attribute 'vt' 
+  AdviseImportExportObserver(Observer:?'tuple' object has no attribute 'vt', SafeArrayOfImportExportTypes:?'tuple' object has no attribute 'vt')  ret=?'tuple' object has no attribute 'vt' 
+  UnadviseImportExportObserver(Cookie:?'tuple' object has no attribute 'vt')  ret=?'tuple' object has no attribute 'vt' 
+  _reserved23()  ret=?'tuple' object has no attribute 'vt' 
+  ExecuteCommand(CommandId:?'tuple' object has no attribute 'vt')  ret=?'tuple' object has no attribute 'vt' 
+  OpenDocument(Name:?'tuple' object has no attribute 'vt', Visible:?'tuple' object has no attribute 'vt', UserData:?'tuple' object has no attribute 'vt')  ret=?'tuple' object has no attribute 'vt' 
+  OpenProject(Name:?'tuple' object has no attribute 'vt', ConfirmConvert:?'tuple' object has no attribute 'vt')  ret=?'tuple' object has no attribute 'vt' 
+  IsProjectOpen()  ret=?'tuple' object has no attribute 'vt' 
+  LogOn(UserName:?'tuple' object has no attribute 'vt', Password:?'tuple' object has no attribute 'vt')  ret=?'tuple' object has no attribute 'vt' 
+  Quit(ConfirmSave:?'tuple' object has no attribute 'vt')  ret=?'tuple' object has no attribute 'vt' 
+  GetIdOfWindowType(Name:?'tuple' object has no attribute 'vt')  ret=?'tuple' object has no attribute 'vt' 
+  GetIdOfCommand(Name:?'tuple' object has no attribute 'vt')  ret=?'tuple' object has no attribute 'vt' 
+  GetFeatureState(Name:?'tuple' object has no attribute 'vt')  ret=?'tuple' object has no attribute 'vt' 
+  SetMonitorMode(Mode:?'tuple' object has no attribute 'vt', ConfirmSave:?'tuple' object has no attribute 'vt')  ret=?'tuple' object has no attribute 'vt' 
+  Visible()  ret=?'tuple' object has no attribute 'vt' propget
+  Visible(arg0:?'tuple' object has no attribute 'vt')  ret=?'tuple' object has no attribute 'vt' propput
+  Interactive()  ret=?'tuple' object has no attribute 'vt' propget
+  Interactive(arg0:?'tuple' object has no attribute 'vt')  ret=?'tuple' object has no attribute 'vt' propput
+  _reserved37()  ret=?'tuple' object has no attribute 'vt' propget
+  Version()  ret=?'tuple' object has no attribute 'vt' propget
+  Path()  ret=?'tuple' object has no attribute 'vt' propget
+  FullName()  ret=?'tuple' object has no attribute 'vt' propget
+  ActiveProject()  ret=?'tuple' object has no attribute 'vt' propget
+  _reserved42()  ret=?'tuple' object has no attribute 'vt' propget
+  _reserved43()  ret=?'tuple' object has no attribute 'vt' propget
+  AddIns()  ret=?'tuple' object has no attribute 'vt' propget
+  Properties()  ret=?'tuple' object has no attribute 'vt' propget
+  CrossReferenceManager()  ret=?'tuple' object has no attribute 'vt' propget
+  WatchWindow()  ret=?'tuple' object has no attribute 'vt' propget
+  _reserved48()  ret=?'tuple' object has no attribute 'vt' propget
+  OutputWindows()  ret=?'tuple' object has no attribute 'vt' propget
+  ControlBars()  ret=?'tuple' object has no attribute 'vt' propget
+  _reserved51()  ret=?'tuple' object has no attribute 'vt' propget
+  _reserved52()  ret=?'tuple' object has no attribute 'vt' propget
+  ImportExports()  ret=?'tuple' object has no attribute 'vt' propget
+  Application()  ret=?'tuple' object has no attribute 'vt' propget
+  Parent()  ret=?'tuple' object has no attribute 'vt' propget
+  AdviseFrameworkExtension(AddInName:?'tuple' object has no attribute 'vt', CommandTarget:?'tuple' object has no attribute 'vt', ResourceProvider:?'tuple' object has no attribute 'vt')  ret=?'tuple' object has no attribute 'vt' 
+  UnadviseFrameworkExtension(Cookie:?'tuple' object has no attribute 'vt')  ret=?'tuple' object has no attribute 'vt' 
+  ChangeMenuSet(AddInCookie:?'tuple' object has no attribute 'vt', MenuSetID:?'tuple' object has no attribute 'vt')  ret=?'tuple' object has no attribute 'vt' 
+  SourceCodeControlProviders()  ret=?'tuple' object has no attribute 'vt' propget
+  CurrentSourceCodeControlProvider()  ret=?'tuple' object has no attribute 'vt' propget
+  SourceCodeControlUserName()  ret=?'tuple' object has no attribute 'vt' propget
+  AdviseSourceCodeControlObserver(Observer:?'tuple' object has no attribute 'vt')  ret=?'tuple' object has no attribute 'vt' 
+  UnadviseSourceCodeControlObserver(Cookie:?'tuple' object has no attribute 'vt')  ret=?'tuple' object has no attribute 'vt' 
+  CloseAllResourceControlDialogs()  ret=?'tuple' object has no attribute 'vt' 
+  IsAnyCommunicationChannelOpen()  ret=?'tuple' object has no attribute 'vt' propget
+  ExecuteDdeCommand(CommandString:?'tuple' object has no attribute 'vt')  ret=?'tuple' object has no attribute 'vt' 
+  AdviseProgressObserver(Observer:?'tuple' object has no attribute 'vt', ProgressType:?'tuple' object has no attribute 'vt')  ret=?'tuple' object has no attribute 'vt' 
+  UnadviseProgressObserver(Cookie:?'tuple' object has no attribute 'vt')  ret=?'tuple' object has no attribute 'vt' 
+  AdviseVariableGroupObserver(Observer:?'tuple' object has no attribute 'vt', Actions:?'tuple' object has no attribute 'vt', SafeArrayOfObjectType:?'tuple' object has no attribute 'vt')  ret=?'tuple' object has no attribute 'vt' 
+  UnadviseVariableGroupObserver(Cookie:?'tuple' object has no attribute 'vt')  ret=?'tuple' object has no attribute 'vt' 
+  AdviseDataTypeObserver(Observer:?'tuple' object has no attribute 'vt')  ret=?'tuple' object has no attribute 'vt' 
+  UnadviseDataTypeObserver(Cookie:?'tuple' object has no attribute 'vt')  ret=?'tuple' object has no attribute 'vt' 
+  DisableClosing()  ret=?'tuple' object has no attribute 'vt' propget
+  DisableClosing(arg0:?'tuple' object has no attribute 'vt')  ret=?'tuple' object has no attribute 'vt' propput
+  AdviseFrameworkExtension2(AddInName:?'tuple' object has no attribute 'vt', CommandTarget:?'tuple' object has no attribute 'vt', ResourceProvider:?'tuple' object has no attribute 'vt')  ret=?'tuple' object has no attribute 'vt' 
+  UnadviseFrameworkExtension2(Cookie:?'tuple' object has no attribute 'vt')  ret=?'tuple' object has no attribute 'vt' 
+  LockCommand(CommandId:?'tuple' object has no attribute 'vt')  ret=?'tuple' object has no attribute 'vt' 
+  UnlockCommand(CommandId:?'tuple' object has no attribute 'vt')  ret=?'tuple' object has no attribute 'vt' 
+  IsCommandLocked(CommandId:?'tuple' object has no attribute 'vt')  ret=?'tuple' object has no attribute 'vt' 
+  ApplicationState()  ret=?'tuple' object has no attribute 'vt' propget
+  AdviseProjectObserver2(Observer:?'tuple' object has no attribute 'vt')  ret=?'tuple' object has no attribute 'vt' 
+  UnadviseProjectObserver2(Cookie:?'tuple' object has no attribute 'vt')  ret=?'tuple' object has no attribute 'vt' 
+  AdviseObjectDataObserver(Observer:?'tuple' object has no attribute 'vt', SafeArrayOfObjectType:?'tuple' object has no attribute 'vt')  ret=?'tuple' object has no attribute 'vt' 
+  UnadviseObjectDataObserver(Cookie:?'tuple' object has no attribute 'vt')  ret=?'tuple' object has no attribute 'vt' 
+  ExternalImportExportProviders()  ret=?'tuple' object has no attribute 'vt' propget
+  StatusBarEntries()  ret=?'tuple' object has no attribute 'vt' propget
+  AdviseVariableObserver2(Observer:?'tuple' object has no attribute 'vt', Actions:?'tuple' object has no attribute 'vt', SafeArrayOfObjectType:?'tuple' object has no attribute 'vt')  ret=?'tuple' object has no attribute 'vt' 
+  UnadviseVariableObserver2(Cookie:?'tuple' object has no attribute 'vt')  ret=?'tuple' object has no attribute 'vt' 
+  WorkspaceManager()  ret=?'tuple' object has no attribute 'vt' propget
+  AdviseJumpResolver(JumpResolver:?'tuple' object has no attribute 'vt')  ret=?'tuple' object has no attribute 'vt' 
+  UnadviseJumpResolver(Cookie:?'tuple' object has no attribute 'vt')  ret=?'tuple' object has no attribute 'vt' 
+  _reserved91()  ret=?'tuple' object has no attribute 'vt' 
+  ExportEvcObject(objType:?'tuple' object has no attribute 'vt')  ret=?'tuple' object has no attribute 'vt' 
+  ImportEvcObject(objType:?'tuple' object has no attribute 'vt')  ret=?'tuple' object has no attribute 'vt' 
+
+=== Project  (funcs=0, vars=0) ===
+
+=== _Project  (funcs=43, vars=0) ===
+  QueryInterface(riid:?'tuple' object has no attribute 'vt', ppvObj:?'tuple' object has no attribute 'vt')  ret=?'tuple' object has no attribute 'vt' 
+  AddRef()  ret=?'tuple' object has no attribute 'vt' 
+  Release()  ret=?'tuple' object has no attribute 'vt' 
+  GetTypeInfoCount(pctinfo:?'tuple' object has no attribute 'vt')  ret=?'tuple' object has no attribute 'vt' 
+  GetTypeInfo(itinfo:?'tuple' object has no attribute 'vt', lcid:?'tuple' object has no attribute 'vt', pptinfo:?'tuple' object has no attribute 'vt')  ret=?'tuple' object has no attribute 'vt' 
+  GetIDsOfNames(riid:?'tuple' object has no attribute 'vt', rgszNames:?'tuple' object has no attribute 'vt', cNames:?'tuple' object has no attribute 'vt', lcid:?'tuple' object has no attribute 'vt', rgdispid:?'tuple' object has no attribute 'vt')  ret=?'tuple' object has no attribute 'vt' 
+  Invoke(dispidMember:?'tuple' object has no attribute 'vt', riid:?'tuple' object has no attribute 'vt', lcid:?'tuple' object has no attribute 'vt', wFlags:?'tuple' object has no attribute 'vt', pdispparams:?'tuple' object has no attribute 'vt', pvarResult:?'tuple' object has no attribute 'vt', pexcepinfo:?'tuple' object has no attribute 'vt', puArgErr:?'tuple' object has no attribute 'vt')  ret=?'tuple' object has no attribute 'vt' 
+  Close(ConfirmSave:?'tuple' object has no attribute 'vt')  ret=?'tuple' object has no attribute 'vt' 
+  GetInstancePathForPou(PouName:?'tuple' object has no attribute 'vt')  ret=?'tuple' object has no attribute 'vt' 
+  Name()  ret=?'tuple' object has no attribute 'vt' propget
+  Path()  ret=?'tuple' object has no attribute 'vt' propget
+  FullName()  ret=?'tuple' object has no attribute 'vt' propget
+  Hardware()  ret=?'tuple' object has no attribute 'vt' propget
+  Pous()  ret=?'tuple' object has no attribute 'vt' propget
+  DataTypes()  ret=?'tuple' object has no attribute 'vt' propget
+  Properties()  ret=?'tuple' object has no attribute 'vt' propget
+  _reserved9()  ret=?'tuple' object has no attribute 'vt' propget
+  _reserved10()  ret=?'tuple' object has no attribute 'vt' propget
+  Application()  ret=?'tuple' object has no attribute 'vt' propget
+  Parent()  ret=?'tuple' object has no attribute 'vt' propget
+  Create(Path:?'tuple' object has no attribute 'vt', Name:?'tuple' object has no attribute 'vt', TemplateName:?'tuple' object has no attribute 'vt')  ret=?'tuple' object has no attribute 'vt' 
+  Compile(CompileType:?'tuple' object has no attribute 'vt')  ret=?'tuple' object has no attribute 'vt' 
+  Libraries()  ret=?'tuple' object has no attribute 'vt' propget
+  SourceCodeControlDatabaseFilename()  ret=?'tuple' object has no attribute 'vt' propget
+  SourceCodeControlProjectPath()  ret=?'tuple' object has no attribute 'vt' propget
+  SourceCodeControlLocalPath()  ret=?'tuple' object has no attribute 'vt' propget
+  ConnectedWithSourceCodeControlProvider()  ret=?'tuple' object has no attribute 'vt' propget
+  MultiUser()  ret=?'tuple' object has no attribute 'vt' propget
+  SaveAsServer(DatabasePath:?'tuple' object has no attribute 'vt', SourceCodeControlProjectPath:?'tuple' object has no attribute 'vt')  ret=?'tuple' object has no attribute 'vt' 
+  UpdateSourceCodeControlState()  ret=?'tuple' object has no attribute 'vt' 
+  GetObjectByLogicalName(LogicalName:?'tuple' object has no attribute 'vt', ObjectType:?'tuple' object has no attribute 'vt')  ret=?'tuple' object has no attribute 'vt' 
+  IsModified()  ret=?'tuple' object has no attribute 'vt' propget
+  Save()  ret=?'tuple' object has no attribute 'vt' 
+  IsCompiled()  ret=?'tuple' object has no attribute 'vt' propget
+  Compare(ReferenceProject:?'tuple' object has no attribute 'vt', CompareOptions:?'tuple' object has no attribute 'vt')  ret=?'tuple' object has no attribute 'vt' 
+  LastModified()  ret=?'tuple' object has no attribute 'vt' propget
+  SecurityState()  ret=?'tuple' object has no attribute 'vt' propget
+  SecurityState(arg0:?'tuple' object has no attribute 'vt')  ret=?'tuple' object has no attribute 'vt' propput
+  EnumVarAttributes()  ret=?'tuple' object has no attribute 'vt' propget
+  GetLogicalNameOfActiveView()  ret=?'tuple' object has no attribute 'vt' 
+  SaveAsServer2(DatabasePath:?'tuple' object has no attribute 'vt', SourceCodeControlProjectPath:?'tuple' object has no attribute 'vt', Comment:?'tuple' object has no attribute 'vt')  ret=?'tuple' object has no attribute 'vt' 
+  SaveAs(Path:?'tuple' object has no attribute 'vt', flags:?'tuple' object has no attribute 'vt')  ret=?'tuple' object has no attribute 'vt' 
+  Released()  ret=?'tuple' object has no attribute 'vt' propget
+
+=== Pous  (funcs=0, vars=0) ===
+
+=== _Pous  (funcs=20, vars=0) ===
+  QueryInterface(riid:?'tuple' object has no attribute 'vt', ppvObj:?'tuple' object has no attribute 'vt')  ret=?'tuple' object has no attribute 'vt' 
+  AddRef()  ret=?'tuple' object has no attribute 'vt' 
+  Release()  ret=?'tuple' object has no attribute 'vt' 
+  GetTypeInfoCount(pctinfo:?'tuple' object has no attribute 'vt')  ret=?'tuple' object has no attribute 'vt' 
+  GetTypeInfo(itinfo:?'tuple' object has no attribute 'vt', lcid:?'tuple' object has no attribute 'vt', pptinfo:?'tuple' object has no attribute 'vt')  ret=?'tuple' object has no attribute 'vt' 
+  GetIDsOfNames(riid:?'tuple' object has no attribute 'vt', rgszNames:?'tuple' object has no attribute 'vt', cNames:?'tuple' object has no attribute 'vt', lcid:?'tuple' object has no attribute 'vt', rgdispid:?'tuple' object has no attribute 'vt')  ret=?'tuple' object has no attribute 'vt' 
+  Invoke(dispidMember:?'tuple' object has no attribute 'vt', riid:?'tuple' object has no attribute 'vt', lcid:?'tuple' object has no attribute 'vt', wFlags:?'tuple' object has no attribute 'vt', pdispparams:?'tuple' object has no attribute 'vt', pvarResult:?'tuple' object has no attribute 'vt', pexcepinfo:?'tuple' object has no attribute 'vt', puArgErr:?'tuple' object has no attribute 'vt')  ret=?'tuple' object has no attribute 'vt' 
+  Item(Index:?'tuple' object has no attribute 'vt')  ret=?'tuple' object has no attribute 'vt' 
+  Count()  ret=?'tuple' object has no attribute 'vt' propget
+  _NewEnum()  ret=?'tuple' object has no attribute 'vt' 
+  _reserved2()  ret=?'tuple' object has no attribute 'vt' propget
+  _reserved3()  ret=?'tuple' object has no attribute 'vt' propget
+  Application()  ret=?'tuple' object has no attribute 'vt' propget
+  Parent()  ret=?'tuple' object has no attribute 'vt' propget
+  Create(Name:?'tuple' object has no attribute 'vt', Type:?'tuple' object has no attribute 'vt', Language:?'tuple' object has no attribute 'vt', ReturnType:?'tuple' object has no attribute 'vt', PlcType:?'tuple' object has no attribute 'vt', ProcessorType:?'tuple' object has no attribute 'vt')  ret=?'tuple' object has no attribute 'vt' 
+  LogicalName()  ret=?'tuple' object has no attribute 'vt' propget
+  SecurityState()  ret=?'tuple' object has no attribute 'vt' propget
+  SecurityState(arg0:?'tuple' object has no attribute 'vt')  ret=?'tuple' object has no attribute 'vt' propput
+  ReadOnlyAttribute()  ret=?'tuple' object has no attribute 'vt' propget
+  ReadOnlyAttribute(arg0:?'tuple' object has no attribute 'vt')  ret=?'tuple' object has no attribute 'vt' propput
+
+=== Pou  (funcs=0, vars=0) ===
+
+=== _Pou  (funcs=35, vars=0) ===
+  QueryInterface(riid:?'tuple' object has no attribute 'vt', ppvObj:?'tuple' object has no attribute 'vt')  ret=?'tuple' object has no attribute 'vt' 
+  AddRef()  ret=?'tuple' object has no attribute 'vt' 
+  Release()  ret=?'tuple' object has no attribute 'vt' 
+  GetTypeInfoCount(pctinfo:?'tuple' object has no attribute 'vt')  ret=?'tuple' object has no attribute 'vt' 
+  GetTypeInfo(itinfo:?'tuple' object has no attribute 'vt', lcid:?'tuple' object has no attribute 'vt', pptinfo:?'tuple' object has no attribute 'vt')  ret=?'tuple' object has no attribute 'vt' 
+  GetIDsOfNames(riid:?'tuple' object has no attribute 'vt', rgszNames:?'tuple' object has no attribute 'vt', cNames:?'tuple' object has no attribute 'vt', lcid:?'tuple' object has no attribute 'vt', rgdispid:?'tuple' object has no attribute 'vt')  ret=?'tuple' object has no attribute 'vt' 
+  Invoke(dispidMember:?'tuple' object has no attribute 'vt', riid:?'tuple' object has no attribute 'vt', lcid:?'tuple' object has no attribute 'vt', wFlags:?'tuple' object has no attribute 'vt', pdispparams:?'tuple' object has no attribute 'vt', pvarResult:?'tuple' object has no attribute 'vt', pexcepinfo:?'tuple' object has no attribute 'vt', puArgErr:?'tuple' object has no attribute 'vt')  ret=?'tuple' object has no attribute 'vt' 
+  Name()  ret=?'tuple' object has no attribute 'vt' propget
+  PouType()  ret=?'tuple' object has no attribute 'vt' propget
+  PouLanguage()  ret=?'tuple' object has no attribute 'vt' propget
+  Path()  ret=?'tuple' object has no attribute 'vt' propget
+  LogicalName()  ret=?'tuple' object has no attribute 'vt' propget
+  _reserved5()  ret=?'tuple' object has no attribute 'vt' propget
+  _reserved6()  ret=?'tuple' object has no attribute 'vt' propget
+  Variables()  ret=?'tuple' object has no attribute 'vt' propget
+  Application()  ret=?'tuple' object has no attribute 'vt' propget
+  Parent()  ret=?'tuple' object has no attribute 'vt' propget
+  Copy(newPouName:?'tuple' object has no attribute 'vt')  ret=?'tuple' object has no attribute 'vt' 
+  Convert(newPouLanguage:?'tuple' object has no attribute 'vt')  ret=?'tuple' object has no attribute 'vt' 
+  Name(arg0:?'tuple' object has no attribute 'vt')  ret=?'tuple' object has no attribute 'vt' propput
+  Delete()  ret=?'tuple' object has no attribute 'vt' 
+  ReadOnly()  ret=?'tuple' object has no attribute 'vt' propget
+  UnderSourceCodeControl()  ret=?'tuple' object has no attribute 'vt' propget
+  CheckedOut()  ret=?'tuple' object has no attribute 'vt' propget
+  _reserved16()  ret=?'tuple' object has no attribute 'vt' propget
+  PlcType()  ret=?'tuple' object has no attribute 'vt' propget
+  PlcType(arg0:?'tuple' object has no attribute 'vt')  ret=?'tuple' object has no attribute 'vt' propput
+  ProcessorType()  ret=?'tuple' object has no attribute 'vt' propget
+  ProcessorType(arg0:?'tuple' object has no attribute 'vt')  ret=?'tuple' object has no attribute 'vt' propput
+  GroupPath()  ret=?'tuple' object has no attribute 'vt' propget
+  MoveToGroup(destinationGroupPath:?'tuple' object has no attribute 'vt')  ret=?'tuple' object has no attribute 'vt' 
+  SecurityState()  ret=?'tuple' object has no attribute 'vt' propget
+  SecurityState(arg0:?'tuple' object has no attribute 'vt')  ret=?'tuple' object has no attribute 'vt' propput
+  ReadOnlyAttribute()  ret=?'tuple' object has no attribute 'vt' propget
+  ReadOnlyAttribute(arg0:?'tuple' object has no attribute 'vt')  ret=?'tuple' object has no attribute 'vt' propput
+
+=== IAdeVariableGroupObserver  (funcs=6, vars=0) ===
+  BeforeInsert(ObjectType:?'tuple' object has no attribute 'vt', VariableGroup:?'tuple' object has no attribute 'vt', Cancel:?'tuple' object has no attribute 'vt')  ret=?'tuple' object has no attribute 'vt' 
+  AfterInsert(ObjectType:?'tuple' object has no attribute 'vt', VariableGroup:?'tuple' object has no attribute 'vt')  ret=?'tuple' object has no attribute 'vt' 
+  BeforeDelete(ObjectType:?'tuple' object has no attribute 'vt', VariableGroup:?'tuple' object has no attribute 'vt', Cancel:?'tuple' object has no attribute 'vt')  ret=?'tuple' object has no attribute 'vt' 
+  AfterDelete(ObjectType:?'tuple' object has no attribute 'vt', VariableGroup:?'tuple' object has no attribute 'vt')  ret=?'tuple' object has no attribute 'vt' 
+  BeforeChange(ObjectType:?'tuple' object has no attribute 'vt', OldVariableGroup:?'tuple' object has no attribute 'vt', NewVariableGroup:?'tuple' object has no attribute 'vt', Cancel:?'tuple' object has no attribute 'vt')  ret=?'tuple' object has no attribute 'vt' 
+  AfterChange(ObjectType:?'tuple' object has no attribute 'vt', OldVariableGroup:?'tuple' object has no attribute 'vt', NewVariableGroup:?'tuple' object has no attribute 'vt')  ret=?'tuple' object has no attribute 'vt' 
+
+=== IAdeVariableObserver2  (funcs=9, vars=0) ===
+  BeforeInsert(ObjectType:?'tuple' object has no attribute 'vt', Variable:?'tuple' object has no attribute 'vt', Cancel:?'tuple' object has no attribute 'vt')  ret=?'tuple' object has no attribute 'vt' 
+  AfterInsert(ObjectType:?'tuple' object has no attribute 'vt', Variable:?'tuple' object has no attribute 'vt')  ret=?'tuple' object has no attribute 'vt' 
+  BeforeDelete(ObjectType:?'tuple' object has no attribute 'vt', Variable:?'tuple' object has no attribute 'vt', Cancel:?'tuple' object has no attribute 'vt')  ret=?'tuple' object has no attribute 'vt' 
+  AfterDelete(ObjectType:?'tuple' object has no attribute 'vt', Variable:?'tuple' object has no attribute 'vt')  ret=?'tuple' object has no attribute 'vt' 
+  BeforeChange(ObjectType:?'tuple' object has no attribute 'vt', OldVariable:?'tuple' object has no attribute 'vt', NewVariable:?'tuple' object has no attribute 'vt', Cancel:?'tuple' object has no attribute 'vt')  ret=?'tuple' object has no attribute 'vt' 
+  AfterChange(ObjectType:?'tuple' object has no attribute 'vt', OldVariable:?'tuple' object has no attribute 'vt', NewVariable:?'tuple' object has no attribute 'vt')  ret=?'tuple' object has no attribute 'vt' 
+  OnErrorCodeChanged(ObjectType:?'tuple' object has no attribute 'vt', Variable:?'tuple' object has no attribute 'vt')  ret=?'tuple' object has no attribute 'vt' 
+  BeforeMove(ObjectType:?'tuple' object has no attribute 'vt', OldVariable:?'tuple' object has no attribute 'vt', NewVariableGroup:?'tuple' object has no attribute 'vt', Cancel:?'tuple' object has no attribute 'vt')  ret=?'tuple' object has no attribute 'vt' 
+  AfterMove(ObjectType:?'tuple' object has no attribute 'vt', NewVariable:?'tuple' object has no attribute 'vt', OldVariableGroup:?'tuple' object has no attribute 'vt')  ret=?'tuple' object has no attribute 'vt' 
+

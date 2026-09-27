@@ -1,0 +1,435 @@
+﻿=== AdeErrors (100 values) ===
+  -2147205120  adeErrInternal
+  -2147205119  adeErrPouNotFound
+  -2147205118  adeErrVariableNotFound
+  -2147205117  adeErrCouldNotOpenWorksheet
+  -2147205116  adeErrCompilationError
+  -2147205115  adeErrOpenProjectBeforeCloseProject
+  -2147205114  adeErrProjectConversionFailed
+  -2147205113  adeErrInvalidProjectPath
+  -2147205112  adeErrNoProjectOpen
+  -2147205111  adeErrInvalidObject
+  -2147205110  adeErrObjectNotFound
+  -2147205109  adeErrOnlineIsOn
+  -2147205108  adeErrCanNotCreateObject
+  -2147205107  adeErrDeleteGroupFailed
+  -2147205106  adeErrTemporaryObject
+  -2147205105  adeErrControlBarNotFound
+  -2147205104  adeErrIndexOutOfRange
+  -2147205103  adeErrObserverActive
+  -2147205102  adeErrActionCanceled
+  -2147205101  adeErrDataAccessFailed
+  -2147205100  adeErrIoGroupAlreadyExists
+  -2147205099  adeErrReadOnly
+  -2147205098  adeErrOnlineIsOff
+  -2147205097  adeErrInvalidInstancePath
+  -2147205096  adeErrReadValuesIsActive
+  -2147205095  adeErrInvalidFunctionCall
+  -2147205094  adeErrPlcFunctionNotSupported
+  -2147205093  adeErrPlcDataTypeNotSupported
+  -2147205092  adeErrVariableNotFoundInPou
+  -2147205091  adeErrVariableNotFoundInProject
+  -2147205090  adeErrVariableNotFoundInDefinition
+  -2147205089  adeErrUnknownEditorType
+  -2147205088  adeErrCommandNotFound
+  -2147205087  adeErrWindowNotFound
+  -2147205086  adeErrDdeSyntaxError
+  -2147205085  adeErrChangeMonitorMode
+  -2147205084  adeErrCompilerActive
+  -2147205083  adeErrProjectAlreadyExists
+  -2147205082  adeErrPouAlreadyExists
+  -2147205081  adeErrLibraryNotFound
+  -2147205080  adeErrLibraryIsNotCompiled
+  -2147205079  adeErrResourceHasNotAnyTasks
+  -2147205078  adeErrTaskHasNotAnyPrograms
+  -2147205077  adeErrCannotMarkProjectAsChanged
+  -2147205076  adeErrInvalidOrMissingReturnType
+  -2147205075  adeErrInvalidPouLanguage
+  -2147205074  adeErrInvalidPouType
+  -2147205073  adeErrInvalidPlcType
+  -2147205072  adeErrInvalidProcessorType
+  -2147205071  adeErrInvalidTaskType
+  -2147205070  adeErrUnknownProgramType
+  -2147205069  adeErrTypeIsNoProgram
+  -2147205068  adeErrLibraryAlreadyExists
+  -2147205067  adeErrConfigurationAlreadyExists
+  -2147205066  adeErrResourceAlreadyExists
+  -2147205065  adeErrTaskAlreadyExists
+  -2147205064  adeErrProgramInstanceAlreadyExists
+  -2147205063  adeErrTemplateNotFound
+  -2147205062  adeErrObjectTypeNotSupported
+  -2147205061  adeErrSccOptionNotSupported
+  -2147205060  adeErrSccApiError
+  -2147205059  adeErrSccCheckedOutByOtherUser
+  -2147205058  adeErrSccCheckedOutOnDifferentLocation
+  -2147205057  adeErrSccCommandNotSupported
+  -2147205056  adeErrSccInvalidClientPath
+  -2147205055  adeErrSccAlreadyCheckedOut
+  -2147205054  adeErrSccObjectIsClientOnly
+  -2147205053  adeErrSccObjectNotCheckedOut
+  -2147205052  adeErrSccObjectNotUnderScc
+  -2147205051  adeErrSccObjectAlreadyUnderScc
+  -2147205050  adeErrSccObjectWithSameNameUnderScc
+  -2147205049  adeErrSccNoConnection
+  -2147205048  adeErrSccNoUserLoggedOn
+  -2147205047  adeErrExcludedFromCompilation
+  -2147205046  adeErrMultiUserOperationInprogress
+  -2147205045  adeErrGlobalOperationInProgress
+  -2147205044  adeErrDownloadChangesNotPossible
+  -2147205043  adeErrNotSupported
+  -2147205042  adeErrVariableNotFoundInConfiguration
+  -2147205041  adeErrVariableNotFoundInResource
+  -2147205040  adeErrInvalidPouGroupPath
+  -2147205039  adeErrLanguageNotSupported
+  -2147205038  adeErrReadProtected
+  -2147205037  adeErrProjectNotCompiled
+  -2147205036  adeErrReferenceProjectNotFound
+  -2147205035  adeErrReferenceProjectNotCompiled
+  -2147205034  adeErrAccessToReferenceProjectDenied
+  -2147205033  adeErrProjectAndReferenceProjectIdentical
+  -2147205032  adeErrNoAccessReferenceProjectIsAlreadyOpen
+  -2147205031  adeErrAccessDenied
+  -2147205030  adeErrDownloadInProgess
+  -2147205029  adeErrProviderIDAlreadyExists
+  -2147205028  adeErrStatusBarEntryAlreadyExists
+  -2147205027  adeErrCurrentlyNoAccess
+  -2147205026  adeErrMaxNoOfEntriesReached
+  -2147205025  adeErrObjectNotInitialized
+  -2147205024  adeErrFileError
+  -2147205023  adeErrExpressionError
+  -2147205022  adeErrWorksheetNotFound
+  -2147205021  adeErrMaxOpenedDocuments
+
+=== AdeObjectType (17 values) ===
+     253  adeOtApplication
+       1  adeOtProject
+       2  adeOtLibraries
+      31  adeOtLibrary
+       5  adeOtPous
+      24  adeOtFunction
+       6  adeOtFunctionBlock
+       7  adeOtProgram
+      26  adeOtHardware
+      13  adeOtConfiguration
+      14  adeOtResource
+      20  adeOtTask
+      19  adeOtProgramInstance
+      44  adeOtFbInstance
+     254  adeOtVariable
+     252  adeOtVariables
+      41  adeOtDataTypes
+
+=== AdeMenuState (3 values) ===
+       0  adeMsEnabled
+       1  adeMsGrayed
+       8  adeMsChecked
+
+=== AdePrintPosition (3 values) ===
+       0  adePripBefore
+       1  adePripInstead
+       2  adePripAfter
+
+=== AdeConnectMode (4 values) ===
+       0  adeCmAfterStartup
+       1  adeCmStartup
+       2  adeCmExternal
+       3  adeCmCommandLine
+
+=== AdeDisconnectMode (2 values) ===
+       0  adeDmHostShutdown
+       1  adeDmUserClosed
+
+=== AdeProjectProperty (4 values) ===
+       1  adePpSecurityActivated
+       2  adePpCurrentLocale
+       3  adePpSourceStoragesValid
+       4  adePpSealedProject
+
+=== AdeApplicationProperty (12 values) ===
+       1  adeApCurrentLocale
+       2  adeApOnlineOn
+       3  adeApCompilerRunning
+       4  adeApFirstInstance
+       5  adeApMonitorMode
+       6  adeApStartModeAutomation
+       7  adeApTheme
+       8  adeApUseDinIdentifiers
+       9  adeApNotOnPlcActive
+      10  adeApRedundancyAvailable
+      11  adeApIsMultiprogExpress
+      12  adeApCompilerRunningExt
+
+=== AdeVariableAction (4 values) ===
+       1  adeVaCreate
+       2  adeVaDelete
+       4  adeVaChange
+       8  adeVaMove
+
+=== AdeVariableBlockType (13 values) ===
+       1  adeVarBlockVar
+       2  adeVarBlockVarInput
+       3  adeVarBlockVarOutput
+       4  adeVarBlockVarInOut
+       5  adeVarBlockVarExternal
+       6  adeVarBlockVarGlobal
+       7  adeVarBlockVarAccess
+       8  adeVarBlockVarAuto
+       9  adeVarBlockVarAlias
+      10  adeVarBlockVarExternalPg
+      11  adeVarBlockVarGlobalPg
+      12  adeVarBlockVarExternalFb
+      13  adeVarBlockVarGlobalFb
+
+=== AdeOutputWindowMessageType (10 values) ===
+       0  adeOwMsgDefault
+       1  adeOwMsgError
+       2  adeOwMsgFatalError
+       3  adeOwMsgFileError
+       4  adeOwMsgInternalError
+       5  adeOwMsgWarningLevel1
+       6  adeOwMsgWarningLevel2
+       7  adeOwMsgResultError
+       8  adeOwMsgResultOk
+       9  adeOwMsgInfo
+
+=== AdeConfirmRule (4 values) ===
+       0  adeCrAskUser
+       1  adeCrAskUserWithCancel
+       2  adeCrConfirm
+       3  adeCrNotConfirm
+
+=== AdeDataTypeKind (4 values) ===
+       1  adeDtElementary
+       2  adeDtStruct
+       3  adeDtArray
+       4  adeDtUserString
+
+=== AdePouLanguage (7 values) ===
+       1  adePlIl
+       2  adePlSt
+       3  adePlFbd
+       4  adePlLd
+       5  adePlSfc
+       6  adePlMsfc
+       7  adePlFfld
+
+=== AdeCompileType (5 values) ===
+       1  adeCtMake
+       2  adeCtBuild
+       3  adeCtPatch
+       4  adeCtWorksheet
+       5  adeCtDataTypes
+
+=== AdeIoGroupAccessType (2 values) ===
+       1  adeIgatInput
+       2  adeIgatOutput
+
+=== AdeIoGroupDataType (4 values) ===
+       1  adeIgdtBool
+       8  adeIgdtByte
+      16  adeIgdtWord
+      32  adeIgdtDword
+
+=== AdeMemoryAlignment (5 values) ===
+       1  adeMaBool
+total enum type-infos: 46 of 172 type-infos
+       8  adeMaByte
+      16  adeMaWord
+      32  adeMaQuad
+      64  adeMaLongWord
+
+=== AdeImportExportDirection (2 values) ===
+       1  adeIedExport
+       2  adeIedImport
+
+=== AdeImportObjectType (10 values) ===
+       1  adeIotDataTypes
+       2  adeIotPou
+       3  adeIotHardware
+       4  adeIotConfiguration
+       5  adeIotResource
+       6  adeIotTask
+       7  adeIotIoConfiguration
+       8  adeIotVariables
+       8  adeIotNetworkVariables
+       8  adeIotGlobalVariables
+
+=== AdeMonitorMode (3 values) ===
+       0  adeNoMonitorMode
+       1  adeHalfMonitorMode
+       2  adeFullMonitorMode
+
+=== AdeLoadDirection (2 values) ===
+       1  adeLdDown
+       2  adeLdUp
+
+=== AdeUpDownloadType (4 values) ===
+       1  adeUdtProject
+       2  adeUdtBootProject
+       3  adeUdtChanges
+       4  adeUdtFile
+
+=== AdeCommandStatus (4 values) ===
+       0  adeCSDisabled
+       1  adeCSEnabled
+       0  adeCSUnchecked
+       2  adeCSChecked
+
+=== AdeMenuType (4 values) ===
+       1  adeMTStatic
+       2  adeMTDynamic
+      16  adeMTMainMenuExtension
+      32  adeMTSubMenuExtension
+
+=== AdeSubMenu (11 values) ===
+       1  adeSMFile
+       2  adeSMEdit
+       3  adeSMView
+       4  adeSMProject
+       5  adeSMBuild
+       6  adeSMOnline
+       7  adeSMExtras
+       8  adeSMHelp
+     100  adeSMObject
+     101  adeSMLayout
+     102  adeSMWindow
+
+=== AdeSourceCodeControlOperationType (12 values) ===
+       0  adeSOTUnknown
+       1  adeSOTCheckOut
+       2  adeSOTCheckIn
+       3  adeSOTUndoCheckOut
+       4  adeSOTGetLatestVersion
+       5  adeSOTInsertToServer
+       6  adeSOTDeleteFromServer
+       7  adeSOTUpdateStructure
+       8  adeSOTSaveAsServer
+       9  adeSOTCreateClient
+      10  adeSOTInsertFromServer
+      11  adeSOTDeleteClientOnly
+
+=== AdeSourceCodeControlOptions (8 values) ===
+       0  adeSccNoOptions
+       1  adeSccKeepCheckedOut
+       2  adeSccKeepLocalVersion
+      32  adeSccAddNewNodesToServer
+      64  adeSccDeleteClientOnlyNodes
+     128  adeSccAddNewNodesFromServer
+     256  adeSccGetLatestVersion
+      12  adeSccOverwriteCheckedOut
+
+=== AdeProgressType (3 values) ===
+       1  adeProgressCompile
+       2  adeProgressDownload
+       3  adeProgressBuild
+
+=== AdeActionType (3 values) ===
+       1  adeAtInsert
+       2  adeAtDelete
+       4  adeAtChange
+
+=== AdeCommand (12 values) ===
+   36569  adeCmdFileNewProject
+   36560  adeCmdFileOpenProject
+   36561  adeCmdFileSaveProjectAs
+   36562  adeCmdFileCloseProject
+   36576  adeCmdFileDeleteProject
+   36647  adeCmdFileSaveAsTemplate
+   36648  adeCmdFileDeleteTemplate
+   36567  adeCmdBuildMake
+   36583  adeCmdBuildPatchPou
+   36568  adeCmdBuildCompileWorksheet
+   36570  adeCmdBuildRebuildProject
+   36566  adeCmdBuildStopCompile
+
+=== AdeProjectCompareOptions (2 values) ===
+       0  adePcoNone
+       1  adePcoNoWorkspaceSwitch
+
+=== AdeSecurityStates (13 values) ===
+       0  adeSecNone
+       1  adeSecWriteProtection
+       2  adeSecReadProtection
+       8  adeSecLibraryStructureProtection
+      16  adeSecDataTypesStructureProtection
+      32  adeSecPouStructureProtection
+      64  adeSecTargetStructureProtection
+     128  adeSecConfigurationStructureProtection
+     256  adeSecResourceStructureProtection
+     512  adeSecDownloadProtection
+    1024  adeSecDebugProtection
+  268435456  adeSecPartiallyWriteProtection
+  536870912  adeSecPartiallyReadProtection
+
+=== AdeApplicationStates (8 values) ===
+       0  adeASIdle
+       1  adeASOnlineMode
+       2  adeASCompiling
+       4  adeASMultiUser
+       8  adeASImportExport
+      16  adeASBuildingCrossReferences
+      32  adeASDownloading
+  1073741824  adeASUnspecifiedLongOperation
+
+=== AdeTriState (3 values) ===
+       0  adeTSFalse
+      -1  adeTSTrue
+      -2  adeTSIntermediate
+
+=== AdeCrossReferenceProviderType (3 values) ===
+       1  adeCrptLocal
+       2  adeCrptGlobal
+       3  adeCrptAll
+
+=== AdeCrossReferenceType (2 values) ===
+       1  adeCrfInternal
+       2  adeCrfExternal
+
+=== AdeVarAttrDataType (3 values) ===
+       3  adeVadtI4
+       8  adeVadtBSTR
+      11  adeVadtBOOL
+
+=== AdeEvcObject (2 values) ===
+       1  adeEvcSafety
+       2  adeEvcHW
+
+=== AdeSaveAsFlags (5 values) ===
+       1  adeSafLibraries
+       2  adeSafFwLibraries
+       4  adeSafPagelayout
+       8  adeSafFrontend
+      16  adeSafBackend
+
+=== AdeBootPrjFlags (5 values) ===
+       0  adeBpfNone
+       1  adeBpfSources
+       2  adeBpfUserLibraries
+       4  adeBpfPageLayouts
+       8  adeBpfBackendCode
+
+=== AdeBootPrjFlagsPCOS (2 values) ===
+       0  adeBpfpNone
+       1  adeBpfpOPC
+
+=== AdeMenuExtension (5 values) ===
+       0  MenuHandle
+       4  MenuSetID
+       8  MenuType
+      12  SubMenu
+      16  DisplayName
+
+=== AdeToolbarBitmap (2 values) ===
+       0  BitmapHandle
+       4  CommandIDs
+
+=== AdeToolbarItem (3 values) ===
+       0  DisplayName
+       4  ToolbarID
+       8  CommandIDs
+
+=== AdeToolbarBitmap2 (3 values) ===
+       0  BitmapHandle
+       4  LargeBitmapHandle
+       8  CommandIDs
+

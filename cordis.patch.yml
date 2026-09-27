@@ -1,0 +1,12 @@
+# MotionWorks Use — the agent-facing half of the bundle.
+#
+# This row is what the profile's bundle list pulls in. It registers the mw_ide_*
+# tools on ctx.tools and owns the lifetime of the 32-bit COM bridge that talks to
+# the running MotionWorks IDE.
+#
+# There is deliberately NO config here: the plugin needs no settings, and its
+# staging root is derived from its own location rather than configured, so a
+# mistaken config value cannot point the tools at a real project tree.
+- insert:
+    - id: motionworks-iec-use
+      name: 'dsh-motionworks-iec-use'

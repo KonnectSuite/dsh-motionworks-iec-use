@@ -1,0 +1,18 @@
+# The bridge and its launcher are PowerShell, and the engine is Python: keep
+# their line endings native so Windows users do not get CRLF churn in review.
+*.ps1   text eol=crlf
+*.cmd   text eol=crlf
+*.py    text eol=lf
+*.js    text eol=lf
+*.mjs   text eol=lf
+*.json  text eol=lf
+*.yml   text eol=lf
+*.md    text eol=lf
+
+# The vendored engine is a copy of another package; do not let GitHub render it
+# as the repository's primary language.
+code/engine/** linguist-vendored
+
+# Type-library dumps are generated, not hand-written.
+docs/tlb_dump.txt   linguist-generated
+docs/tlb_enums.txt  linguist-generated
