@@ -1707,11 +1707,18 @@ function defineTools() {
     {
       name: 'mw_code_pou_create',
       description:
-        'Create a new POU by cloning a template POU that already exists in the project Ã¢â‚¬â€ '
-        + 'creation clones that POU\'s directory and renames its streams, so a POU cannot be '
-        + 'authored from nothing. The new POU starts with the template\'s body and variables; '
-        + 'use mw_code_write_st to replace the body. **dry_run defaults to true** and returns '
-        + 'the plan (files it would touch, GUIDs, warnings) without changing anything.',
+        'Create a new POU by cloning a template POU that already exists in the project. '
+        + 'Template is required: creation clones that POU\'s directory and renames its streams, '
+        + 'so a POU cannot be authored from nothing. The new POU INHERITS the template\'s variable '
+        + 'declarations and those ARE usable - write the body to use them with mw_code_write_st. '
+        + 'KNOWN LIMITATION, and it is silent and delayed: ADDING A DECLARATION to a created POU '
+        + 'BREAKS it. Measured - the add reports success and the declaration reads back correctly, '
+        + 'and then the first build after the POU is assigned STALLS, with the IDE truncating the '
+        + '.VB to 0 bytes and the grid to 79,432,063 bytes. The identical add on an EXISTING POU '
+        + 'survives and compiles. So choose a template that already declares what the new POU '
+        + 'needs, or add declarations to an existing POU; if a created POU must have new '
+        + 'declarations, add them once in the MotionWorks editor and edit it from here afterwards. '
+        + '**dry_run defaults to true** and returns the plan without changing anything.',
       parameters: {
         type: 'object',
         additionalProperties: false,
