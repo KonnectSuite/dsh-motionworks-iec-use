@@ -598,6 +598,21 @@ while ($true) {
                 # Only another process can press that button, so start one.
                 $watcher = $null
                 try {
+                    # Never let watchers accumulate. A watcher is started per open and
+                    # killed when the load finishes, but any path that throws first
+                    # leaves one behind - and FOUR were observed running at once after
+                    # a run of failed opens. Overlapping watchers all click whatever
+                    # dialog they find, which is exactly the kind of interference that
+                    # makes an open fail for no visible reason. Clear them first.
+                    try {
+                        Get-CimInstance Win32_Process -Filter "Name='powershell.exe'" -ErrorAction SilentlyContinue |
+                            Where-Object { $_.CommandLine -and $_.CommandLine -match 'watch_dialogs' } |
+                            ForEach-Object {
+                                Log "clearing stale dialog watcher pid=$($_.ProcessId)"
+                                Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue
+                            }
+                    } catch { }
+
                     $watchCmd = Join-Path $BridgeDir 'watch_dialogs.cmd'
                     if (Test-Path $watchCmd) {
                         $watcher = Start-Process -FilePath 'cmd.exe' `
@@ -636,7 +651,7 @@ while ($true) {
                         Start-Sleep -Seconds 2
                     }
                 }
-                Log "open attempt(s)=$pass opened=$opened elapsed=$([Math]::Round(((Get-Date) - $swOpen).TotalSeconds,1))s"
+                Log "open attempt(s)=$pass opened=$opened elapsed=$([Math]::Round($swOpen.Elapsed.TotalSeconds,1))s"
                 if (-not $opened) {
                     if ($watcher) { try { Stop-Process -Id $watcher.Id -Force -ErrorAction SilentlyContinue } catch { } }
                     throw "OpenProject never succeeded within 60s; last error: $lastErr"
@@ -1162,18 +1177,33 @@ public class KILLW {
             }
             if (-not $accepted) { throw "Compile($mode) never accepted within 120s; last error: $lastErr" }
 
-            # RELIABLE completion detection: offer the same compile again until the
-            # IDE accepts it, which proves the previous one finished. ApplicationState
-            # bit 2 (adeASCompiling) is NOT trustworthy for this - measured reading
-            # "idle" 0s into a build that was demonstrably still running.
-            $settled = $false
-            while ($sw.Elapsed.TotalSeconds -lt 300) {
-                Start-Sleep -Milliseconds 500
-                try { $app.ActiveProject.Compile($mode); $settled = $true; break } catch { }
+            # Completion detection by POLLING IsCompiled.
+            #
+            # The earlier version re-offered Compile() and treated ACCEPTANCE as proof
+            # the previous build had finished. That is wrong: re-offering starts
+            # ANOTHER BUILD, so the IsCompiled read immediately afterwards is false -
+            # and this verb reported "COMPILE FAILED" for a project that was in fact
+            # compiling cleanly. Measured on the same IDE, same project:
+            #     IsCompiled = True, IsModified = False, Errors pane = 0 errors
+            # while this verb still said COMPILE FAILED. A false negative here is the
+            # worst possible bug for a verification tool, because it makes working
+            # code look broken.
+            #
+            # IsCompiled is the authority: a successful compile sets it true, a failed
+            # one leaves it false. Poll it and take the first true.
+            $isCompiled = $false
+            $swPoll = [Diagnostics.Stopwatch]::StartNew()
+            while ($swPoll.Elapsed.TotalSeconds -lt 90) {
+                Start-Sleep -Milliseconds 400
+                try { if ([bool]$app.ActiveProject.IsCompiled) { $isCompiled = $true; break } } catch { }
             }
-            Start-Sleep -Milliseconds 500
-            $isCompiled = $null
-            try { $isCompiled = [bool]$app.ActiveProject.IsCompiled } catch { }
+            $swPoll.Stop()
+            # `settled` means only "a verdict was reached". The three fields together
+            # keep the distinction the tool documents:
+            #   accepted=false                  -> the compile never ran
+            #   accepted=true, is_compiled=false -> compiled and FAILED
+            #   accepted=true, is_compiled=true  -> compiled cleanly
+            $settled = $true
             $ok = $true
             $data = [ordered]@{
                 mode          = $verb

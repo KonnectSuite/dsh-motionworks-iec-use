@@ -1255,8 +1255,27 @@ def _rename_for(filename: str, template_name: str, pou_name: str) -> str:
 
 
 def _template_record_lines(document: TreeDocument, node: TreeNode) -> list[str]:
-    """The raw record lines a template node occupies."""
-    return [document.lines[i] for i in range(node.start_line, node.end_line)]
+    """The raw record lines a template node occupies, INCLUDING its trailing blank.
+
+    A blank line separates one tree record from the next, and that blank belongs to
+    the record's extent: ``end_line`` points AT it. ``range(start, end)`` is
+    exclusive, so the earlier version silently dropped it and the records cloned into
+    a new POU ran together with no separator.
+
+    That produced a project which passed every internal check and then would not
+    load. Measured directly: a fresh copy of the same project opens fine, a copy with
+    one created POU returns "Internal error in 'OpenProject'", and diffing the two
+    trees showed the inserted worksheet records missing exactly the blank lines every
+    existing POU in the file has.
+
+    Reattaching the blank is safe for the container caller, which slices these lines
+    with ``[: first_child - start_line]`` and so drops the extra line.
+    """
+    lines = [document.lines[i] for i in range(node.start_line, node.end_line)]
+    following = node.end_line
+    if 0 <= following < len(document.lines) and document.lines[following].strip() == "":
+        lines.append(document.lines[following])
+    return lines
 
 
 def build_records(
