@@ -658,19 +658,30 @@ CHILD's, which killed the parent and produced no output at all.
 The bridge has its own ``stop`` verb. Use it. Never match a process by name alone - filter on
 CommandLine, or let the tool that owns the process end it.
 
-### Open: does the stale-App fix also cure create-then-declare?
+### Closed: the stale-App fix does NOT cure create-then-declare
 
-Round 45 found that ``Connect-App`` cached ``$script:App`` and served the project it FIRST saw,
-making mutation verbs fail with errors that name the operation instead of the cause. Dropping that
-cache whenever a project is opened or the IDE is closed fixed it.
+Round 46 recorded this as open, because every create-then-declare test in rounds 40 to 44 ran
+through a long-lived bridge and the stale-App bug found in round 45 might have been the real cause.
+**It is not.** Tested with the bridge restarted at every step, so no cached COM object survives:
 
-That may be more than plumbing. **Every create-then-declare test in rounds 40 to 44 ran through a
-long-lived bridge across many restages**, and the failure was the IDE REWRITING files during a
-build. If a stale Application reference reaches the IDE's own writes, the "landmine" documented in
-round 44 - and the tool description currently telling agents NOT to add declarations to a created
-POU - may describe a bug that no longer exists.
+    setup                staged and opened, 7 POUs
+    create ZzFresh47     .VB=1094B   .VGR=1565B
+    add a declaration    applied=true   .VB=1113B   .VGR=1645B
+    reopen               13 declarations   .VB=1113B   .VGR=1645B     <- SURVIVED
+    assign               assigned=true
+    BUILD                is_compiled=false  stalled=true
+      on disk            .VB=0B   .VGR=79,432,063B                   <- DESTROYED
 
-**The test, not yet run:** create, add a declaration, reopen, assign, build, with the bridge
-restarted between every step so no cached COM object survives. If it passes, the warning comes out
-of ``mw_code_pou_create`` and a feature is restored. If it fails, the warning stays and it is known
-to be a real format problem rather than a stale handle.
+So the warning in ``mw_code_pou_create`` stays, and it describes a real problem in the format rather
+than a stale handle.
+
+**And the timing is sharper than every earlier round said.** The POU is VALID through the create,
+through the add, and through a full close-and-reopen - 13 declarations readable from disk. It is
+destroyed only when the assigned POU is COMPILED. Earlier rounds described this as "the IDE
+truncates the .VB on open"; **the reopen above disproves that directly.** The destruction is a
+property of the FAILED BUILD, which matches the round 24 finding that a failed build rewrites
+project files - it truncated ``NODES.LST`` from 802 to 499 bytes.
+
+An agent following the documented working path is safe. An agent adding a declaration gets a POU
+that looks perfect - reads back, reopens, shows every declaration - right up to the moment it is
+compiled and the project loses it.
