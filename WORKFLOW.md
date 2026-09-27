@@ -189,8 +189,48 @@ See step 1 of workflow B above.
 **A stalled build with an empty Errors pane is the signature of a guardrail**, not of a syntax error.
 Check §3.
 
+**`mw_ide_build` also returns a `diagnosis`**, worked out on the way out so a bare verdict is never
+the whole answer:
+
+| `diagnosis.kind` | what it means | what to do |
+|---|---|---|
+| `poe-damaged` | a POU container is not a plausible size — **the compiler destroyed it** | `mw_code_restore_pou` |
+| `stall` | the compiler never finished, so **the Errors pane is EMPTY** | see §3 |
+| `rejected` | the compiler finished and refused the code — the pane **has** messages | `mw_ide_errors` |
+| `null` | clean | — |
+
+Each carries an `explain` naming the cause and a `next` naming the step. **A stall and a rejection
+look identical from `is_compiled` alone and need opposite responses** — one has no messages to read,
+the other has nothing but.
+
 **And remember the ordering trap:** build → unassigned POU → green → you conclude it works. It was
 never compiled. **Assign, then build.**
+
+## 4a. When a POU is destroyed
+
+**A type error does not fail the build — it takes the POU with it** (`.VB` → 0 bytes, resource grid
+→ 79 MB). `mw_ide_build` detects this and names the POU:
+
+```
+diagnosis.kind     = 'poe-damaged'
+diagnosis.damaged  = [{ pou: 'TopCutterCamSetup', bytes: 2000000, kind: 'blown' }]
+```
+
+Put it back:
+
+```
+mw_code_restore_pou {}                              what is restorable, and what looks damaged now
+mw_code_restore_pou { pou: "TopCutterCamSetup" }    what restoring it would do (dry run)
+mw_code_restore_pou { pou: "...", dry_run: false }  do it
+```
+
+**Restoring the container restores the `.VB` text and the `.VGR` grid together** — both are streams
+in that one file — so no format knowledge is involved. The file it replaces is kept as
+`<name>.before-restore`, **so a restore is itself undoable**.
+
+**A POU can only be restored if this plugin has written it at some point**, because the backup is
+taken by the write. That matches the risk exactly: **a POU the plugin never touched is one it cannot
+have broken.** On a project with history that is typically most of them.
 
 ---
 

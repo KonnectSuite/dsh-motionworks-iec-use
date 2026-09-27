@@ -567,6 +567,31 @@ def verb_manual(request):
     )
 
 
+
+def verb_restore_pou(req):
+    """Put a POU back from a snapshot. dry_run defaults to True.
+
+    Added because mw_ide_build now DETECTS a destroyed POU and says to restore it, and there was no
+    way to do that. A diagnosis with no remedy is half a fix.
+    """
+    from motionworks_iec_mcp import restore as R
+
+    root = Path(req["project"])
+    dry = bool(req.get("dry_run", True))
+    # pou is OPTIONAL: omitting it asks what is restorable rather than naming one. Reading it
+    # with [] raised KeyError before the guard below could run - the guard was right and the
+    # access above it was wrong, which is the pair written the wrong way round.
+    pou = req.get("pou")
+    which = int(req.get("which", 0) or 0)
+
+    if not pou:
+        # No POU named: report what is restorable and what looks damaged, so a caller that only
+        # knows something is wrong can find out what.
+        return _ok(dry_run=dry, result=R.list_restorable(root))
+
+    report = R.restore_pou(root, pou, which=which, dry_run=dry)
+    return _ok(dry_run=dry, result=_jsonable(report))
+
 VERBS = {
     "types": verb_types,
     "manual": verb_manual,
@@ -576,6 +601,7 @@ VERBS = {
     "unsupported": verb_unsupported,
     "write_st": verb_write_st,
     "var_add": verb_var_add,
+    "restore_pou": verb_restore_pou,
     "var_edit": verb_var_edit,
     "var_delete": verb_var_delete,
     "pou_create": verb_pou_create,

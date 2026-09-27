@@ -67,6 +67,20 @@ try {
     `${(m.manuals ?? []).length} manuals, ${(m.help_topics ?? []).length} help topics`);
 } catch (e) { check('mw_code_manual (list mode)', false, String(e.message).slice(0, 70)); }
 
+console.log('\n  ══ restoring ══');
+try {
+  const listing = await run('mw_code_restore_pou', {});
+  const info = listing.result ?? listing;
+  check('mw_code_restore_pou lists what is restorable',
+    typeof info.snapshots === 'number' && typeof info.restorable_pous === 'number',
+    `${info.snapshots} snapshot(s), ${info.restorable_pous} POU(s)`);
+  check('and reports whether anything looks damaged',
+    Array.isArray(info.damaged) && info.damaged.length === 0,
+    `${info.damaged?.length ?? '?'} damaged`);
+} catch (e) {
+  check('mw_code_restore_pou lists what is restorable', false, String(e.message).slice(0, 60));
+}
+
 console.log('\n  ══ the IDE-side tools ══');
 try {
   const s = await run('mw_ide_state');

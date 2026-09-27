@@ -441,8 +441,8 @@ function diagnoseBuild(verdict) {
         '0 bytes and the resource grid grows to 79,432,063 bytes - and the usual cause is a TYPE ' +
         'ERROR in the body that was written before this build. mw_code_write_st now refuses a type ' +
         'error, so a body that reached here has something the check does not cover. Restore the ' +
-        'POU from backups/ and re-examine the body that preceded this build.',
-      next: 'restore the damaged POU, then check the body written before this build for a type error',
+        'POU with mw_code_restore_pou, then re-examine the body that preceded this build.',
+      next: 'call mw_code_restore_pou with this POU, then check the body it was written with',
     };
   }
 
@@ -1918,6 +1918,47 @@ function defineTools() {
       },
     },
 
+    {
+      name: 'mw_code_restore_pou',
+      description:
+        'Put a POU back from a snapshot. This is the remedy for the damage mw_ide_build detects: '
+        + 'when the IDE compiler meets a TYPE ERROR it does not merely fail, it DESTROYS the POU - '
+        + 'the .VB goes to 0 bytes and the resource grid to 79,432,063 bytes - and the build verdict '
+        + 'now says so and names the POU. Until this tool existed there was no way to act on that. '
+        + 'Omit `pou` to be told which POUs can be restored and which look damaged right now. '
+        + 'A POU can only be restored if this plugin has written it at some point, because the '
+        + 'backup is taken by the write - which matches the risk exactly, since a POU the plugin '
+        + 'never touched is one it cannot have broken. Restoring the container restores the .VB text '
+        + 'and the .VGR grid together, because both are streams inside that one file. '
+        + '**dry_run defaults to true**, so the first call reports which snapshot it would use and '
+        + 'changes nothing; the file it replaces is kept as <name>.before-restore so a restore is '
+        + 'itself undoable.',
+      parameters: {
+        type: 'object',
+        additionalProperties: false,
+        properties: {
+          pou: {
+            type: 'string',
+            description: 'POU to restore. Omit to list what is restorable and what looks damaged.',
+          },
+          which: {
+            type: 'integer',
+            description: 'Which snapshot to use, 0 being the newest. Defaults to 0.',
+          },
+          project: { type: 'string' },
+          dry_run: { type: 'boolean', description: 'Defaults to true.' },
+        },
+      },
+      output: { schema: WRITE_SCHEMA, render: renderWrite },
+      presentCall: (a) => ({
+        card: 'generic',
+        title: a?.pou ? `Restore ${a.pou}` : 'Restorable POUs',
+        kind: 'edit',
+      }),
+      execute: (args) => runCode('restore_pou', {
+        ...(args ?? {}), project: projectOf(args), dry_run: args?.dry_run !== false,
+      }),
+    },
     {
       name: 'mw_code_pou_delete',
       description:
