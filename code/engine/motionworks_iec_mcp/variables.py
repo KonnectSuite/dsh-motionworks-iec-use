@@ -454,7 +454,7 @@ def default_initial_value(type_name: str) -> str:
 
 def append_grid_variable(
     grid: bytes, name: str, type_name: str, row: int | None = None,
-    initial_value: str | None = None,
+    initial_value: str | None = None, usage: int = 1,
 ) -> tuple[bytes, int]:
     """Add one record to a POU's ``.VGR`` grid, IN ROW ORDER. Returns ``(new_grid, handle)``.
 
@@ -462,7 +462,7 @@ def append_grid_variable(
     and the reason matters because the failure looked like a bad record.
 
     The record content was always right: four strings (type, empty, initial value, name),
-    usage 1 for a local, the initial value, and zeros where an external record carries the
+    usage 1 for a local and 5 for an external, the initial value, and the ffffffff marker
     ``ffffffff`` marker. Every decodable field matched a real local record field for field -
     and the POU was still rewritten into garbage, the .VB emptied from 1132 bytes to 0 and the
     grid inflated from 1665 bytes to 79,432,063, with an empty Errors pane.
@@ -513,9 +513,20 @@ def append_grid_variable(
     # Synthesised from the layout rather than cloned from a donor. Cloning kept leaving one
     # field wrong - a struct's trailing structure, or an external marker left on a record
     # marked local - and each wrong guess is not a polite failure.
-    record = struct.pack("<6I", new_handle, 1, 1, 0, row, 0)
+    # usage is 1 for a LOCAL and 5 for an EXTERNAL, and the trailing run has to agree with
+    # it. Measured on a real grid, the run is four uint32 and the third word is the
+    # external marker:
+    #
+    #     usage=5   00 00 00 00 | 00 00 00 00 | ff ff ff ff | 00 00 00 00
+    #     usage=1   00 00 00 00 | 00 00 00 00 | 00 00 00 00 | 00 00 00 00
+    #
+    # Writing usage=1 unconditionally, as this did, meant a VAR_EXTERNAL declaration got a
+    # LOCAL record - a record that says local in one field and external nowhere else, for a
+    # declaration the text marks external. The two stores have to describe the same thing.
+    record = struct.pack("<6I", new_handle, usage, 1, 0, row, 0)
     record += _string(type_name) + _string("") + _string(initial_value) + _string(name)
-    record += b"\x00" * 16          # a LOCAL record carries no external marker
+    trailing = b"\x00" * 8 + (struct.pack("<I", 0xFFFFFFFF) if usage == 5 else b"\x00" * 4)
+    record += trailing + b"\x00" * 4
 
     # THE FIX: the insertion point is where the ROW belongs, not the end of the grid.
     index = next((i for i, r in enumerate(records) if r["row"] > row), len(records))
