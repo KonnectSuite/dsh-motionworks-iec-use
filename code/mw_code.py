@@ -516,8 +516,60 @@ def verb_library(request):
     )
 
 
+def verb_manual(request):
+    """Search the MotionWorks manuals the IDE installs, or list what is available.
+
+    The IDE ships its own documentation - three PDFs and 259 .chm help files - so an agent
+    writing MotionWorks code can be given the vendor's own words rather than guessing at a
+    library block's behaviour. The Toolbox Manual documents every function block and data type
+    the toolboxes provide, which is exactly what is needed to call CamGenerator or read a
+    CamSegmentStruct correctly.
+    """
+    from motionworks_iec_mcp import manuals as M
+
+    name = request.get("name")
+    term = request.get("term")
+
+    if not term:
+        listed = M.list_manuals()
+        topics = []
+        try:
+            topics = M.help_topics()
+        except Exception:
+            pass
+        return _ok(
+            manuals=[
+                {"name": m.name, "bytes": m.bytes, "readable": m.readable, "note": m.note}
+                for m in listed
+            ],
+            help_topics=topics,
+            note=(
+                "Pass a 'term' to search. The PDFs are read; the .chm files are compiled help "
+                "whose text cannot be extracted here, though their filenames name their subjects."
+            ),
+        )
+
+    raw = request.get("limit")
+    limit = int(raw) if isinstance(raw, (int, float)) else 5
+    results = M.search(str(term), name=str(name) if name else None, limit=limit)
+    if not results:
+        return _ok(
+            term=str(term), found=0,
+            note=(
+                "No manual mentions that. Try a symbol the project actually uses - a function "
+                "block, a data type - or call this with no term to see what is available."
+            ),
+        )
+    return _ok(
+        term=str(term),
+        found=len(results),
+        results=results,
+    )
+
+
 VERBS = {
     "types": verb_types,
+    "manual": verb_manual,
     "library": verb_library,
     "pous": verb_pous,
     "read_st": verb_read_st,

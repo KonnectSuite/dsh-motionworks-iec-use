@@ -1304,6 +1304,108 @@ function defineTools() {
       }),
     },
     {
+      name: 'mw_code_manual',
+      description:
+        'Search the MotionWorks documentation the IDE installs, or list it. The IDE ships '
+        + 'three PDF manuals and 259 .chm help files, and the Toolbox Manual documents every '
+        + 'function block and data type the toolboxes provide - so this is how to find out '
+        + 'what CamGenerator actually does, or what a CamSegmentStruct contains, in the '
+        + "vendor's own words rather than by guessing. Call with no term to list the manuals "
+        + 'and the help topics; pass a term - a function block, a data type, a concept - to '
+        + 'get matching passages with surrounding context. The PDFs are read directly; the '
+        + '.chm files cannot be, because they are LZX-compressed, but their filenames name '
+        + 'their subjects so a caller learns which help file to open. Read-only and offline.',
+      parameters: {
+        type: 'object',
+        additionalProperties: false,
+        properties: {
+          term: { type: 'string', description: 'Word or phrase to search for; omit to list what is available.' },
+          name: { type: 'string', description: 'Restrict the search to one manual by name fragment.' },
+          limit: { type: 'integer', description: 'Passages per manual; defaults to 5.' },
+        },
+      },
+      output: {
+        schema: {
+          type: 'object',
+          additionalProperties: true,
+          properties: {
+            term: { type: 'string' },
+            found: { type: 'integer' },
+            results: { type: 'array', items: { type: 'object', additionalProperties: true } },
+            manuals: { type: 'array', items: { type: 'object', additionalProperties: true } },
+            help_topics: { type: 'array', items: { type: 'string' } },
+            note: { type: 'string' },
+          },
+        },
+        render: (r) => {
+          if (Array.isArray(r.manuals)) {
+            return `${r.manuals.length} manuals, ${(r.help_topics ?? []).length} help topics: `
+              + r.manuals.map((m) => `${m.name}${m.readable ? '' : ' (compiled)'}`).join(' | ');
+          }
+          if (!r.found) return `no manual mentions ${r.term}`;
+          const total = (r.results ?? []).reduce((n, x) => n + (x.hits ?? 0), 0);
+          return `${total} hits for ${r.term} across ${r.found} manual(s): `
+            + (r.results ?? []).map((x) => `${x.manual} (${x.hits})`).join(', ');
+        },
+      },
+      execute: async (args) => runCode('manual', {
+        ...(args?.term ? { term: String(args.term) } : {}),
+        ...(args?.name ? { name: String(args.name) } : {}),
+        ...(args?.limit !== undefined ? { limit: Number(args.limit) } : {}),
+      }),
+    },
+    {
+      name: 'mw_code_manual',
+      description:
+        'Search the MotionWorks documentation the IDE installs, or list it. The IDE ships '
+        + 'three PDF manuals and 259 .chm help files, and the Toolbox Manual documents every '
+        + 'function block and data type the toolboxes provide - so this is how to find out '
+        + 'what CamGenerator actually does, or what a CamSegmentStruct contains, in the '
+        + "vendor's own words rather than by guessing. Call with no term to list the manuals "
+        + 'and the help topics; pass a term - a function block, a data type, a concept - to '
+        + 'get matching passages with surrounding context. The PDFs are read directly; the '
+        + '.chm files cannot be, because they are LZX-compressed, but their filenames name '
+        + 'their subjects so a caller learns which help file to open. Read-only and offline.',
+      parameters: {
+        type: 'object',
+        additionalProperties: false,
+        properties: {
+          term: { type: 'string', description: 'Word or phrase to search for; omit to list what is available.' },
+          name: { type: 'string', description: 'Restrict the search to one manual by name fragment.' },
+          limit: { type: 'integer', description: 'Passages per manual; defaults to 5.' },
+        },
+      },
+      output: {
+        schema: {
+          type: 'object',
+          additionalProperties: true,
+          properties: {
+            term: { type: 'string' },
+            found: { type: 'integer' },
+            results: { type: 'array', items: { type: 'object', additionalProperties: true } },
+            manuals: { type: 'array', items: { type: 'object', additionalProperties: true } },
+            help_topics: { type: 'array', items: { type: 'string' } },
+            note: { type: 'string' },
+          },
+        },
+        render: (r) => {
+          if (Array.isArray(r.manuals)) {
+            return `${r.manuals.length} manuals, ${(r.help_topics ?? []).length} help topics: `
+              + r.manuals.map((m) => `${m.name}${m.readable ? '' : ' (compiled)'}`).join(' | ');
+          }
+          if (!r.found) return `no manual mentions ${r.term}`;
+          const total = (r.results ?? []).reduce((n, x) => n + (x.hits ?? 0), 0);
+          return `${total} hits for ${r.term} across ${r.found} manual(s): `
+            + (r.results ?? []).map((x) => `${x.manual} (${x.hits})`).join(', ');
+        },
+      },
+      execute: async (args) => runCode('manual', {
+        ...(args?.term ? { term: String(args.term) } : {}),
+        ...(args?.name ? { name: String(args.name) } : {}),
+        ...(args?.limit !== undefined ? { limit: Number(args.limit) } : {}),
+      }),
+    },
+    {
       name: 'mw_code_globals',
       description:
         'List the project VAR_GLOBAL declarations - the tags every POU can see, with type, '
