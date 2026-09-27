@@ -685,3 +685,33 @@ project files - it truncated ``NODES.LST`` from 802 to 499 bytes.
 An agent following the documented working path is safe. An agent adding a declaration gets a POU
 that looks perfect - reads back, reopens, shows every declaration - right up to the moment it is
 compiled and the project loses it.
+
+
+### A POU with no declarations cannot be given any
+
+``mw_code_var_add`` refuses to append to a grid that holds no records:
+
+    clone of TopCutterInitialize     .VB=23B  VAR_EXTERNAL=0  .VGR=63B  declares=0
+    mw_code_var_add                  UnsupportedFormat: no variable records found in the
+                                     grid; refusing to guess
+
+The refusal is correct - guessing at a layout this plugin has not seen is what destroyed a POU
+once - but it is a boundary worth knowing. ``TopCutterInitialize`` declares nothing, so a POU cloned
+from it can never gain a declaration through this tool. **Pick a template that already declares
+something.** Note that this error is immediate and legible, unlike the create-then-declare failure
+below, which reports success and destroys the POU later.
+
+### The localization hypothesis is untested, not disproved
+
+A clone differs from its template in exactly two ways: the text has ``VAR_EXTERNAL`` renamed to
+``VAR``, and the grid has records moved from usage 5 to usage 1 with their markers zeroed. A normal
+POU is not localized at all and accepts an append, so the localization is a plausible trigger for
+the compiler crash.
+
+A first attempt to revert it was **too crude to be evidence**: it replaced every ``VAR`` line in the
+declaration text with ``VAR_EXTERNAL``, including the legitimate VAR blocks, and the writer
+correctly rejected the result. **The hypothesis remains untested.**
+
+The next attempt should revert **record by record**, using the same per-record tail offset
+``localize_variable_grid`` uses, and restore ``VAR_EXTERNAL`` only for the declarations the template
+actually declares that way - **never by replacing text.**
