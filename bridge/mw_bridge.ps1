@@ -77,11 +77,27 @@ Add-Type -TypeDefinition @'
 using System; using System.Text; using System.Runtime.InteropServices;
 public class MWW {
   [DllImport("user32.dll")] public static extern bool EnumWindows(EnumWindowsProc cb, IntPtr l);
+  [DllImport("user32.dll")] public static extern bool EnumChildWindows(IntPtr parent, EnumWindowsProc cb, IntPtr l);
   public delegate bool EnumWindowsProc(IntPtr h, IntPtr l);
   [DllImport("user32.dll",CharSet=CharSet.Unicode)] public static extern int GetWindowTextW(IntPtr h, StringBuilder s, int n);
+  [DllImport("user32.dll",CharSet=CharSet.Unicode)] public static extern int GetClassNameW(IntPtr h, StringBuilder s, int n);
   [DllImport("user32.dll")] public static extern bool IsWindowVisible(IntPtr h);
+  [DllImport("user32.dll")] public static extern bool IsWindow(IntPtr h);
   [StructLayout(LayoutKind.Sequential)] public struct RECT { public int Left; public int Top; public int Right; public int Bottom; }
   [DllImport("user32.dll")] public static extern bool GetWindowRect(IntPtr h, out RECT r);
+
+  // Licence-dialog dismissal helpers. The unlicensed build shows a modal
+  // WindowsForms dialog before the IDE has any window of its own.
+  [DllImport("user32.dll")] public static extern IntPtr SendMessage(IntPtr h, uint m, IntPtr w, IntPtr l);
+  [DllImport("user32.dll")] public static extern bool PostMessage(IntPtr h, uint m, IntPtr w, IntPtr l);
+  [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr h);
+  [DllImport("user32.dll")] public static extern IntPtr SetFocus(IntPtr h);
+  [DllImport("user32.dll")] public static extern bool BringWindowToTop(IntPtr h);
+  [DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr h, int c);
+  [DllImport("user32.dll")] public static extern IntPtr SetActiveWindow(IntPtr h);
+  [DllImport("user32.dll")] public static extern bool AttachThreadInput(uint a, uint b, bool f);
+  [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr h, out uint p);
+  [DllImport("kernel32.dll")] public static extern uint GetCurrentThreadId();
 }
 '@
 
@@ -126,6 +142,72 @@ function Get-IdeWindow {
     return ($script:cands | Sort-Object -Property area -Descending | Select-Object -First 1).h
 }
 
+# --- licence / trial dialog -------------------------------------------------
+#
+# The UNLICENSED build shows a modal licence dialog BEFORE the IDE creates any
+# window of its own. It is a .NET WinForms window owned by mwctVerify.exe, titled
+# "Motionworks IEC" (lower-case w), with children "Use Trial", "Activate Online",
+# "Activate by Phone", "Find Distributor".
+#
+# Two consequences the bridge must handle:
+#   1. Get-IdeWindow does NOT see it (wrong owner, wrong class, no "3 Pro"), so a
+#      launcher that only waits for the IDE window sits there until it times out
+#      while a dialog is actually waiting for a human click.
+#   2. Until it is answered, the IDE has no project services and OpenProject fails
+#      with "Internal error in 'OpenProject'".
+function Get-TrialDialog {
+    $script:trialDlg = $null
+    $script:trialBtn = $null
+    $cb = [MWW+EnumWindowsProc]{
+        param($h, $l)
+        if ([MWW]::IsWindowVisible($h)) {
+            $cls = New-Object System.Text.StringBuilder 256
+            [void][MWW]::GetClassNameW($h, $cls, 256)
+            if ($cls.ToString() -like 'WindowsForms10.Window*') {
+                $script:trialDlg = $h
+                $cb2 = [MWW+EnumWindowsProc]{
+                    param($k, $l2)
+                    $t = New-Object System.Text.StringBuilder 512
+                    [void][MWW]::GetWindowTextW($k, $t, 512)
+                    if ($t.ToString() -eq 'Use Trial') { $script:trialBtn = $k }
+                    return $true
+                }
+                [void][MWW]::EnumChildWindows($h, $cb2, [IntPtr]::Zero)
+            }
+        }
+        return $true
+    }
+    [void][MWW]::EnumWindows($cb, [IntPtr]::Zero)
+    return @($script:trialDlg, $script:trialBtn)
+}
+
+function Invoke-TrialClick([IntPtr]$target, [IntPtr]$dialog) {
+    # Attach our input thread to the dialog's threads and foreground it first.
+    # Without this the synthetic click is ignored: measured, BM_CLICK and the
+    # mouse messages are accepted and do nothing while the dialog is not active.
+    $pidT = [uint32]0; $tid = [MWW]::GetWindowThreadProcessId($target, [ref]$pidT)
+    $pidD = [uint32]0; $tidD = [MWW]::GetWindowThreadProcessId($dialog, [ref]$pidD)
+    $me = [MWW]::GetCurrentThreadId()
+    try {
+        [void][MWW]::AttachThreadInput($me, $tid, $true)
+        [void][MWW]::AttachThreadInput($me, $tidD, $true)
+    } catch { }
+    [void][MWW]::ShowWindow($dialog, 5)
+    [void][MWW]::BringWindowToTop($dialog)
+    [void][MWW]::SetForegroundWindow($dialog)
+    [void][MWW]::SetActiveWindow($dialog)
+    [void][MWW]::SetFocus($target)
+    Start-Sleep -Milliseconds 700
+}
+
+function Test-TrialGone([IntPtr]$dialog, [int]$seconds = 20) {
+    for ($i = 0; $i -lt ($seconds / 2); $i++) {
+        Start-Sleep -Seconds 2
+        if (-not [MWW]::IsWindow($dialog)) { return [int](($i * 2) + 2) }
+    }
+    return 0
+}
+
 # --- COM connection, held open across requests ---
 $script:App = $null
 
@@ -135,8 +217,18 @@ function Connect-App {
         # closes the IDE to write code, then starts it again. The dead proxy stays
         # valid as an object, so without this probe every later call fails with
         # "The RPC server is unavailable" (0x800706BA) until the bridge restarts.
-        try { $null = $script:App.Version; return $script:App }
-        catch { $script:App = $null }
+        #
+        # Require a REAL answer, not merely "did not throw": a half-dead proxy
+        # returns an empty Version and then fails the next call, which is exactly
+        # how a stale connection slipped through the earlier check.
+        try {
+            $probe = [string]$script:App.Version
+            if (-not [string]::IsNullOrWhiteSpace($probe)) { return $script:App }
+            Log "cached connection answered with an empty Version; dropping it"
+        } catch {
+            Log "cached connection failed its probe ($($_.Exception.Message)); dropping it"
+        }
+        $script:App = $null
     }
     if (-not (Get-IdeWindow)) {
         throw "no running MotionWorks IDE window; refusing to instantiate (that would launch a new IDE and a trial licence permits only one instance). Use the 'start_ide' verb to launch one deliberately."
@@ -208,7 +300,22 @@ while ($true) {
                 # From Ade.tlb: OpenProject(Name, ConfirmConvert). ConfirmConvert=$false
                 # suppresses the conversion prompt, which would otherwise block an
                 # unattended flow on a modal dialog nobody is there to answer.
-                $app.OpenProject($full, $false)
+                #
+                # RETRY on "Internal error": a freshly launched IDE has not finished
+                # initialising its project services, and OpenProject fails with
+                # "Internal error in 'OpenProject'" until it has. Reporting that as a
+                # failure made start->open look broken when it only needed time.
+                $opened = $false; $lastErr = $null
+                $deadline = (Get-Date).AddSeconds(90)
+                while ((Get-Date) -lt $deadline) {
+                    try { $app.OpenProject($full, $false); $opened = $true; break }
+                    catch {
+                        $lastErr = $_.Exception.Message
+                        if ($lastErr -notmatch 'Internal error') { throw }
+                        Start-Sleep -Seconds 2
+                    }
+                }
+                if (-not $opened) { throw "OpenProject never succeeded within 90s; last error: $lastErr" }
                 # Verify what actually happened rather than trusting the call.
                 $verified = $null; $activeName = $null
                 for ($i = 0; $i -lt 40; $i++) {
@@ -349,14 +456,44 @@ while ($true) {
                     $exe = 'C:\Program Files (x86)\Yaskawa\MotionWorks IEC 3 Pro\Mwt.exe'
                 }
                 $already = [bool](Get-IdeWindow)
+                $trialAnswered = $null
+                $trialSeen = $false
                 if (-not $already) {
                     if (-not (Test-Path $exe)) { throw "Mwt.exe not found at $exe" }
                     Start-Process -FilePath $exe | Out-Null
-                    $deadline = (Get-Date).AddSeconds(120)
-                    while (-not (Get-IdeWindow) -and (Get-Date) -lt $deadline) { Start-Sleep -Milliseconds 1000 }
+                    # 300s, not 120s: measured on this machine the IDE can take
+                    # well over two minutes to show its window (licence check and
+                    # CodeMeter are part of startup). A shorter wait made a merely
+                    # slow start look like a failure to launch.
+                    $deadline = (Get-Date).AddSeconds(300)
+                    while (-not (Get-IdeWindow) -and (Get-Date) -lt $deadline) {
+                        Start-Sleep -Milliseconds 1000
+                        # An UNLICENSED build shows the licence dialog FIRST and will
+                        # never produce an IDE window until it is answered. Waiting
+                        # blindly therefore looks exactly like a hang. Detect it and
+                        # answer it with "Use Trial".
+                        if (-not $trialSeen) {
+                            $pair = Get-TrialDialog
+                            if ($pair[0] -and $pair[1]) {
+                                $trialSeen = $true
+                                Log 'licence dialog detected during start_ide; answering it'
+                                Invoke-TrialClick $pair[1] $pair[0]
+                                [void][MWW]::SendMessage($pair[1], 0x00F5, [IntPtr]::Zero, [IntPtr]::Zero)
+                                $gone = Test-TrialGone $pair[0] 30
+                                $trialAnswered = [bool]$gone
+                                Log "licence dialog answered=$($trialAnswered) after ${gone}s"
+                            }
+                        }
+                    }
                 }
                 $w = Get-IdeWindow
-                if (-not $w) { throw 'the IDE window did not appear within 120s' }
+                if (-not $w) {
+                    $pair = Get-TrialDialog
+                    if ($pair[0]) {
+                        throw 'the IDE never showed its window because the LICENCE dialog is up and could not be answered automatically. Click "Use Trial" once by hand (or activate a licence), then retry. Until then the IDE has no project services.'
+                    }
+                    throw 'the IDE window did not appear within 300s'
+                }
                 # Force a fresh connection: the previous one pointed at the old process.
                 $script:App = $null
                 $app = Connect-App
@@ -366,6 +503,80 @@ while ($true) {
                     ide_window      = ("0x{0:X}" -f ([int64]$w))
                     version         = [string]$app.Version
                     launched_exe    = $exe
+                    trial_dialog    = $trialSeen
+                    trial_answered  = $trialAnswered
+                }
+            }
+
+            # Report whether the licence/trial dialog is up. Read-only and cheap:
+            # this is how you tell "no IDE yet" apart from "the IDE is waiting for
+            # a human to answer the licence dialog".
+            'trial_state' {
+                $pair = Get-TrialDialog
+                $d = $pair[0]; $b = $pair[1]
+                $ideW = Get-IdeWindow
+                $ok = $true
+                $data = [ordered]@{
+                    dialog_present   = [bool]$d
+                    dialog_hwnd      = $(if ($d) { "0x{0:X}" -f ([int64]$d) } else { $null })
+                    use_trial_hwnd   = $(if ($b) { "0x{0:X}" -f ([int64]$b) } else { $null })
+                    ide_window       = $(if ($ideW) { "0x{0:X}" -f ([int64]$ideW) } else { $null })
+                    verifier_running = [bool](Get-Process -Name mwctVerify -ErrorAction SilentlyContinue)
+                }
+            }
+
+            # Try to answer the licence dialog with "Use Trial".
+            #
+            # Every strategy is VERIFIED by re-checking the window, and if none of
+            # them close it this reports that honestly instead of claiming success.
+            # The dialog is a .NET WinForms window in ANOTHER process; from an
+            # automated process, clicking it is best-effort, not guaranteed.
+            'dismiss_trial' {
+                $pair = Get-TrialDialog
+                $d = $pair[0]; $b = $pair[1]
+                if (-not $d) {
+                    $ok = $true
+                    $data = [ordered]@{ dialog_present = $false; dismissed = $true; method = 'none-needed' }
+                } elseif (-not $b) {
+                    throw 'a licence dialog is up but it contains no "Use Trial" button'
+                } else {
+                    $tried = @(); $method = $null; $secs = 0
+
+                    Invoke-TrialClick $b $d
+                    [void][MWW]::SendMessage($b, 0x00F5, [IntPtr]::Zero, [IntPtr]::Zero)   # BM_CLICK
+                    $secs = Test-TrialGone $d 20; $tried += 'bm_click'
+                    if ($secs) { $method = 'bm_click' }
+
+                    if (-not $method) {
+                        Invoke-TrialClick $b $d
+                        $lp = [IntPtr](5 -bor (5 -shl 16))
+                        [void][MWW]::SendMessage($b, 0x0201, [IntPtr]1, $lp)   # WM_LBUTTONDOWN
+                        [void][MWW]::SendMessage($b, 0x0202, [IntPtr]0, $lp)   # WM_LBUTTONUP
+                        $secs = Test-TrialGone $d 20; $tried += 'mouse_messages'
+                        if ($secs) { $method = 'mouse_messages' }
+                    }
+
+                    if (-not $method) {
+                        Invoke-TrialClick $b $d
+                        $lp = [IntPtr](5 -bor (5 -shl 16))
+                        [void][MWW]::PostMessage($b, 0x0201, [IntPtr]1, $lp)
+                        [void][MWW]::PostMessage($b, 0x0202, [IntPtr]0, $lp)
+                        $secs = Test-TrialGone $d 20; $tried += 'posted_mouse'
+                        if ($secs) { $method = 'posted_mouse' }
+                    }
+
+                    $still = [bool]((Get-TrialDialog)[0])
+                    $ok = (-not $still)
+                    $data = [ordered]@{
+                        dialog_present   = $true
+                        dismissed        = (-not $still)
+                        method           = $method
+                        seconds          = $secs
+                        strategies_tried = $tried
+                    }
+                    if ($still) {
+                        $err = 'the licence dialog is still up and could not be answered from this process. Click "Use Trial" once by hand (or activate a licence); until then the IDE has no project services and every OpenProject fails with "Internal error".'
+                    }
                 }
             }
 
@@ -468,7 +679,7 @@ public class KILLW {
             }
 
             default {
-                throw "unknown verb '$verb' (allowed: ping, status, start_ide, open, close_ide, pous, variables, compile_state, make, build, patch, worksheet, datatypes, output_windows, activate_output, command_id, command, feature_state, screenshot, stop)"
+                throw "unknown verb '$verb' (allowed: ping, status, start_ide, open, close_ide, trial_state, dismiss_trial, pous, variables, compile_state, make, build, patch, worksheet, datatypes, output_windows, activate_output, command_id, command, feature_state, screenshot, stop)"
             }
         }
 

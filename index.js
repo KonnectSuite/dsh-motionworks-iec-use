@@ -382,12 +382,23 @@ const WRITE_SCHEMA = {
     ok: { type: 'boolean' },
     dry_run: { type: 'boolean' },
     result: { type: 'object', additionalProperties: true },
+    plan: { type: 'object', additionalProperties: true },
   },
 };
 
 function renderWrite(_a, v) {
   const r = (v && v.result) || {};
+  const p = (v && v.plan) || {};
   if (v && v.dry_run) {
+    if (p.pou_name) {
+      return text(`DRY RUN — nothing changed. Plan for POU '${p.pou_name}'`
+        + (p.template_name ? ` from template '${p.template_name}'` : '')
+        + (p.files ? `; would touch ${p.files.length} file(s)` : '')
+        + (p.referenced_by && p.referenced_by.length
+          ? `; referenced by ${p.referenced_by.join(', ')}` : '')
+        + (p.assigned_to && p.assigned_to.length
+          ? `; assigned to tasks ${p.assigned_to.join(', ')}` : ''));
+    }
     return text(`DRY RUN — nothing changed.`
       + (r.target ? ` Would write ${r.target}` : '')
       + (r.stream ? ` (stream ${r.stream})` : ''));
@@ -399,7 +410,8 @@ function renderWrite(_a, v) {
       + (Array.isArray(r.backups) && r.backups.length ? ` Backup: ${r.backups[0]}` : ''),
     );
   }
-  return text(`Result: ${JSON.stringify(r).slice(0, 400)}`);
+  const body = Object.keys(r).length ? r : p;
+  return text(`Result: ${JSON.stringify(body).slice(0, 400)}`);
 }
 
 /**
@@ -414,9 +426,14 @@ function projectOf(args) {
   if (!existsSync(STAGE_ROOT)) {
     throw new Error(`no staged project: ${STAGE_ROOT} does not exist — stage one first`);
   }
+  // A staged PROJECT is a directory with a sibling `<name>.mwt`. Requiring that
+  // matters: writing a POU creates stage/backups, and a plain "newest directory"
+  // pick then selected the BACKUP FOLDER as the project, so the next call failed
+  // with "no POE directory under stage\backups".
   const dirs = readdirSync(STAGE_ROOT, { withFileTypes: true })
     .filter((e) => e.isDirectory())
     .map((e) => join(STAGE_ROOT, e.name))
+    .filter((d) => existsSync(`${d}.mwt`))
     .sort((a, b) => statSync(b).mtimeMs - statSync(a).mtimeMs);
   if (dirs.length === 0) throw new Error(`no staged project directory under ${STAGE_ROOT}`);
   return dirs[0];
@@ -489,6 +506,16 @@ function defineTools() {
         const targetMwt = join(STAGE_ROOT, `${base}.mwt`);
         const targetDir = join(STAGE_ROOT, base);
 
+        // REPLACE, do not merge. Copying onto an existing staged copy left POUs and
+        // edits from the previous run in place, so "re-stage" did not produce a
+        // clean copy — a repeat test then ran against a dirty project.
+        const stageRoot = resolve(STAGE_ROOT);
+        for (const target of [targetMwt, targetDir]) {
+          if (resolve(target).startsWith(stageRoot + sep)) {
+            rmSync(target, { recursive: true, force: true });
+          }
+        }
+
         let copied = 0;
         copyFileSync(mwt, targetMwt);
         copied += 1;
@@ -532,7 +559,9 @@ function defineTools() {
       presentCall: (a) => ({
         card: 'generic', title: 'Open project in IDE', kind: 'other', rawInput: a.path,
       }),
-      execute: (args) => verb('open', { path: assertStaged(String(args.path)) }, 120000),
+      // The bridge retries OpenProject for up to 90s while a freshly started IDE
+      // initialises its project services, so allow more than that here.
+      execute: (args) => verb('open', { path: assertStaged(String(args.path)) }, 150000),
     },
 
     {
@@ -739,6 +768,11 @@ function defineTools() {
             ide_window: { type: 'string' },
             version: { type: 'string' },
             launched_exe: { type: 'string' },
+            trial_dialog: {
+              type: 'boolean',
+              description: 'A licence/trial dialog appeared during startup and was answered.',
+            },
+            trial_answered: { type: ['boolean', 'null'] },
           },
         },
         render: (_a, v) => text(
@@ -747,7 +781,62 @@ function defineTools() {
         ),
       },
       presentCall: () => ({ card: 'generic', title: 'Start MotionWorks IEC', kind: 'execute' }),
-      execute: (args) => verb('start_ide', args?.exe ? { exe: String(args.exe) } : {}, 180000),
+      // The bridge waits up to 300s for the window (IDE startup can exceed two
+      // minutes here), so the client must allow longer than that or it gives up
+      // while the bridge is still legitimately waiting.
+      execute: (args) => verb('start_ide', args?.exe ? { exe: String(args.exe) } : {}, 330000),
+    },
+
+    {
+      name: 'mw_ide_trial',
+      description:
+        'Check for — and optionally answer — the MotionWorks licence/trial dialog. An '
+        + 'unlicensed build shows a modal dialog ("Use Trial" / "Activate Online" / '
+        + '"Activate by Phone") BEFORE the IDE creates any window of its own, and until '
+        + 'it is answered the IDE has no project services, so every OpenProject fails '
+        + 'with "Internal error". mw_ide_start already answers it when it appears; call '
+        + 'this to inspect the state or to retry. It reports honestly when the dialog '
+        + 'could not be dismissed: the dialog belongs to another process (mwctVerify.exe), '
+        + 'so clicking it is best-effort and may need one manual click.',
+      parameters: {
+        type: 'object',
+        additionalProperties: false,
+        properties: {
+          attempt: {
+            type: 'boolean',
+            description: 'Try to dismiss it with "Use Trial". Defaults to false (report only).',
+          },
+        },
+      },
+      output: {
+        schema: {
+          type: 'object',
+          additionalProperties: true,
+          properties: {
+            dialog_present: { type: 'boolean' },
+            dismissed: { type: 'boolean' },
+            method: { type: ['string', 'null'] },
+            dialog_hwnd: { type: ['string', 'null'] },
+            use_trial_hwnd: { type: ['string', 'null'] },
+            ide_window: { type: ['string', 'null'] },
+          },
+        },
+        render: (_a, v) => text(
+          v.dialog_present
+            ? (v.dismissed
+              ? `Licence dialog was present and is now answered (via ${v.method}).`
+              : 'LICENCE DIALOG IS UP and could not be dismissed automatically. Click '
+                + '"Use Trial" once by hand (or activate a licence); the IDE has no project '
+                + 'services until then, and every OpenProject will fail with "Internal error".')
+            : 'No licence dialog is present.',
+        ),
+      },
+      presentCall: (a) => ({
+        card: 'generic',
+        title: a?.attempt ? 'Answer licence dialog' : 'Check licence dialog',
+        kind: 'read',
+      }),
+      execute: (args) => verb(args?.attempt ? 'dismiss_trial' : 'trial_state', {}, 240000),
     },
 
     {
@@ -908,6 +997,115 @@ function defineTools() {
       output: { schema: WRITE_SCHEMA, render: renderWrite },
       presentCall: (a) => ({ card: 'generic', title: `Add variable ${a.name}`, kind: 'edit' }),
       execute: (args) => runCode('var_add', {
+        ...(args ?? {}), project: projectOf(args), dry_run: args?.dry_run !== false,
+      }),
+    },
+
+    {
+      name: 'mw_code_var_edit',
+      description:
+        'Edit an existing variable declaration in place: rename it, change its type, address, '
+        + 'initial value or description. **dry_run defaults to true.**',
+      parameters: {
+        type: 'object',
+        additionalProperties: false,
+        required: ['name'],
+        properties: {
+          name: { type: 'string', description: 'Current variable name.' },
+          pou: { type: 'string', description: 'Owning POU; omit for a global variable.' },
+          new_name: { type: 'string' },
+          type: { type: 'string', description: 'New IEC data type.' },
+          address: { type: 'string' },
+          initial_value: { type: 'string' },
+          description: { type: 'string' },
+          clear_address: { type: 'boolean', description: 'Remove the IEC address.' },
+          force: { type: 'boolean', description: 'Override the reference check.' },
+          project: { type: 'string' },
+          dry_run: { type: 'boolean', description: 'Defaults to true.' },
+        },
+      },
+      output: { schema: WRITE_SCHEMA, render: renderWrite },
+      presentCall: (a) => ({ card: 'generic', title: `Edit variable ${a.name}`, kind: 'edit' }),
+      execute: (args) => runCode('var_edit', {
+        ...(args ?? {}), project: projectOf(args), dry_run: args?.dry_run !== false,
+      }),
+    },
+
+    {
+      name: 'mw_code_var_delete',
+      description:
+        'Delete a variable declaration. Refuses while any POU body still references it, because '
+        + 'that leaves a dangling reference and a failed build — pass `force` to override. '
+        + '**dry_run defaults to true.**',
+      parameters: {
+        type: 'object',
+        additionalProperties: false,
+        required: ['name'],
+        properties: {
+          name: { type: 'string' },
+          pou: { type: 'string', description: 'Owning POU; omit for a global variable.' },
+          force: { type: 'boolean' },
+          project: { type: 'string' },
+          dry_run: { type: 'boolean', description: 'Defaults to true.' },
+        },
+      },
+      output: { schema: WRITE_SCHEMA, render: renderWrite },
+      presentCall: (a) => ({ card: 'generic', title: `Delete variable ${a.name}`, kind: 'delete' }),
+      execute: (args) => runCode('var_delete', {
+        ...(args ?? {}), project: projectOf(args), dry_run: args?.dry_run !== false,
+      }),
+    },
+
+    {
+      name: 'mw_code_pou_create',
+      description:
+        'Create a new POU by cloning a template POU that already exists in the project — '
+        + 'creation clones that POU\'s directory and renames its streams, so a POU cannot be '
+        + 'authored from nothing. The new POU starts with the template\'s body and variables; '
+        + 'use mw_code_write_st to replace the body. **dry_run defaults to true** and returns '
+        + 'the plan (files it would touch, GUIDs, warnings) without changing anything.',
+      parameters: {
+        type: 'object',
+        additionalProperties: false,
+        required: ['name', 'template'],
+        properties: {
+          name: { type: 'string', description: 'Name for the new POU.' },
+          template: {
+            type: 'string',
+            description: 'Existing POU to clone. Use an ST POU (e.g. Instructions) for an ST POU.',
+          },
+          project: { type: 'string' },
+          dry_run: { type: 'boolean', description: 'Defaults to true.' },
+        },
+      },
+      output: { schema: WRITE_SCHEMA, render: renderWrite },
+      presentCall: (a) => ({ card: 'generic', title: `Create POU ${a.name}`, kind: 'edit' }),
+      execute: (args) => runCode('pou_create', {
+        ...(args ?? {}), project: projectOf(args), dry_run: args?.dry_run !== false,
+      }),
+    },
+
+    {
+      name: 'mw_code_pou_delete',
+      description:
+        'Delete a POU together with its task assignments and registry entries. The POU directory '
+        + 'is moved to an archive rather than removed, so the deletion is recoverable. Refuses '
+        + 'when another POU still calls it unless `force` is set. '
+        + '**dry_run defaults to true** and returns the plan without changing anything.',
+      parameters: {
+        type: 'object',
+        additionalProperties: false,
+        required: ['name'],
+        properties: {
+          name: { type: 'string' },
+          force: { type: 'boolean', description: 'Delete even if another POU references it.' },
+          project: { type: 'string' },
+          dry_run: { type: 'boolean', description: 'Defaults to true.' },
+        },
+      },
+      output: { schema: WRITE_SCHEMA, render: renderWrite },
+      presentCall: (a) => ({ card: 'generic', title: `Delete POU ${a.name}`, kind: 'delete' }),
+      execute: (args) => runCode('pou_delete', {
         ...(args ?? {}), project: projectOf(args), dry_run: args?.dry_run !== false,
       }),
     },

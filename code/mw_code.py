@@ -191,11 +191,18 @@ def verb_var_edit(req):
 
     root = Path(req["project"])
     dry = bool(req.get("dry_run", True))
-    kwargs = {}
-    for k in ("new_name", "type", "section", "address", "initial_value", "description"):
-        if req.get(k) is not None:
-            kwargs[k if k != "type" else "type_name"] = req[k]
-    plan = W.plan_variable_edit(root, req.get("pou"), req["name"], **kwargs)
+    plan = W.plan_variable_edit(
+        root,
+        req.get("pou"),
+        req["name"],
+        new_name=req.get("new_name"),
+        type_name=req.get("type"),
+        address=req.get("address"),
+        initial_value=req.get("initial_value"),
+        description=req.get("description"),
+        clear_address=bool(req.get("clear_address", False)),
+        force=bool(req.get("force", False)),
+    )
     return _ok(dry_run=dry, result=_jsonable(W.apply_declaration(plan, root, dry_run=dry)))
 
 
@@ -205,12 +212,75 @@ def verb_var_delete(req):
 
     root = Path(req["project"])
     dry = bool(req.get("dry_run", True))
-    plan = W.plan_variable_delete(root, req.get("pou"), req["name"])
+    plan = W.plan_variable_delete(
+        root, req.get("pou"), req["name"], force=bool(req.get("force", False))
+    )
     return _ok(dry_run=dry, result=_jsonable(W.apply_declaration(plan, root, dry_run=dry)))
 
 
+def _plan_summary(plan):
+    """Flatten a planner's dataclass into JSON-friendly fields (no methods)."""
+    out = {}
+    for key, value in vars(plan).items():
+        if callable(value):
+            continue
+        out[key] = _jsonable(value)
+    return out
+
+
+def _backup_dir(req, root: Path) -> Path:
+    """Backups go beside the plugin, NOT inside the staging root.
+
+    Writing into stage/ creates a directory that a naive "newest staged project"
+    search can then mistake for a project, so the staging root is kept to
+    projects only.
+    """
+    raw = req.get("backup_dir")
+    directory = Path(raw) if raw else (Path(__file__).resolve().parent.parent / "backups")
+    directory.mkdir(parents=True, exist_ok=True)
+    return directory
+
+
+def verb_pou_create(req):
+    """Create a new POU by cloning a template POU already in the project.
+
+    ``template`` must be the name of an existing POU: creation clones that POU's
+    directory and renames its streams, so there is no way to author a POU from
+    nothing. dry_run defaults to True and returns the plan instead of applying it.
+    """
+    from motionworks_iec_mcp import pou_writer as PW
+
+    root = Path(req["project"])
+    dry = bool(req.get("dry_run", True))
+    plan = PW.plan_pou_creation(root, req["name"], req["template"])
+    if dry:
+        return _ok(dry_run=True, plan=_plan_summary(plan))
+    result = PW.apply_pou_creation(
+        plan, backup_dir=_backup_dir(req, root), project_root=root
+    )
+    return _ok(dry_run=False, result=_jsonable(result))
+
+
+def verb_pou_delete(req):
+    """Delete a POU, its task assignments and its registry entries.
+
+    The POU directory is moved to an archive rather than removed, so the deletion
+    is recoverable. Refuses when another POU still calls it unless ``force`` is set.
+    dry_run defaults to True and returns the plan instead of applying it.
+    """
+    from motionworks_iec_mcp import pou_writer as PW
+
+    root = Path(req["project"])
+    dry = bool(req.get("dry_run", True))
+    plan = PW.plan_pou_deletion(root, req["name"], force=bool(req.get("force", False)))
+    if dry:
+        return _ok(dry_run=True, plan=_plan_summary(plan))
+    result = PW.apply_pou_deletion(plan, backup_dir=_backup_dir(req, root))
+    return _ok(dry_run=False, result=_jsonable(result))
+
+
 def verb_ide_closed(req):
-    """Report whether the IDE-held gate would let a write through."""
+    """Report whether the IDE gate would let a write through."""
     from motionworks_iec_mcp import ide as I
 
     running = None
@@ -222,7 +292,7 @@ def verb_ide_closed(req):
                 break
             except Exception:
                 pass
-    return _ok(running=running, helpers=[n for n in dir(I) if not n.startswith("_")][:40])
+    return _ok(running=running, helper_names=[n for n in dir(I) if not n.startswith("_")][:40])
 
 
 VERBS = {
@@ -233,6 +303,8 @@ VERBS = {
     "var_add": verb_var_add,
     "var_edit": verb_var_edit,
     "var_delete": verb_var_delete,
+    "pou_create": verb_pou_create,
+    "pou_delete": verb_pou_delete,
     "ide_closed": verb_ide_closed,
 }
 
