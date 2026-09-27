@@ -26,7 +26,15 @@
     "cordis.patch.yml",
     "bridge/",
     "code/",
-    "docs/"
+    "docs/",
+    "!**/__pycache__/",
+    "!**/*.pyc",
+    "!bridge/req.json",
+    "!bridge/res.json",
+    "!bridge/bridge.log",
+    "!code/req.json",
+    "!code/res.json",
+    "!code/res_*.json"
   ],
   "engines": {
     "node": ">=20"

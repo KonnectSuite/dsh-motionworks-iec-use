@@ -333,7 +333,7 @@ const STATUS_SCHEMA = {
     version: { type: 'string', description: 'Automation server version reported by the IDE.' },
     ide_window: { type: 'string', description: 'Window handle of the live IDE, e.g. 0x4A0A12.' },
     is_project_open: { type: 'boolean' },
-    active_project: { type: ['string', 'null'] },
+    active_project: { oneOf: [{ type: 'string' }, { type: 'null' }] },
   },
 };
 
@@ -343,14 +343,14 @@ const BUILD_SCHEMA = {
   required: ['mode', 'accepted', 'settled', 'is_compiled', 'elapsed_s'],
   properties: {
     mode: { type: 'string', description: 'make | build | patch | worksheet | datatypes.' },
-    compile_type: { type: ['integer', 'null'], description: 'The AdeCompileType passed to Compile().' },
+    compile_type: { oneOf: [{ type: 'integer' }, { type: 'null' }], description: 'The AdeCompileType passed to Compile().' },
     accepted: { type: 'boolean', description: 'The IDE accepted the compile request.' },
     settled: {
       type: 'boolean',
       description: 'A second compile was accepted, proving the previous one finished.',
     },
-    is_compiled: { type: ['boolean', 'null'] },
-    is_modified: { type: ['boolean', 'null'] },
+    is_compiled: { oneOf: [{ type: 'boolean' }, { type: 'null' }] },
+    is_modified: { oneOf: [{ type: 'boolean' }, { type: 'null' }] },
     elapsed_s: { type: 'number' },
   },
 };
@@ -547,7 +547,7 @@ function defineTools() {
           properties: {
             requested: { type: 'string' },
             is_project_open: { type: 'boolean' },
-            active_project: { type: ['string', 'null'] },
+            active_project: { oneOf: [{ type: 'string' }, { type: 'null' }] },
           },
         },
         render: (_a, v) => text(
@@ -637,9 +637,9 @@ function defineTools() {
                       required: ['name'],
                       properties: {
                         name: { type: 'string' },
-                        data_type: { type: ['string', 'null'] },
-                        initial_value: { type: ['string', 'null'] },
-                        iec_address: { type: ['string', 'null'] },
+                        data_type: { oneOf: [{ type: 'string' }, { type: 'null' }] },
+                        initial_value: { oneOf: [{ type: 'string' }, { type: 'null' }] },
+                        iec_address: { oneOf: [{ type: 'string' }, { type: 'null' }] },
                       },
                     },
                   },
@@ -772,7 +772,7 @@ function defineTools() {
               type: 'boolean',
               description: 'A licence/trial dialog appeared during startup and was answered.',
             },
-            trial_answered: { type: ['boolean', 'null'] },
+            trial_answered: { oneOf: [{ type: 'boolean' }, { type: 'null' }] },
           },
         },
         render: (_a, v) => text(
@@ -815,10 +815,10 @@ function defineTools() {
           properties: {
             dialog_present: { type: 'boolean' },
             dismissed: { type: 'boolean' },
-            method: { type: ['string', 'null'] },
-            dialog_hwnd: { type: ['string', 'null'] },
-            use_trial_hwnd: { type: ['string', 'null'] },
-            ide_window: { type: ['string', 'null'] },
+            method: { oneOf: [{ type: 'string' }, { type: 'null' }] },
+            dialog_hwnd: { oneOf: [{ type: 'string' }, { type: 'null' }] },
+            use_trial_hwnd: { oneOf: [{ type: 'string' }, { type: 'null' }] },
+            ide_window: { oneOf: [{ type: 'string' }, { type: 'null' }] },
           },
         },
         render: (_a, v) => text(
@@ -896,9 +896,9 @@ function defineTools() {
                 required: ['name'],
                 properties: {
                   name: { type: 'string' },
-                  language: { type: ['string', 'null'] },
-                  body_stream: { type: ['string', 'null'] },
-                  has_st_body: { type: ['boolean', 'null'] },
+                  language: { oneOf: [{ type: 'string' }, { type: 'null' }] },
+                  body_stream: { oneOf: [{ type: 'string' }, { type: 'null' }] },
+                  has_st_body: { oneOf: [{ type: 'boolean' }, { type: 'null' }] },
                 },
               },
             },
@@ -934,9 +934,9 @@ function defineTools() {
           required: ['pou', 'body'],
           properties: {
             pou: { type: 'string' },
-            language: { type: ['string', 'null'] },
-            body: { type: ['string', 'null'] },
-            body_error: { type: ['string', 'null'] },
+            language: { oneOf: [{ type: 'string' }, { type: 'null' }] },
+            body: { oneOf: [{ type: 'string' }, { type: 'null' }] },
+            body_error: { oneOf: [{ type: 'string' }, { type: 'null' }] },
             variables: { type: 'array', items: { type: 'object', additionalProperties: true } },
           },
         },

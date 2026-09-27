@@ -21,7 +21,7 @@
 import assert from 'node:assert/strict';
 import { dirname, join } from 'node:path';
 import { statSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const live = process.argv.includes('--live');
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -49,30 +49,133 @@ console.log(`tools registered: ${registered.length}`);
 assert.ok(registered.length >= 13, 'registers the IDE and code tool sets');
 assert.ok(disposeHandler, 'registers a dispose handler so the bridge is stopped');
 
-// ── schema shape: this is the check that catches the DSL/JSON-Schema slip ───
+// ── schema shape ────────────────────────────────────────────────────────────
+//
+// This reproduces the enforced subset from @deepseek-ai/dsh-tools
+// (checkSchemaNode / checkObjectSchemaTail). It matters: the plugin registers
+// definitions DIRECTLY, so ctx.tools.register() runs the real validator, and a
+// violation there throws inside apply() and the whole plugin reports
+// "Failed to start" — which is exactly what a plugin with no unit tests ships.
+//
+// The earlier version of this file ACCEPTED `type: ['string', 'null']` (it even
+// unwrapped type arrays in stub()), so it passed while the real registry
+// rejected 9 of 21 tools. Do not loosen these rules.
+const CONSTRAINT_KEYWORDS = new Set([
+  'type', 'oneOf', 'properties', 'required', 'additionalProperties', 'items', 'enum', 'const',
+]);
+const ANNOTATION_KEYWORDS = new Set(['description', 'title', 'default', 'examples']);
+const SCHEMA_TYPES = ['object', 'array', 'string', 'number', 'integer', 'boolean', 'null'];
+const ONE_OF_SIBLING_KEYWORDS = ['properties', 'required', 'additionalProperties', 'items', 'enum', 'const'];
+
 const problems = [];
-function checkSchema(schema, path) {
-  if (!schema || typeof schema !== 'object') { problems.push(`${path}: not an object`); return; }
-  if ('required' in schema && !Array.isArray(schema.required)) {
-    problems.push(`${path}.required is ${JSON.stringify(schema.required)} — must be an ARRAY of names`);
+function checkSchema(node, path, seen = new Set()) {
+  if (!node || typeof node !== 'object' || Array.isArray(node)) {
+    problems.push(`${path}: must be a schema object`);
+    return;
   }
-  if (schema.type === 'object' && schema.properties) {
-    for (const [k, v] of Object.entries(schema.properties)) {
-      if ('required' in v) {
-        problems.push(`${path}.properties.${k} carries an inline 'required' — properties must not`);
+  if (seen.has(node)) { problems.push(`${path}: is circular`); return; }
+  seen.add(node);
+
+  for (const key of Object.keys(node)) {
+    if (CONSTRAINT_KEYWORDS.has(key) || ANNOTATION_KEYWORDS.has(key)) continue;
+    problems.push(
+      `${path}.${key} is not a supported keyword `
+      + '(subset: type/oneOf/properties/required/additionalProperties/items/enum/const + annotations)',
+    );
+  }
+  if ('description' in node && typeof node.description !== 'string') problems.push(`${path}.description must be a string`);
+  if ('title' in node && typeof node.title !== 'string') problems.push(`${path}.title must be a string`);
+
+  const hasType = Object.hasOwn(node, 'type');
+  const hasOneOf = Object.hasOwn(node, 'oneOf');
+
+  if (hasType && hasOneOf) { problems.push(`${path} cannot declare both type and oneOf`); seen.delete(node); return; }
+
+  if (!hasType && !hasOneOf) {
+    for (const key of ONE_OF_SIBLING_KEYWORDS) {
+      if (Object.hasOwn(node, key)) problems.push(`${path}.${key} requires type or oneOf`);
+    }
+    seen.delete(node);
+    return;
+  }
+
+  if (hasOneOf) {
+    const oneOf = node.oneOf;
+    if (!Array.isArray(oneOf) || oneOf.length < 2) problems.push(`${path}.oneOf must be an array of at least two schemas`);
+    else oneOf.forEach((sub, i) => checkSchema(sub, `${path}.oneOf[${i}]`, seen));
+    for (const key of ONE_OF_SIBLING_KEYWORDS) {
+      if (Object.hasOwn(node, key)) problems.push(`${path}.${key} is not supported beside oneOf`);
+    }
+    seen.delete(node);
+    return;
+  }
+
+  // ── the rule that caught the real bug ──
+  const type = node.type;
+  if (typeof type !== 'string' || !SCHEMA_TYPES.includes(type)) {
+    problems.push(Array.isArray(type)
+      ? `${path}.type must be a single type string (type arrays are not supported)`
+      : `${path}.type must be one of ${SCHEMA_TYPES.join('/')}`);
+    seen.delete(node);
+    return;
+  }
+
+  if (type === 'object') {
+    if (Object.hasOwn(node, 'required')) {
+      const req = node.required;
+      if (!Array.isArray(req) || req.some((r) => typeof r !== 'string')) {
+        problems.push(`${path}.required must be an array of strings (never an inline boolean)`);
       }
-      checkSchema(v, `${path}.properties.${k}`);
+    }
+    if (Object.hasOwn(node, 'additionalProperties') && typeof node.additionalProperties !== 'boolean') {
+      problems.push(`${path}.additionalProperties must be a boolean`);
+    }
+    for (const [k, v] of Object.entries(node.properties ?? {})) {
+      // properties must be a plain record of schemas
+      if (Array.isArray(v)) { problems.push(`${path}.properties.${k}: must be a schema object`); continue; }
+      checkSchema(v, `${path}.properties.${k}`, seen);
     }
   }
-  if (schema.items) checkSchema(schema.items, `${path}.items`);
+  if (type === 'array' && Object.hasOwn(node, 'items')) checkSchema(node.items, `${path}.items`, seen);
+  seen.delete(node);
+}
+
+// Prefer the REAL validator when the DSH runtime is locatable, and always run the
+// replica above as well. Deriving it from process.execPath works wherever the
+// harness is installed, because verify.mjs is run with the runtime's own node.
+let realValidator = null;
+const runtimeRoots = [
+  process.env.DSH_TOOLS_ENTRY,
+  join(dirname(dirname(process.execPath)), 'node_modules', '@deepseek-ai', 'dsh-tools', 'lib', 'index.js'),
+].filter(Boolean);
+for (const c of runtimeRoots) {
+  try {
+    const m = await import(pathToFileURL(c).href);
+    if (typeof m.assertSupportedJsonSchema === 'function') { realValidator = m.assertSupportedJsonSchema; break; }
+  } catch { /* not resolvable here; the replica still runs */ }
+}
+
+// ── guard the guard ─────────────────────────────────────────────────────────
+// The defect that shipped was a type array. If this checker ever stops rejecting
+// one, the test above is worthless — so assert that it does.
+{
+  const before = problems.length;
+  checkSchema({ type: 'object', properties: { x: { type: ['string', 'null'] } } }, 'selftest');
+  const caught = problems.some((p) => p.includes('type arrays are not supported'));
+  problems.length = before;   // discard the probe
+  if (!caught) {
+    console.error('SELF-TEST FAILED: the checker no longer rejects type arrays — the shipped defect would pass again.');
+    process.exit(1);
+  }
+  console.log('self-test: the checker rejects type arrays (the defect that shipped)');
 }
 
 /** Build a value that satisfies a schema, so render() can be exercised. */
 function stub(schema) {
   if (!schema || typeof schema !== 'object') return null;
   if (schema.enum) return schema.enum[0];
-  let t = schema.type;
-  if (Array.isArray(t)) t = t.find((x) => x !== 'null') ?? 'null';
+  if (Array.isArray(schema.oneOf)) return stub(schema.oneOf[0]);   // first branch
+  const t = schema.type;                                           // never an array (checked above)
   switch (t) {
     case 'object': {
       const o = {};
@@ -104,6 +207,15 @@ for (const t of registered) {
   checkSchema(t.parameters, `${t.name}.parameters`);
   checkSchema(t.output.schema, `${t.name}.output.schema`);
 
+  // The real registry runs this exact call inside ctx.tools.register().
+  if (realValidator) {
+    try {
+      realValidator(t.output.schema);
+    } catch (e) {
+      problems.push(`${t.name}.output.schema rejected by the real validator: ${e.message}`);
+    }
+  }
+
   // render() must produce ContentBlock[] from a schema-satisfying value.
   const rendered = t.output.render({}, stub(t.output.schema));
   assert.ok(Array.isArray(rendered) && rendered.length > 0, `${t.name} render returned nothing`);
@@ -118,7 +230,8 @@ if (problems.length) {
   for (const p of problems) console.error(`  ${p}`);
   process.exit(1);
 }
-console.log('schemas: valid JSON Schema (required is an array everywhere)');
+console.log(`schemas: valid JSON Schema (required is an array, type is a single string)`);
+console.log(`schema checks: enforced-subset replica${realValidator ? ' + the REAL dsh-tools validator' : ' (real validator not locatable here)'}`);
 console.log('tools:');
 for (const t of registered) console.log(`  ${t.name}`);
 
