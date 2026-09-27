@@ -69,10 +69,51 @@ const STAGE_ROOT = join(HERE, 'stage');
 // makes on purpose, because the alternative - which happened in use - is an agent opening a project
 // on someone's Desktop that the task never mentioned.
 
-//: The workspace this session is working in. process.cwd() is the session workspace; an explicit
-//: override exists so a deployment can pin it.
+//: The host context, kept so a tool can ask which SESSION is calling. Set once in apply().
+let hostCtx = null;
+
+//: How the workspace was found, for reporting. An agent that is told "the workspace is X" can tell
+//: whether X looks like its session, which is what would have caught the wrong-root bug immediately.
+let workspaceSource = 'process cwd (no host lookup attempted)';
+
+/**
+ * The workspace THIS SESSION is working in.
+ *
+ * process.cwd() is the DSH process's directory and says nothing about which workspace a session is
+ * attached to - using it made the guard compare against the wrong root. The session's own cwd is the
+ * answer, and the host exposes it in two steps because an Agent carries only an id:
+ *
+ *     ctx.agents.currentInitiator()  ->  Agent { id }
+ *     ctx.sessions.get(agent.id)     ->  Session, whose header carries `cwd`
+ *
+ * Both are OPTIONAL services, so each step falls through rather than throwing. The order is:
+ * explicit override, then the session, then the process directory.
+ */
 function workspaceRoot() {
-  return process.env.MOTIONWORKS_MCP_WORKSPACE || process.cwd();
+  const override = process.env.MOTIONWORKS_MCP_WORKSPACE;
+  if (override) {
+    workspaceSource = 'MOTIONWORKS_MCP_WORKSPACE';
+    return override;
+  }
+
+  try {
+    const agents = hostCtx?.get?.('agents');
+    const agent = agents?.currentInitiator?.();
+    if (agent?.id) {
+      const sessions = hostCtx?.get?.('sessions');
+      const session = sessions?.get?.(agent.id);
+      const cwd = session?.cwd ?? session?.header?.cwd ?? session?.meta?.cwd;
+      if (cwd) {
+        workspaceSource = `session ${String(agent.id).slice(0, 12)}`;
+        return cwd;
+      }
+    }
+  } catch {
+    // an unavailable host service must not break a tool call
+  }
+
+  workspaceSource = 'process cwd (the host did not report a session workspace)';
+  return process.cwd();
 }
 
 function isInsideWorkspace(target) {
@@ -792,8 +833,11 @@ function defineTools() {
           type: 'object',
           additionalProperties: false,
           required: ['workspace', 'count', 'projects', 'guidance'],
+          // workspace_source says HOW the workspace was found, so a wrong root is visible
+          // in the result instead of silently pointing somewhere unexpected.
           properties: {
             workspace: { type: 'string' },
+            workspace_source: { oneOf: [{ type: 'string' }, { type: 'null' }] },
             root: { type: 'string' },
             count: { type: 'integer' },
             projects: { type: 'array' },
@@ -806,19 +850,32 @@ function defineTools() {
           ? `${v.count} MotionWorks project(s) in the workspace:\n`
             + v.projects.map((p) => `  ${p.name}  ${p.mwt}`).join('\n')
             + '\n\nStage one with mw_ide_stage { source: "<the .mwt>" }.'
-          : `No MotionWorks projects found in ${v.root}.\n\n${v.guidance}`),
+          : `No MotionWorks projects found in ${v.root}`
+            + ` (workspace from ${v.workspace_source}).\n\n${v.guidance}`),
       },
       presentCall: () => ({ card: 'generic', title: 'Find MotionWorks projects', kind: 'read' }),
       execute: async (args) => {
         const root = args?.root ? resolve(args.root) : workspaceRoot();
         const projects = findProjects(root);
+        // A root outside the workspace is allowed - this tool only reads - but it is REPORTED
+        // rather than passed over. The rule is that MotionWorks work happens in the workspace, and
+        // a search that quietly wandered elsewhere would undermine it even though nothing is
+        // modified. Naming it keeps the caller honest about which tree it just looked at.
+        const outside = !isInsideWorkspace(root);
         return {
           workspace: workspaceRoot(),
+          workspace_source: workspaceSource,
           root,
+          outside_workspace: outside,
           count: projects.length,
           projects,
           guidance: projects.length
-            ? 'Pass one of these .mwt paths to mw_ide_stage.'
+            ? (outside
+              ? 'NOTE: this root is OUTSIDE the workspace. Nothing here was modified - this tool '
+                + 'only reads - but MotionWorks work should happen on a project in the workspace. '
+                + 'Pass one of these to mw_ide_stage only if the USER named it, with '
+                + 'allow_outside_workspace: true.'
+              : 'Pass one of these .mwt paths to mw_ide_stage.')
             : 'STOP AND ASK THE USER. There is no MotionWorks project in this workspace, and a '
               + 'project elsewhere on the machine is not what the task asked for. Tell the user '
               + 'what you looked for (.mwt files) and where you looked, then ask them to put the '
@@ -2548,6 +2605,9 @@ function defineTools() {
  * @param ctx - registrant context carrying the tool registry.
  */
 export function apply(ctx) {
+  // Kept for per-call workspace lookup: currentInitiator() reports the agent for the
+  // current driver chain, so it can only be asked while a tool is executing.
+  hostCtx = ctx;
   for (const definition of defineTools()) {
     // `defineTool()` Ã¢â‚¬â€ which we cannot import here Ã¢â‚¬â€ wraps execute in an async
     // function, so a validation throw becomes a rejection rather than a
