@@ -75,7 +75,7 @@ function observe(label) {
 
 try { await run('mw_ide_close'); } catch { /* not running */ }
 for (const p of [DIR, MWT]) { try { rmSync(p, { recursive: true, force: true }); } catch { /* absent */ } }
-await run('mw_ide_stage', { source: SOURCE });
+await run('mw_ide_stage', { source: SOURCE, allow_outside_workspace: true });
 const before = observe('1. staged, NOTHING edited');
 
 await run('mw_ide_start');

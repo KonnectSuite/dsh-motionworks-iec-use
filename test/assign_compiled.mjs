@@ -85,7 +85,7 @@ async function kase(label, prepare) {
   try { await run('mw_ide_close'); } catch { /* not running */ }
   for (const p of [DIR, MWT]) { try { rmSync(p, { recursive: true, force: true }); } catch { /* absent */ } }
   try { rmSync(`${PLUGIN}\\backups\\archived-pous\\${NEW_POU}`, { recursive: true, force: true }); } catch { /* absent */ }
-  await run('mw_ide_stage', { source: SOURCE });
+  await run('mw_ide_stage', { source: SOURCE, allow_outside_workspace: true });
   await run('mw_ide_close');
   try { console.log(`     ${await prepare()}`); }
   catch (e) { console.log(`     prepare THREW: ${e.message.split('\n')[0].slice(0, 120)}`); }

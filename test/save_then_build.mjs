@@ -51,7 +51,7 @@ line('1. fresh stage, create + assign (the sequence that breaks)');
 try { await run('mw_ide_close'); } catch { /* not running */ }
 for (const p of [DIR, MWT]) { try { rmSync(p, { recursive: true, force: true }); } catch { /* absent */ } }
 try { rmSync(`${PLUGIN}\\backups\\archived-pous\\SaveProbe`, { recursive: true, force: true }); } catch { /* absent */ }
-await run('mw_ide_stage', { source: SOURCE });
+await run('mw_ide_stage', { source: SOURCE, allow_outside_workspace: true });
 await run('mw_code_pou_create', { name: 'SaveProbe', template: 'TopCutterInitialize', dry_run: false });
 await run('mw_code_pou_assign', { task: 'SlowTsk', pou: 'SaveProbe', dry_run: false });
 console.log('  created SaveProbe and assigned it to SlowTsk');

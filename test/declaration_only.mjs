@@ -65,7 +65,7 @@ async function buildAndReport(label) {
 line('1. fresh stage, baseline build');
 try { await run('mw_ide_close'); } catch { /* not running */ }
 for (const p of [DIR, MWT]) { try { rmSync(p, { recursive: true, force: true }); } catch { /* absent */ } }
-await run('mw_ide_stage', { source: SOURCE });
+await run('mw_ide_stage', { source: SOURCE, allow_outside_workspace: true });
 const baseline = await buildAndReport('baseline (nothing changed)');
 const g0 = helper('grids');
 console.log(`  grid before: count=${g0.grid_count} parsed=${g0.grid_parsed} bytes=${g0.grid_bytes} textHasVar=${g0.text_has_var}`);

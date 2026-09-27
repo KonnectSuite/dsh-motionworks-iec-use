@@ -71,7 +71,7 @@ function compare(before, after, step, allowedPous = []) {
 
 line(`0. Stage a FRESH copy from the original\n  ${SRC}`);
 try { rmSync(join(STAGE, 'TopCutter.mwt'), { force: true }); rmSync(join(STAGE, 'TopCutter'), { recursive: true, force: true }); } catch { /* first run */ }
-const staged = await run('mw_ide_stage', { source: SRC });
+const staged = await run('mw_ide_stage', { source: SRC, allow_outside_workspace: true });
 const dir = join(STAGE, 'TopCutter');
 if (!existsSync(dir)) { console.log(`  staged dir missing: ${dir}`); process.exit(1); }
 pass(`staged from the original (source untouched)`);

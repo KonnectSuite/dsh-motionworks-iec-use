@@ -53,7 +53,7 @@ line('1. fresh stage');
 try { await run('mw_ide_close'); } catch { /* not running */ }
 for (const p of [DIR, MWT]) { try { rmSync(p, { recursive: true, force: true }); } catch { /* absent */ } }
 try { rmSync(`${PLUGIN}\\backups\\archived-pous\\AssignProbe`, { recursive: true, force: true }); } catch { /* absent */ }
-await run('mw_ide_stage', { source: SOURCE });
+await run('mw_ide_stage', { source: SOURCE, allow_outside_workspace: true });
 
 line('2. create the POU (no assign yet)');
 await run('mw_ide_close');

@@ -8,12 +8,32 @@ reading the IDE's own verdict, not by inspection.
 
 ---
 
-## 0. The safety model
+## 0. The two rules that come first
 
-**Always work on a staged copy.**
+### 0a. Find the project — it must be IN the workspace
+
+**MotionWorks work happens on a project inside the workspace. If there is none, stop and ask.**
 
 ```
-mw_ide_stage { source: "C:\\path\\to\\Project.mwt" }
+mw_project_find              what MotionWorks projects does this workspace hold?
+```
+
+A MotionWorks project is a `.mwt` file beside its expanded directory, so each result gives the `.mwt`
+to stage. **`mw_ide_stage` refuses a path outside the workspace** unless you pass
+`allow_outside_workspace: true`, which is for the case where the *user* named that path.
+
+**When `mw_project_find` finds nothing, that is the instruction, not an obstacle.** Tell the user
+what you looked for and where, then ask them to put the project in the workspace or to say which one
+they mean. **Do not search the rest of the machine** — a project elsewhere is not one the task asked
+for, and opening it is the behaviour this rule exists to stop.
+
+The rule is enforced in the tool rather than stated only here, because a runbook can be skimmed but a
+refusal has to be read.
+
+### 0b. Work on a staged copy
+
+```
+mw_ide_stage { source: "<workspace>\\Project.mwt" }   stage a COPY
 ```
 
 This copies the project into the plugin's stage directory and works there. **The file you named is
@@ -257,6 +277,8 @@ few seconds.
 
 <details>
 <summary>All 36 tools</summary>
+
+**Workspace** — `mw_project_find`
 
 **IDE lifecycle** — `mw_ide_status` · `mw_ide_start` · `mw_ide_open` · `mw_ide_close` ·
 `mw_ide_stage` · `mw_ide_save` · `mw_ide_trial` · `mw_ide_state` · `mw_ide_dialog` ·

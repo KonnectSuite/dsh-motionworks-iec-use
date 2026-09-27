@@ -45,7 +45,7 @@ for (let i = 0; i < 10; i++) {
     break;
   } catch { await new Promise((r) => setTimeout(r, 1500)); }
 }
-await run('mw_ide_stage', { source: SOURCE });
+await run('mw_ide_stage', { source: SOURCE, allow_outside_workspace: true });
 await run('mw_ide_start');
 await run('mw_ide_open', { path: MWT });
 

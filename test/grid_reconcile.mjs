@@ -71,7 +71,7 @@ const show = (label) => {
 line('1. fresh stage, edit the POU, and add a variable');
 try { await run('mw_ide_close'); } catch { /* not running */ }
 for (const p of [DIR, MWT]) { try { rmSync(p, { recursive: true, force: true }); } catch { /* absent */ } }
-await run('mw_ide_stage', { source: SOURCE });
+await run('mw_ide_stage', { source: SOURCE, allow_outside_workspace: true });
 await run('mw_ide_close');
 show('pristine');
 const before = await run('mw_code_read_st', { pou: TARGET });

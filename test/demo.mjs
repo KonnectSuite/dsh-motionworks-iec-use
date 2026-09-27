@@ -36,7 +36,7 @@ console.log('  ' + all.map((t) => t.name).join('\n  '));
 // ── 2 ────────────────────────────────────────────────────────────────────────
 banner('2. Stage a copy of a project (the original is never touched)');
 rmSync(`${PLUGIN}\\backups\\archived-pous`, { recursive: true, force: true });
-const staged = await run('mw_ide_stage', { source: SAMPLE });
+const staged = await run('mw_ide_stage', { source: SAMPLE, allow_outside_workspace: true });
 console.log(`  copied ${staged.files_copied} files`);
 console.log(`  to     ${staged.staged_mwt}`);
 

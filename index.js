@@ -63,6 +63,74 @@ const REQ = join(BRIDGE_DIR, 'req.json');
 const RES = join(BRIDGE_DIR, 'res.json');
 const LOG = join(BRIDGE_DIR, 'bridge.log');
 const STAGE_ROOT = join(HERE, 'stage');
+// ── where this plugin is allowed to work ─────────────────────────────────────────
+//
+// MotionWorks projects belong in the workspace. Reaching outside it should be a decision the caller
+// makes on purpose, because the alternative - which happened in use - is an agent opening a project
+// on someone's Desktop that the task never mentioned.
+
+//: The workspace this session is working in. process.cwd() is the session workspace; an explicit
+//: override exists so a deployment can pin it.
+function workspaceRoot() {
+  return process.env.MOTIONWORKS_MCP_WORKSPACE || process.cwd();
+}
+
+function isInsideWorkspace(target) {
+  try {
+    const root = resolve(workspaceRoot()).toLowerCase();
+    const full = resolve(target).toLowerCase();
+    return full === root || full.startsWith(root.endsWith(sep) ? root : root + sep);
+  } catch {
+    return false;
+  }
+}
+
+//: Directories that never hold a user's project and are expensive to walk.
+const SKIP_DIRS = new Set(['node_modules', '.git', 'stage', 'backups', '__pycache__',
+                           'chm_out', 'help_extract', '.dsh']);
+
+/**
+ * MotionWorks projects inside a root: a `.mwt` file is the project, and its directory is what
+ * mw_ide_stage wants.
+ */
+function findProjects(root, maxDepth = 5) {
+  const found = [];
+  const walk = (dir, depth) => {
+    if (depth > maxDepth || found.length >= 50) return;
+    let entries;
+    try {
+      entries = readdirSync(dir, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    for (const entry of entries) {
+      if (found.length >= 50) return;
+      if (entry.name.startsWith('.') && entry.name !== '.') continue;
+      if (entry.isDirectory()) {
+        if (SKIP_DIRS.has(entry.name)) continue;
+        walk(join(dir, entry.name), depth + 1);
+      } else if (entry.name.toLowerCase().endsWith('.mwt')) {
+        const full = join(dir, entry.name);
+        let bytes = 0;
+        let modified = null;
+        try {
+          const st = statSync(full);
+          bytes = st.size;
+          modified = st.mtime.toISOString().slice(0, 19);
+        } catch { /* unreadable is not fatal */ }
+        found.push({
+          name: entry.name.replace(/\.mwt$/i, ''),
+          mwt: full,
+          directory: dir,
+          bytes,
+          modified,
+        });
+      }
+    }
+  };
+  walk(root, 0);
+  return found;
+}
 
 // ── POUs this plugin created ─────────────────────────────────────────────────────
 //
@@ -697,12 +765,81 @@ function defineTools() {
     },
 
     {
+      name: 'mw_project_find',
+      description:
+        'Find MotionWorks projects INSIDE THE WORKSPACE. Call this first for any MotionWorks task, '
+        + 'before mw_ide_stage: it answers "which project am I supposed to be working on" and '
+        + 'mq_ide_stage will refuse a path outside the workspace without an explicit override. '
+        + 'A MotionWorks project is a .mwt file beside its expanded directory, so each result '
+        + 'returns the .mwt to pass to mw_ide_stage. '
+        + 'IF THERE ARE NO PROJECTS IT SAYS SO and tells you to ask the user for the files - that is '
+        + 'the intended behaviour, not a failure. Do not go looking elsewhere on the machine; a '
+        + 'project outside the workspace is not one the task asked for. '
+        + 'The search is bounded (5 levels, hidden and build directories skipped) so it stays fast '
+        + 'on a large tree.',
+      parameters: {
+        type: 'object',
+        additionalProperties: false,
+        properties: {
+          root: {
+            type: 'string',
+            description: 'Directory to search. Defaults to the workspace.',
+          },
+        },
+      },
+      output: {
+        schema: {
+          type: 'object',
+          additionalProperties: false,
+          required: ['workspace', 'count', 'projects', 'guidance'],
+          properties: {
+            workspace: { type: 'string' },
+            root: { type: 'string' },
+            count: { type: 'integer' },
+            projects: { type: 'array' },
+            guidance: { type: 'string' },
+          },
+        },
+        // render receives (args, value). Taking only one parameter here made `v` the ARGS - an empty
+        // object - so the result read as undefined and the tool said "no projects" whatever it found.
+        render: (_a, v) => text(v.count
+          ? `${v.count} MotionWorks project(s) in the workspace:\n`
+            + v.projects.map((p) => `  ${p.name}  ${p.mwt}`).join('\n')
+            + '\n\nStage one with mw_ide_stage { source: "<the .mwt>" }.'
+          : `No MotionWorks projects found in ${v.root}.\n\n${v.guidance}`),
+      },
+      presentCall: () => ({ card: 'generic', title: 'Find MotionWorks projects', kind: 'read' }),
+      execute: async (args) => {
+        const root = args?.root ? resolve(args.root) : workspaceRoot();
+        const projects = findProjects(root);
+        return {
+          workspace: workspaceRoot(),
+          root,
+          count: projects.length,
+          projects,
+          guidance: projects.length
+            ? 'Pass one of these .mwt paths to mw_ide_stage.'
+            : 'STOP AND ASK THE USER. There is no MotionWorks project in this workspace, and a '
+              + 'project elsewhere on the machine is not what the task asked for. Tell the user '
+              + 'what you looked for (.mwt files) and where you looked, then ask them to put the '
+              + 'project in the workspace or to say which one they mean.',
+        };
+      },
+    },
+    {
       name: 'mw_ide_stage',
       description:
         'Copy a MotionWorks project into this plugin\'s staging area so it can be opened '
         + 'without touching the original. Accepts a project folder or its .mwt file, and copies '
         + 'both the .mwt and its sibling expanded directory. This only ever copies; the source '
-        + 'is never modified, moved or deleted.',
+        + 'is never modified, moved or deleted. '
+        + 'THE SOURCE MUST BE INSIDE THE WORKSPACE. A project elsewhere on the machine is refused, '
+        + 'because a task that mentions MotionWorks does not mean "find any project anywhere" - in '
+        + 'use an agent opened one from the user\'s Desktop that the task never named. So: call '
+        + 'mw_project_find first to see what the workspace holds, and if it holds nothing, STOP AND '
+        + 'ASK THE USER for the files rather than searching the machine. If the user has explicitly '
+        + 'named a path outside the workspace, pass allow_outside_workspace: true and the refusal '
+        + 'becomes a deliberate act recorded in the transcript.',
       parameters: {
         type: 'object',
         additionalProperties: false,
@@ -710,7 +847,15 @@ function defineTools() {
         properties: {
           source: {
             type: 'string',
-            description: 'Absolute path to the project folder or to its .mwt file.',
+            description:
+              'Path to the project folder or its .mwt file. Must be inside the workspace unless '
+              + 'allow_outside_workspace is set.',
+          },
+          allow_outside_workspace: {
+            type: 'boolean',
+            description:
+              'Stage a project outside the workspace. Only when the USER named that path; the '
+              + 'default refusal exists so this cannot happen by accident.',
           },
         },
       },
@@ -730,8 +875,32 @@ function defineTools() {
         card: 'generic', title: 'Stage project copy', kind: 'other', rawInput: a.source,
       }),
       execute: (args) => {
-        const source = resolve(String(args.source));
+        // The workspace rule is checked BEFORE existence, on purpose. Policy should not depend on
+        // whether the path happens to be there: a caller reaching outside the workspace is told the
+        // rule whether or not their path resolves, and the check costs no filesystem access.
+        //
+        // MotionWorks projects belong in the workspace. Reaching outside it should be a decision the
+        // caller makes on purpose: in use, an agent opened a project on the user's Desktop that the
+        // task never mentioned, because nothing stopped it and the plugin's own examples pointed
+        // there. So this refuses by default and names how to override, which makes the outside case
+        // visible in the transcript rather than silent.
+        const asked = resolve(String(args.source));
+        if (!isInsideWorkspace(asked) && args?.allow_outside_workspace !== true) {
+          throw new Error(
+            `mw_ide_stage refuses '${asked}': it is outside the workspace `
+            + `'${workspaceRoot()}'. MotionWorks work should happen on a project IN the workspace. `
+            + `Do this: call mw_project_find to see what projects the workspace holds. If there are `
+            + `none, STOP AND ASK THE USER - tell them what you looked for and where, and ask them `
+            + `to put the project in the workspace or say which one they mean. Do not go looking `
+            + `elsewhere on the machine; a project outside the workspace is not one the task asked `
+            + `for. If the user has explicitly named this path, call again with `
+            + `allow_outside_workspace: true.`,
+          );
+        }
+
+        const source = asked;
         if (!existsSync(source)) throw new Error(`source not found: ${source}`);
+
         const isMwt = source.toLowerCase().endsWith('.mwt');
         const mwt = isMwt ? source : `${source}.mwt`;
         const dir = isMwt ? source.slice(0, -4) : source;

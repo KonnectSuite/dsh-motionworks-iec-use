@@ -760,3 +760,18 @@ grid carries it, and a global that is READ stalls even when it is declared prope
 This is verified end to end on every run by the capability matrix, which adds and uses declarations
 on an existing POU and rebuilds after each of its 13 cases. **A created POU's inherited declarations
 are fully usable** - that has always worked.
+
+## Where to work - the workspace rule
+
+**MotionWorks work happens on a project INSIDE THE WORKSPACE. If there is none, stop and ask.**
+
+    mw_project_find      what MotionWorks projects does this workspace hold?
+
+mw_ide_stage REFUSES a source outside the workspace unless llow_outside_workspace: true is
+passed, and that flag is for the case where the USER named the path. Reaching outside is a decision
+to make on purpose: in use, an agent opened a .mwt from the user's Desktop that the task never
+mentioned, because nothing stopped it.
+
+When mw_project_find returns nothing, that IS the instruction. Say what you looked for and where,
+then ask the user to put the project in the workspace or to name the one they mean. Do not go looking
+elsewhere on the machine - a project outside the workspace is not one the task asked for.

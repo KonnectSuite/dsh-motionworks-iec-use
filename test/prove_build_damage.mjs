@@ -55,7 +55,7 @@ line('1. pristine stage');
 try { await run('mw_ide_close'); } catch { /* not running */ }
 for (const p of [DIR, MWT]) { try { rmSync(p, { recursive: true, force: true }); } catch { /* absent */ } }
 try { rmSync(`${PLUGIN}\\backups\\archived-pous\\BadPou`, { recursive: true, force: true }); } catch { /* absent */ }
-await run('mw_ide_stage', { source: SOURCE });
+await run('mw_ide_stage', { source: SOURCE, allow_outside_workspace: true });
 const t0 = tasks();
 show('pristine', t0);
 

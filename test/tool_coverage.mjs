@@ -67,6 +67,31 @@ try {
     `${(m.manuals ?? []).length} manuals, ${(m.help_topics ?? []).length} help topics`);
 } catch (e) { check('mw_code_manual (list mode)', false, String(e.message).slice(0, 70)); }
 
+console.log('\n  ══ the workspace rule ══');
+try {
+  const found = await run('mw_project_find', {});
+  check('mw_project_find reports what the workspace holds',
+    typeof found.count === 'number' && typeof found.workspace === 'string',
+    `${found.count} project(s) in ${String(found.workspace).split('\\').pop()}`);
+  check('and gives guidance when there are none',
+    found.count > 0 || String(found.guidance ?? '').includes('ASK THE USER'),
+    found.count > 0 ? '(workspace holds projects)' : 'says to ask the user');
+} catch (e) {
+  check('mw_project_find reports what the workspace holds', false, String(e.message).slice(0, 60));
+}
+
+// The refusal IS the rule, so it is tested rather than trusted.
+try {
+  await run('mw_ide_stage', { source: 'C:\\Definitely\\Outside\\The\\Workspace.mwt' });
+  check('mw_ide_stage refuses a path outside the workspace', false, 'it did NOT refuse');
+} catch (e) {
+  const msg = String(e.message);
+  check('mw_ide_stage refuses a path outside the workspace',
+    msg.includes('outside the workspace'), msg.slice(0, 54));
+  check('  and the refusal tells the caller to ask the user', msg.includes('ASK THE USER'),
+    msg.includes('allow_outside_workspace') ? 'override named' : '');
+}
+
 console.log('\n  ══ restoring ══');
 try {
   const listing = await run('mw_code_restore_pou', {});
@@ -121,7 +146,7 @@ if (!SOURCE) {
     try { rmSync(DIR, { recursive: true, force: true }); rmSync(`${DIR}.mwt`, { force: true }); break; }
     catch { await new Promise((r) => setTimeout(r, 1500)); }
   }
-  await run('mw_ide_stage', { source: SOURCE });
+  await run('mw_ide_stage', { source: SOURCE, allow_outside_workspace: true });
   await run('mw_ide_close');
   await run('mw_ide_start');
   await run('mw_ide_open', { path: `${DIR}.mwt` });

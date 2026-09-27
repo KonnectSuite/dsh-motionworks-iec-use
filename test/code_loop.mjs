@@ -33,7 +33,7 @@ if (!SAMPLE) {
 }
 
 console.log('── 0. stage a working copy (never the original) ───────────────');
-const staged = await run('mw_ide_stage', { source: SAMPLE });
+const staged = await run('mw_ide_stage', { source: SAMPLE, allow_outside_workspace: true });
 console.log(JSON.stringify(staged));
 const STAGED_POU = process.env.MW_SAMPLE_POU ?? 'Initialize';
 

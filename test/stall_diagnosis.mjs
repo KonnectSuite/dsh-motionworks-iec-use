@@ -40,7 +40,7 @@ const POU = 'TopCutterCamSetup';
 line('1. fresh stage, create the POU change (helper bypasses the shipped refusal)');
 try { await run('mw_ide_close'); } catch { /* not running */ }
 for (const p of [DIR, MWT]) { try { rmSync(p, { recursive: true, force: true }); } catch { /* absent */ } }
-await run('mw_ide_stage', { source: SOURCE });
+await run('mw_ide_stage', { source: SOURCE, allow_outside_workspace: true });
 const added = JSON.parse(execFileSync(PY, [HELPER, 'add', DIR, POU, 'ZZStallProbe'], { encoding: 'utf8' }).trim());
 const last = (added.records ?? []).slice(-1)[0];
 console.log(`  added: ${JSON.stringify(last)}`);

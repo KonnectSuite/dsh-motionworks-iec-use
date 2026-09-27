@@ -67,7 +67,7 @@ print(json.dumps({"lines": len(lines), "malformed": bad}))
 line('1. fresh stage, then read the POU we will rewrite');
 try { await run('mw_ide_close'); } catch { /* not running */ }
 for (const p of [DIR, MWT]) { try { rmSync(p, { recursive: true, force: true }); } catch { /* absent */ } }
-await run('mw_ide_stage', { source: SOURCE });
+await run('mw_ide_stage', { source: SOURCE, allow_outside_workspace: true });
 const t0 = treeHealth();
 check(t0.malformed === 0, `pristine tree: ${t0.lines} lines, ${t0.malformed} malformed`);
 

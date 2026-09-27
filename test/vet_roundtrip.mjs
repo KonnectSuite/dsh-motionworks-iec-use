@@ -56,7 +56,7 @@ try { rmSync(join(STAGE, 'TopCutter.mwt'), { force: true }); } catch { /* first 
 // limitation: delete the same POU NAME twice and the second delete is refused
 // until the archive is moved aside.)
 try { rmSync(join(mod.__internals.HERE ?? PLUGIN, 'backups', 'archived-pous', NEW), { recursive: true, force: true }); } catch { /* absent */ }
-await run('mw_ide_stage', { source: SOURCE });
+await run('mw_ide_stage', { source: SOURCE, allow_outside_workspace: true });
 const DIR = join(STAGE, 'TopCutter');
 console.log(`  staged: ${DIR}`);
 

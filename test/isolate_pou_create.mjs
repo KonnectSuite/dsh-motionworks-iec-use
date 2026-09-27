@@ -36,7 +36,7 @@ line('1. fresh stage, then build with NOTHING changed');
 try { await run('mw_ide_close'); } catch { /* not running */ }
 for (const p of [DIR, MWT]) { try { rmSync(p, { recursive: true, force: true }); } catch { /* absent */ } }
 try { rmSync(`${PLUGIN}\\backups\\archived-pous\\${NEW}`, { recursive: true, force: true }); } catch { /* absent */ }
-await run('mw_ide_stage', { source: SOURCE });
+await run('mw_ide_stage', { source: SOURCE, allow_outside_workspace: true });
 await run('mw_ide_start');
 await run('mw_ide_open', { path: MWT });
 const b1 = await run('mw_ide_build');

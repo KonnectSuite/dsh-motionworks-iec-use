@@ -82,7 +82,7 @@ line('1. fresh stage + create the POU');
 try { await run('mw_ide_close'); } catch { /* not running */ }
 for (const p of [DIR, MWT]) { try { rmSync(p, { recursive: true, force: true }); } catch { /* absent */ } }
 try { rmSync(`${PLUGIN}\\backups\\archived-pous\\${POU}`, { recursive: true, force: true }); } catch { /* absent */ }
-await run('mw_ide_stage', { source: SOURCE });
+await run('mw_ide_stage', { source: SOURCE, allow_outside_workspace: true });
 await run('mw_ide_close');
 await run('mw_code_pou_create', { name: POU, template: 'TopCutterInitialize', dry_run: false });
 state('after create');

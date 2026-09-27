@@ -53,7 +53,7 @@ const results = [];
 line('1. fresh stage');
 try { await run('mw_ide_close'); } catch { /* not running */ }
 for (const p of [DIR, MWT]) { try { rmSync(p, { recursive: true, force: true }); } catch { /* absent */ } }
-await run('mw_ide_stage', { source: SOURCE });
+await run('mw_ide_stage', { source: SOURCE, allow_outside_workspace: true });
 
 results.push(await cycle(`2. add a GLOBAL variable '${GLOBAL}' (no pou given)`, async () => {
   const r = await run('mw_code_var_add', { name: GLOBAL, type: 'BOOL', section: 'VAR_GLOBAL', dry_run: false });

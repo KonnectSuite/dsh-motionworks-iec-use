@@ -40,7 +40,7 @@ step(0, 'stage a working copy (never the original)');
 try { await run('mw_ide_close'); } catch { /* not running */ }
 for (const p of [DIR, MWT]) { try { rmSync(p, { recursive: true, force: true }); } catch { /* absent */ } }
 try { rmSync(`${PLUGIN}\\backups\\archived-pous\\${POU}`, { recursive: true, force: true }); } catch { /* absent */ }
-const staged = await run('mw_ide_stage', { source: SOURCE });
+const staged = await run('mw_ide_stage', { source: SOURCE, allow_outside_workspace: true });
 check(staged.files_copied > 500, `staged ${staged.files_copied} files from the original`);
 
 step(1, 'discover what is there');

@@ -42,7 +42,7 @@ const check = (ok, msg) => { if (!ok) failures++; console.log(`  ${ok ? 'ok  ' :
 line('1. fresh stage, then add a variable the RIGHT way (text + grid)');
 try { await run('mw_ide_close'); } catch { /* not running */ }
 for (const p of [DIR, MWT]) { try { rmSync(p, { recursive: true, force: true }); } catch { /* absent */ } }
-await run('mw_ide_stage', { source: SOURCE });
+await run('mw_ide_stage', { source: SOURCE, allow_outside_workspace: true });
 await run('mw_ide_close');
 
 const before = await run('mw_code_read_st', { pou: POU });

@@ -46,7 +46,7 @@ line('1. fresh stage, create + assign (the failing sequence)');
 try { await run('mw_ide_close'); } catch { /* not running */ }
 for (const p of [DIR, MWT]) { try { rmSync(p, { recursive: true, force: true }); } catch { /* absent */ } }
 try { rmSync(`${PLUGIN}\\backups\\archived-pous\\ForceProbe`, { recursive: true, force: true }); } catch { /* absent */ }
-await run('mw_ide_stage', { source: SOURCE });
+await run('mw_ide_stage', { source: SOURCE, allow_outside_workspace: true });
 await run('mw_ide_close');
 await run('mw_code_pou_create', { name: 'ForceProbe', template: 'TopCutterInitialize', dry_run: false });
 await run('mw_code_pou_assign', { task: 'SlowTsk', pou: 'ForceProbe', dry_run: false });

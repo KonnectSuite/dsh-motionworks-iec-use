@@ -49,7 +49,7 @@ line('1. fresh stage from the pristine baseline');
 try { await run('mw_ide_close'); } catch { /* not running */ }
 for (const p of [DIR, `${STAGE}\\TopCutter.mwt`]) { try { rmSync(p, { recursive: true, force: true }); } catch { /* absent */ } }
 try { rmSync(`${PLUGIN}\\backups\\archived-pous\\AssignPou`, { recursive: true, force: true }); } catch { /* absent */ }
-await run('mw_ide_stage', { source: SOURCE });
+await run('mw_ide_stage', { source: SOURCE, allow_outside_workspace: true });
 const tasksBefore = treeTasks();
 console.log(`  tasks before: ${JSON.stringify(tasksBefore)}`);
 const expectedTasks = Object.keys(tasksBefore).length;
