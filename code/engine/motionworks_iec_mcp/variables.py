@@ -452,7 +452,48 @@ def default_initial_value(type_name: str) -> str:
     }
     return table.get((type_name or "").upper(), "")
 
-def append_grid_variable(
+def append_grid_variable(grid: bytes, name: str, type_name: str, row: int | None = None):
+    """DISABLED. Writing a .VGR record destroys the POU, and this is the proof.
+
+    The function built a record that decodes exactly as intended - four strings, usage 1,
+    a row equal to the declaration's line number, the initial value, and zeros instead of
+    the external marker in the trailing run:
+
+        {"handle":1059,"usage":1,"row":21,"type":"BOOL","init":"FALSE",
+         "name":"ZZUsable1","trailing":"00000000000000000000000000000000"}
+
+    Every field that can be decoded is correct, and MotionWorks rejects it anyway - not by
+    reporting an error, but by rewriting the POU:
+
+        before : .VB 1132 bytes    .VGR     1,665 bytes
+        after  : .VB    0 bytes    .VGR 79,432,063 bytes
+
+    with an EMPTY Errors pane throughout, so nothing warns. Verified on a freshly staged
+    copy, and reproduced WITHOUT the variable even being used in the body - so it is the
+    record itself, not how the code refers to it.
+
+    A second, separate failure mode exists and is much less bad: a declaration written to
+    the .VB but absent from the grid STALLS the build (is_compiled=false, is_modified=true,
+    empty Errors pane) while leaving the POU INTACT. That is what mw_code_var_add does now,
+    and it is honest - the declaration is on record and readable, it simply cannot be used.
+
+    So this raises rather than writing. A tool that silently destroys a POU is worse than
+    one that cannot add a variable, and the fields that remain unknown - whatever they are,
+    since everything decodable already matches - are not worth finding by guesswork against
+    a destructive failure. The supported route to a usable variable is the MotionWorks
+    variable worksheet, or mw_code_export_pou format:"export" and an import.
+    """
+    raise UnsupportedFormat(
+        "refusing to write a .VGR record: a record MotionWorks disagrees with makes it "
+        "rewrite the POU into garbage - measured, the declaration text emptied from 1132 "
+        "bytes to 0 and the grid grew from 1665 bytes to 79 MB, with an empty Errors pane. "
+        "Add the variable in the MotionWorks variable worksheet and re-read it with "
+        "mw_code_read_st, or export the POU with mw_code_export_pou format:\"export\", edit "
+        "the declarations there, and import the file so the IDE writes the grid itself."
+    )
+
+
+def _append_grid_variable_disabled(
     grid: bytes, name: str, type_name: str, row: int | None = None
 ) -> tuple[bytes, int]:
     """Append one LOCAL variable record to a POU's ``.VGR`` grid.
@@ -473,7 +514,7 @@ def append_grid_variable(
     """
     records = parse_grid_records(grid)
     if not records:
-        raise PouPlanError("no variable records found in the grid; refusing to guess")
+        raise UnsupportedFormat("no variable records found in the grid; refusing to guess")
 
     wanted = (type_name or "").upper()
 
@@ -518,7 +559,7 @@ def append_grid_variable(
             continue
         candidates.append((index, _record_extent(grid, records, index), info))
     if not candidates:
-        raise PouPlanError(
+        raise UnsupportedFormat(
             "no variable record with a plain type/name pair to clone in the grid"
         )
 
