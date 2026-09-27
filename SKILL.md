@@ -448,3 +448,66 @@ Project Tree, save, and the tree will contain one.
 
 Until then ``mw_code_pou_assign`` stays refused. The evidence is committed rather than
 described, so the next attempt compares files instead of reconstructing them.
+
+
+### The resource grid, `Global_Variables.VGR` - a third layout
+
+A POU's grid is `<name>V.VGR`. The resource's is `Global_Variables.VGR`, so a check written as
+"ends with V.VGR" never matches it and this plugin had never read it. It is 22,893 bytes and its
+header says `count=161`, which is exactly the number of globals.
+
+**Header is THREE uint32**, not four:
+
+    magic = 524289      last_handle = 1438      count = 161
+
+and the fourth number at offset 12 is not a field - it is record 1's handle, so the first record
+starts there. Getting that wrong is what made the first attempt find one record.
+
+**A record is six uint32, four strings, then a VARIABLE-LENGTH trailing run:**
+
+    offset 12   record 1
+                head   = 1025, 6, 1, 0, 6, 0        handle, 6, 1, 0, <n>, 0
+                str 1  len=10   "DINT"
+                str 2  len=14   "%MD1.0"
+                str 3  len=2    ""                  the initial value
+                str 4  len=34   "PLC_SYS_TICK_CNT"
+                tail   16 bytes
+
+Strings are length-prefixed UTF-16LE with a NUL terminator, exactly as in a POU grid, and the
+four fields are the same four in the same order: type, address, initial value, name. So the
+*fields* are familiar; only the container differs.
+
+Fifteen records decode perfectly this way - real names, real types, real addresses, handles
+ascending 1025..1040:
+
+    @    12  h=1025  DINT             %MD1.0       PLC_SYS_TICK_CNT
+    @   128  h=1026  INT              %MW1.4       PLC_TASK_DEFINED
+    @   242  h=1027  BOOL             %MX1.2016.0  PLCMODE_ON
+    @  1662  h=1040  TASK_INFO_ECLR   %MB1.5000    PLC_TASK_1
+
+**The sixteenth is where a fixed tail stops working.** Record 15 is `PLC_TASK_1 : TASK_INFO_ECLR`,
+a struct, and its trailing run is SIX uint32 rather than four:
+
+    1780:  00000104  00040000  00000000  00000000  ffffffff  00000000
+    1804:  00000411 = 1041            <- record 16's handle
+
+So the tail carries per-type structure and its length varies, exactly as in a POU grid, where a
+scalar record's run is 16 bytes and `CamSegmentStruct`'s is far longer. Reading it needs the
+same extent-finding approach `parse_grid_records` uses for a POU grid - locate the next record
+by its shape rather than assuming a stride.
+
+**Consequence for the plugin.** `mw_code_var_add` writes `Global_Variables.VB` and nothing else.
+A global added that way is declared and readable, and it builds cleanly, but it cannot be USED:
+the chain a user would ask for is
+
+    add a global  ->  declare it VAR_EXTERNAL in a POU  ->  use it  ->  build
+
+and measured, the middle step stalls even when the variable is never used:
+
+    global + VAR_EXTERNAL + USE      stall
+    global + VAR_EXTERNAL, not used  stall      <- stalls WITHOUT being used
+    global only, then use            clean      <- the lint refuses the body, as designed
+
+Stalling while unused is the informative one: it is not about the use, so the missing half is
+the global's own record here. That is the next implementation, and it is now a known format
+with a known catch rather than an unknown one.
