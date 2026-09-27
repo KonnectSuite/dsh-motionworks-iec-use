@@ -383,6 +383,95 @@ const STATUS_SCHEMA = {
   },
 };
 
+// ── diagnosing a build ───────────────────────────────────────────────────────────
+//
+// Three of this project's worst failures were silent. This turns each into a named cause, so a
+// caller that gets is_compiled=false is told what happened instead of being left with a verdict.
+
+//: Real POU containers on this project run 1.5 KB to 60 KB. A blown resource grid is 79 MB and a
+//: truncated .VB leaves the container under 1 KB, so both thresholds sit far outside the real range.
+const DESTROYED_BYTES = 1_000_000;
+const TRUNCATED_BYTES = 1024;
+
+function scanPouContainers() {
+  const damaged = [];
+  let projects;
+  try {
+    projects = readdirSync(STAGE_ROOT, { withFileTypes: true });
+  } catch {
+    return damaged;
+  }
+  for (const project of projects) {
+    if (!project.isDirectory()) continue;
+    const poe = join(STAGE_ROOT, project.name, 'POE');
+    let pous;
+    try {
+      pous = readdirSync(poe, { withFileTypes: true });
+    } catch {
+      continue;
+    }
+    for (const pou of pous) {
+      if (!pou.isDirectory()) continue;
+      const file = join(poe, pou.name, 'src.st1');
+      let size;
+      try {
+        size = statSync(file).size;
+      } catch {
+        continue;
+      }
+      if (size > DESTROYED_BYTES) damaged.push({ pou: pou.name, bytes: size, kind: 'blown' });
+      else if (size < TRUNCATED_BYTES) damaged.push({ pou: pou.name, bytes: size, kind: 'truncated' });
+    }
+  }
+  return damaged;
+}
+
+function diagnoseBuild(verdict) {
+  if (verdict?.is_compiled === true) return null;
+
+  const damaged = scanPouContainers();
+  if (damaged.length) {
+    const names = damaged.map((d) => `${d.pou} (${d.bytes} bytes)`).join(', ');
+    return {
+      kind: 'poe-damaged',
+      damaged,
+      explain:
+        `A POU container is not a plausible size: ${names}. Real containers on this project run ` +
+        '1.5 KB to 60 KB. This is the signature of the compiler DESTROYING a POU - the .VB goes to ' +
+        '0 bytes and the resource grid grows to 79,432,063 bytes - and the usual cause is a TYPE ' +
+        'ERROR in the body that was written before this build. mw_code_write_st now refuses a type ' +
+        'error, so a body that reached here has something the check does not cover. Restore the ' +
+        'POU from backups/ and re-examine the body that preceded this build.',
+      next: 'restore the damaged POU, then check the body written before this build for a type error',
+    };
+  }
+
+  if (verdict?.stalled) {
+    return {
+      kind: 'stall',
+      explain:
+        'The compiler never finished, and the Errors pane will be EMPTY - hunting it for messages ' +
+        'wastes the turn. Every known cause is silent and was measured on this project: ' +
+        '(1) a declaration added to a POU created by mw_code_pou_create - 28 runs of 29, and ' +
+        'mw_code_var_add now refuses it; ' +
+        '(2) a body that READS a VAR_EXTERNAL global - the read stalls, a write does not, so prefer ' +
+        'POU-local declarations; ' +
+        '(3) a global added by mw_code_var_add, which the resource grid does not carry, so nothing ' +
+        'can resolve it. ' +
+        'The POU itself usually survives; removing the offending change clears the stall.',
+      next: 'undo the last write, or replace the global reference with a POU-local declaration',
+    };
+  }
+
+  return {
+    kind: 'rejected',
+    explain:
+      'The compiler finished and REFUSED the code. The Errors pane has messages for this - unlike ' +
+      'a stall - so read it with mw_ide_errors.',
+    next: 'call mw_ide_errors to read the compiler messages',
+  };
+}
+
 const BUILD_SCHEMA = {
   type: 'object',
   additionalProperties: false,
@@ -406,6 +495,16 @@ const BUILD_SCHEMA = {
     is_compiled: { oneOf: [{ type: 'boolean' }, { type: 'null' }] },
     is_modified: { oneOf: [{ type: 'boolean' }, { type: 'null' }] },
     elapsed_s: { type: 'number' },
+    diagnosis: {
+      oneOf: [{ type: 'object' }, { type: 'null' }],
+      description:
+        'Why the build did not succeed, worked out on the way out rather than left to the caller. '
+        + 'kind is one of: poe-damaged (a POU container is not a plausible size - the compiler '
+        + 'destroyed it), stall (the compiler never finished, so the Errors pane is EMPTY and '
+        + 'reading it wastes the turn), rejected (the compiler finished and refused the code, so '
+        + 'the Errors pane HAS messages), or null when the build was clean. explain names the cause '
+        + 'and next says what to do about it.',
+    },
   },
 };
 
@@ -765,7 +864,13 @@ function defineTools() {
       parameters: { type: 'object', additionalProperties: false, properties: {} },
       output: { schema: BUILD_SCHEMA, render: renderBuild },
       presentCall: () => ({ card: 'generic', title: 'Build in MotionWorks IEC', kind: 'execute' }),
-      execute: () => verb('build', {}, 400000),
+      execute: async () => {
+        const verdict = await verb('build', {}, 400000);
+        // Say why, on the way out. A caller that gets is_compiled=false and nothing else has to
+        // guess, and the three silent failure modes this project has are indistinguishable from
+        // the one that leaves messages.
+        return { ...verdict, diagnosis: diagnoseBuild(verdict) };
+      },
     },
     {
       name: 'mw_ide_compile_state',
