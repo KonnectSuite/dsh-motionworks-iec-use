@@ -748,7 +748,7 @@ function defineTools() {
         + 'cleanly: the automation API returns the verdict but never the messages, so this reads '
         + 'the Message Window list control through MSAA and returns each line verbatim, e.g. '
         + '"No matching global variable found for \'x:y\' in resource \'Resource\'!". Panes: '
-        + 'Errors (default), Warnings, Build, Info. A pane with zero lines is a CLEAN result, not '
+        + 'Errors (default), Warnings, Build, Info. The Errors pane also carries INFORMATIONAL lines - structure padding notes, required-memory totals, redundant-variable counts - so read them before calling a build broken. A pane with zero lines is a CLEAN result, not '
         + 'a failure. Set screenshot:true to also capture the pane, and limit to raise the cap.',
       parameters: {
         type: 'object',
