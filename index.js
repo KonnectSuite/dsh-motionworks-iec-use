@@ -1573,9 +1573,7 @@ function defineTools() {
     {
       name: 'mw_code_var_add',
       description:
-        'GLOBAL variables work too: omit pou and the declaration goes into the resource Global_Variables.VB. The .VGR grid header is NOT updated by that write, so mw_code_globals will report a declaration-count mismatch - that is expected and harmless, verified: a .VB-only global add builds cleanly with 0 reference problems. Read globals back with mw_code_globals.'
-        + 
-        'The declaration is written to BOTH stores: the .VB text and the POU binary .VGR grid, at the record position its worksheet row belongs. The second store is what makes the variable USABLE - the compiler resolves variables from the grid, so a text-only declaration could be read back but never used. Verified end to end: declare, use it in the body, build clean.',
+        'GLOBAL variables: omit pou and the declaration goes into the resource Global_Variables.VB. WARNING - a global declared this way CANNOT BE USED yet: the compiler resolves globals through the resource grid Global_Variables.VGR, which has a third layout this plugin only partly decodes, so the record is not written. Measured: referring to such a global - even from a POU that declares it VAR_EXTERNAL - makes the build STALL with an EMPTY Errors pane, and it stalls even when the variable is never used, which is how the grid was identified as the cause. The declaration is real and reads back with mw_code_globals, and the project still builds while it is unreferenced, so this is useful for staging work. To make it usable, add the global in the MotionWorks Global Variables sheet.',
       parameters: {
         type: 'object',
         additionalProperties: false,

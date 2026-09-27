@@ -552,6 +552,30 @@ def plan_variable_add(
                     f"declaration could be read back but never used"
                 ]
 
+    else:
+        # A GLOBAL is written to the resource's Global_Variables.VB and NOTHING ELSE, and
+        # the missing half is not harmless. The compiler resolves a global through the
+        # resource grid, Global_Variables.VGR, which has a third layout this plugin can
+        # read only in part, so the record is not written. Measured, the consequence is
+        # precise:
+        #
+        #     add a global, then use it from a POU          stall
+        #     add a global AND declare it VAR_EXTERNAL      stall, even UNUSED
+        #     add a global and leave it alone               clean
+        #
+        # Stalling while unused is what makes it the grid and not the use. So the
+        # declaration is real, it reads back, and the project still builds - but the
+        # variable cannot be referenced yet, and the tool has to say so rather than
+        # report success and let an agent discover a hang with no error to read. This is
+        # the same mistake the unassigned-POU note made, and it is worth not repeating.
+        notes = list(notes) + [
+            "GLOBAL declared in Global_Variables.VB. It reads back and the project still "
+            "builds, but it CANNOT BE USED YET: the compiler resolves globals through the "
+            "resource grid Global_Variables.VGR, which this tool does not write. Referring "
+            "to it - even from a POU that declares it VAR_EXTERNAL - makes the build STALL "
+            "with an EMPTY Errors pane. Add the global in the MotionWorks Global Variables "
+            "sheet to make it usable, then read it back with mw_code_globals."
+        ]
     return WritePlan(
         target=source, stream=stream, before=before,
         after=updated.encode("latin1"), notes=notes, extra_streams=extra,
