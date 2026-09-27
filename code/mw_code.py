@@ -461,8 +461,54 @@ def verb_types(request):
     )
 
 
+def verb_library(request):
+    """Read the library side: which blocks the project uses, and what one offers.
+
+    Two questions, two sources. ``eCLRPouDependencies.dat`` is a plain-text manifest naming
+    every POU and library block with its kind and what it calls, so "what does this POU use"
+    needs no binary at all. A block's own members come from its compiled assembly, which is
+    a real .NET assembly (BSJB, v4.0.30319) whose identifiers sit in the metadata #Strings
+    heap.
+
+    WHAT THE MEMBER LIST IS NOT: it does not record input/output DIRECTION. Execute and Done
+    are distinguishable by convention, not by anything in the heap, and this does not guess.
+    The declaration in the calling POU, read with mw_code_read_st, is what settles direction.
+    """
+    from motionworks_iec_mcp import libraries as L
+
+    project = Path(request["project"])
+    name = request.get("name")
+    if name:
+        m = L.read_block_members(project, str(name))
+        return _ok(
+            project=str(project),
+            name=m.name,
+            assembly=m.assembly,
+            runtime=m.runtime,
+            identifiers=m.identifiers,
+            filtered_out=m.filtered_out,
+            note=(
+                "these are the identifiers the assembly defines; input/output DIRECTION is "
+                "not recorded in them, so read the declaration in the calling POU "
+                "(mw_code_read_st) to tell an input from an output"
+            ),
+        )
+
+    blocks = L.read_dependencies(project)
+    return _ok(
+        project=str(project),
+        count=len(blocks),
+        blocks=[
+            {"index": b.index, "name": b.name, "kind": b.kind,
+             "library": b.is_library, "depends_on": b.depends_on}
+            for b in blocks
+        ],
+    )
+
+
 VERBS = {
     "types": verb_types,
+    "library": verb_library,
     "pous": verb_pous,
     "read_st": verb_read_st,
     "unsupported": verb_unsupported,

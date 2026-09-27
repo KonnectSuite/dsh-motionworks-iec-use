@@ -1215,7 +1215,62 @@ function defineTools() {
         project: projectOf(args),
         ...(args?.name ? { name: String(args.name) } : {}),
       }),
-    },    {
+    },
+    {
+      name: 'mw_code_library',
+      description:
+        'Read the LIBRARY side of the project: which blocks it uses, and what one block '
+        + 'offers. This is the other half of writing code against things you cannot see - a '
+        + 'POU here declares fbCamGen : CamGenerator, and calling that block needs its '
+        + 'member names. Omit name to list every block the dependency manifest names, with '
+        + 'its kind and what it calls (measured: CalcSpline <- CalcSplineMatrix, CamGenerator '
+        + '<- CalcSpline, CalcBezier, MasterIndex_Lookup, TopCutterCamSetup <- CamGenerator). '
+        + 'Pass name for one block, read from its compiled .NET assembly. IMPORTANT: the '
+        + 'identifier list does NOT record input/output DIRECTION - Execute and Done are '
+        + 'distinguishable by convention, not by evidence - so read the declaration in the '
+        + 'calling POU with mw_code_read_st to tell an input from an output. Compiler '
+        + 'temporaries (__temp_1..50, s1..s7) are filtered out rather than reported as part '
+        + 'of the interface.',
+      parameters: {
+        type: 'object',
+        additionalProperties: false,
+        properties: {
+          name: { type: 'string', description: 'One block to read; omit to list all.' },
+          project: { type: 'string', description: 'Project directory; defaults to the staged project.' },
+        },
+      },
+      output: {
+        schema: {
+          type: 'object',
+          additionalProperties: true,
+          properties: {
+            project: { type: 'string' },
+            count: { type: 'integer' },
+            blocks: { type: 'array', items: { type: 'object', additionalProperties: true } },
+            name: { type: 'string' },
+            assembly: { type: 'string' },
+            runtime: { type: 'string' },
+            identifiers: { type: 'array', items: { type: 'string' } },
+            filtered_out: { type: 'integer' },
+            note: { type: 'string' },
+          },
+        },
+        render: (r) => {
+          if (Array.isArray(r.blocks)) {
+            const libs = r.blocks.filter((b) => b.library).length;
+            return `${r.count} blocks (${libs} library): `
+              + r.blocks.map((b) => `${b.name}${b.depends_on?.length ? ` <- ${b.depends_on.join(', ')}` : ''}`).join(' | ');
+          }
+          return `${r.name} (${r.assembly}) ${(r.identifiers ?? []).length} identifiers: `
+            + (r.identifiers ?? []).join(', ');
+        },
+      },
+      execute: async (args) => runCode('library', {
+        project: projectOf(args),
+        ...(args?.name ? { name: String(args.name) } : {}),
+      }),
+    },
+    {
       name: 'mw_code_globals',
       description:
         'List the project VAR_GLOBAL declarations - the tags every POU can see, with type, '
