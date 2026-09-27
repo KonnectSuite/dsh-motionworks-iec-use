@@ -155,7 +155,186 @@ def _decode_token(token: str) -> str:
     return max((token, shift(_SHIFT), shift(-_SHIFT)), key=_score)
 
 
-def extract_pdf(path: Path) -> str:
+# ── PDF text, by the document's own character maps ──────────────────────────────
+#
+# The heuristic below guesses at a font encoding. This does not: a PDF that uses a non-ASCII font
+# ships a /ToUnicode CMap saying what each byte means, and reading that is exact. The guess stays as
+# a fallback for fonts that carry no map.
+
+_OBJ = re.compile(rb"(?<![0-9])(\d+)\s+(\d+)\s+obj\b")
+_STREAM = re.compile(rb"stream\r?\n", re.DOTALL)
+_FONT_REF = re.compile(rb"/([A-Za-z0-9]+)\s+(\d+)\s+0\s+R")
+
+
+def _inflate(data: bytes) -> bytes | None:
+    """FlateDecode, tolerating the variants that appear in real files."""
+    for attempt in (data, data[1:], data[2:]):
+        try:
+            return zlib.decompress(attempt)
+        except zlib.error:
+            continue
+    try:
+        return zlib.decompressobj(-15).decompress(data)
+    except zlib.error:
+        return None
+
+
+def _objects(data: bytes) -> dict[int, bytes]:
+    """Every `N G obj ... endobj` body, keyed by object number."""
+    found: dict[int, bytes] = {}
+    for m in _OBJ.finditer(data):
+        end = data.find(b"endobj", m.end())
+        found[int(m.group(1))] = data[m.end():end if end >= 0 else len(data)]
+    return found
+
+
+def _object_stream(body: bytes) -> bytes | None:
+    m = _STREAM.search(body)
+    if not m:
+        return None
+    raw = body[m.end():body.find(b"endstream", m.end())]
+    if b"FlateDecode" in body[:m.start()]:
+        return _inflate(raw)
+    return raw
+
+
+def _parse_cmap(text: bytes) -> dict[int, str]:
+    """code -> character, from the bfchar and bfrange sections of a ToUnicode CMap."""
+    mapping: dict[int, str] = {}
+    for block in re.findall(rb"beginbfchar(.*?)endbfchar", text, re.DOTALL):
+        for src, dst in re.findall(rb"<([0-9A-Fa-f]+)>\s*<([0-9A-Fa-f]+)>", block):
+            try:
+                mapping[int(src, 16)] = bytes.fromhex(dst.decode()).decode("utf-16-be", "replace")
+            except Exception:
+                continue
+    for block in re.findall(rb"beginbfrange(.*?)endbfrange", text, re.DOTALL):
+        for lo, hi, dst in re.findall(
+                rb"<([0-9A-Fa-f]+)>\s*<([0-9A-Fa-f]+)>\s*<([0-9A-Fa-f]+)>", block):
+            try:
+                start, stop, base = int(lo, 16), int(hi, 16), int(dst, 16)
+            except Exception:
+                continue
+            if stop - start > 65535:
+                continue
+            for offset in range(stop - start + 1):
+                mapping[start + offset] = chr(base + offset)
+    return mapping
+
+
+def _font_maps(objects: dict[int, bytes]) -> tuple[dict[str, dict[int, str]], dict[str, bool]]:
+    """Resource name -> its CMap, and resource name -> whether the font is two-byte.
+
+    The name is assigned by whoever REFERENCES the font, not by the font itself, so the lookup runs
+    in that direction: find the font object, then find every object naming it.
+    """
+    cmaps: dict[int, dict[int, str]] = {}
+    for number, body in objects.items():
+        if b"beginbfchar" in body or b"beginbfrange" in body:
+            stream = _object_stream(body)
+            if stream:
+                cmaps[number] = _parse_cmap(stream)
+    if not cmaps:
+        return {}, {}
+
+    # font object number -> the CMap it points at
+    font_to_cmap: dict[int, dict[int, str]] = {}
+    two_byte_objects: set[int] = set()
+    for number, body in objects.items():
+        ref = re.search(rb"/ToUnicode\s+(\d+)\s+0\s+R", body)
+        if ref and int(ref.group(1)) in cmaps:
+            font_to_cmap[number] = cmaps[int(ref.group(1))]
+        if b"/Type0" in body:
+            two_byte_objects.add(number)
+
+    # every `/Name N 0 R` anywhere, where N is a font object
+    by_name: dict[str, dict[int, str]] = {}
+    two_byte: dict[str, bool] = {}
+    for body in objects.values():
+        for name, target in _FONT_REF.findall(body):
+            target = int(target)
+            if target in font_to_cmap:
+                key = name.decode()
+                by_name[key] = font_to_cmap[target]
+                if target in two_byte_objects:
+                    two_byte[key] = True
+    return by_name, two_byte
+
+
+def _apply_cmap(raw: bytes, cmap: dict[int, str] | None, two_byte: bool) -> str:
+    if not cmap:
+        return raw.decode("latin1", "replace")
+    if two_byte:
+        return "".join(cmap.get((raw[i] << 8) | raw[i + 1], "")
+                       for i in range(0, len(raw) - 1, 2))
+    return "".join(cmap.get(c, chr(c)) for c in raw)
+
+
+_TEXT_OP = re.compile(
+    rb"/([A-Za-z0-9]+)\s+[\d.]+\s+Tf"          # 1 font selection
+    rb"|\[(.*?)\]\s*TJ"                          # 2 array show
+    rb"|\((.*?)(?<!\\)\)\s*Tj"                # 3 string show
+    rb"|(T\*|Td|TD)",                             # 4 positioning
+    re.DOTALL,
+)
+_IN_ARRAY = re.compile(rb"\((.*?)(?<!\\)\)", re.DOTALL)
+
+
+def extract_pdf_by_cmap(path: Path) -> str | None:
+    """Text read through the document's own ToUnicode maps, or None if it has none."""
+    data = path.read_bytes()
+    objects = _objects(data)
+    by_name, two_byte = _font_maps(objects)
+    if not by_name:
+        return None
+
+    pieces: list[str] = []
+    for body in objects.values():
+        if b"Tj" not in body and b"TJ" not in body:
+            continue
+        stream = _object_stream(body)
+        if not stream or (b"Tj" not in stream and b"TJ" not in stream):
+            continue
+        cmap, wide = None, False
+        for m in _TEXT_OP.finditer(stream):
+            if m.group(1):
+                name = m.group(1).decode()
+                cmap, wide = by_name.get(name), two_byte.get(name, False)
+            elif m.group(2) is not None:
+                for s in _IN_ARRAY.finditer(m.group(2)):
+                    pieces.append(_apply_cmap(_unescape_bytes(s.group(1)), cmap, wide))
+            elif m.group(3) is not None:
+                pieces.append(_apply_cmap(_unescape_bytes(m.group(3)), cmap, wide))
+            elif m.group(4):
+                pieces.append("\n")
+
+    if not pieces:
+        return None
+    text = "".join(pieces)
+    text = re.sub(r"[ \t]+", " ", text)
+    return re.sub(r"\n{3,}", "\n\n", text)
+
+
+def _unescape_bytes(raw: bytes) -> bytes:
+    """PDF string escapes, as bytes, so a multi-byte font encoding survives intact."""
+    out, i = bytearray(), 0
+    simple = {0x6E: 10, 0x72: 13, 0x74: 9, 0x62: 8, 0x66: 12,
+              0x28: 0x28, 0x29: 0x29, 0x5C: 0x5C}
+    while i < len(raw):
+        if raw[i] == 0x5C and i + 1 < len(raw):
+            nxt = raw[i + 1]
+            if nxt in simple:
+                out.append(simple[nxt]); i += 2; continue
+            if 0x30 <= nxt <= 0x37:
+                j, digits = i + 1, b""
+                while j < len(raw) and len(digits) < 3 and 0x30 <= raw[j] <= 0x37:
+                    digits += bytes([raw[j]]); j += 1
+                out.append(int(digits, 8) & 0xFF); i = j; continue
+            i += 2; continue
+        out.append(raw[i]); i += 1
+    return bytes(out)
+
+
+def _extract_pdf_by_shift(path: Path) -> str:
     data = path.read_bytes()
     chunks: list[str] = []
     for raw in STREAM.findall(data):
@@ -241,3 +420,92 @@ def search(term: str, name: str | None = None, limit: int = 5,
             ],
         })
     return out
+
+
+def extract_pdf(path: Path) -> str:
+    """Text from a PDF, preferring the document's own character maps.
+
+    The CMap path is exact and is tried first. The older heuristic - inflate, pull the drawn
+    strings, and guess at a +/-29 font shift - remains as a fallback, because some PDFs really do
+    use a shifted encoding and ship no map to read.
+    """
+    candidates: list[tuple[str, str]] = []
+
+    try:
+        by_cmap = extract_pdf_by_cmap(path)
+        if by_cmap and by_cmap.strip():
+            candidates.append(("cmap", by_cmap))
+    except Exception:
+        pass
+
+    try:
+        plain = _extract_pdf_plain(path)
+        if plain.strip():
+            candidates.append(("plain", plain))
+    except Exception:
+        pass
+
+    try:
+        shifted = _extract_pdf_by_shift(path)
+        if shifted.strip():
+            candidates.append(("shift", shifted))
+    except Exception:
+        pass
+
+    if not candidates:
+        return ""
+
+    # Judge by English: count the ordinary words in a sample. The three decoders differ enormously
+    # when the right one is chosen and barely at all when it is not, so this only has to be roughly
+    # right - but it does have to be about words, which the vowel-based _score is not.
+    return max(candidates, key=lambda pair: _english(pair[1]))[1]
+
+
+#: Ordinary words, used only to decide which decoder produced readable text.
+_ENGLISH = frozenset("""
+the and for with this that are not from which function block variable type value input output
+is of to in on be by or an as it at we you they can may must will would should has have been
+when where what how all any each other more most such only same than then there their them
+""".split())
+
+
+def _english(text: str) -> float:
+    """Fraction of the words in a sample that are ordinary English words."""
+    words = re.findall(r"[A-Za-z]{3,}", text[:20000])
+    if not words:
+        return 0.0
+    return sum(1 for w in words if w.lower() in _ENGLISH) / len(words)
+
+
+def _extract_pdf_plain(path: Path) -> str:
+    """The drawn strings decoded as latin-1, with no re-encoding guess applied.
+
+    This is what the shift heuristic is a correction FOR. Some documents are already plain and the
+    correction damages them - AN.MPIEC.01 reads at 24% this way and 0% with the shift - so the two
+    are offered as alternatives and the scorer picks.
+    """
+    data = path.read_bytes()
+    chunks: list[str] = []
+    for raw in STREAM.findall(data):
+        body = raw
+        if body[:2] in (b"\x78\x9c", b"\x78\x01", b"\x78\xda"):
+            try:
+                body = zlib.decompress(body)
+            except Exception:
+                continue
+        if b"Tj" not in body and b"TJ" not in body:
+            continue
+        # Walk the whole stream, not line by line: an operator and its operand are often on
+        # different lines, and a drawn string can contain a newline of its own.
+        for m in _TEXT_RUN.finditer(body):
+            piece = m.group(1) if m.group(1) is not None else m.group(2)
+            for s in _STRING_IN.finditer(piece):
+                chunks.append(_unescape(s.group(1)))
+            chunks.append("\n")
+    text = "".join(chunks)
+    text = re.sub(r"[ \t]{2,}", " ", text)
+    return re.sub(r"\n{3,}", "\n\n", text)
+
+#: A drawn-string run: either the operand of Tj, or the array operand of TJ.
+_TEXT_RUN = re.compile(rb"\((.*?)(?<!\\)\)\s*Tj|\[(.*?)\]\s*TJ", re.DOTALL)
+_STRING_IN = re.compile(rb"\((.*?)(?<!\\)\)", re.DOTALL)

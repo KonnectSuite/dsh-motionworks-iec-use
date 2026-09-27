@@ -1,4 +1,4 @@
-﻿{
+{
   "name": "dsh-motionworks-iec-use",
   "version": "0.1.0",
   "description": "MotionWorks Use: a DeepSeek Harness plugin that lets an agent operate a running Yaskawa MotionWorks IEC 3 Pro IDE and edit its code â€” live object model, Structured Text read/write, compile verdicts, and compiler error capture. Never downloads to a controller and never commands motion.",
