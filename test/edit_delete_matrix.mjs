@@ -38,13 +38,13 @@ if (!SOURCE) { console.error('no pristine source'); process.exit(2); }
 const STAGE = mod.__internals.STAGE_ROOT;
 const DIR = `${STAGE}\\TopCutter`;
 const MWT = `${DIR}.mwt`;
-const TEMPLATE = 'TopCutterCamSetup';
+const TEMPLATE = 'ServoTaskSlow';
 const TASK = 'SlowTsk';
 const RUNS = Number(process.env.MW_RUNS ?? 3);
 
 // A POU-local declaration that exists in the template and that no body depends on.
-const VICTIM = 'xGenerate';
-const RENAMED = 'xGenerateRenamed';
+const VICTIM = 'Always_True';
+const RENAMED = 'Always_True_Renamed';
 
 async function fresh() {
   try { await run('mw_ide_close'); } catch { /* not running */ }
@@ -71,19 +71,11 @@ async function arm(kind, created, n) {
       await run('mw_ide_open', { path: MWT });
       await run('mw_ide_close');
     }
-    // CLEAR THE BODY FIRST. The template's body references xGenerate, and var_edit/var_delete
-    // correctly refuse while a reference exists - which is what the first version of this test
-    // measured instead of the thing it was written for. Every arm came back "WriteRefused:
-    // 'xGenerate' is still referenced", and the summary mislabelled those refusals as stalls.
-    await run('mw_ide_close');
-    await run('mw_code_write_st', {
-      pou,
-      body: '(* cleared so the declaration below is unreferenced *)\nxSelect := NOT xSelect;\n',
-      dry_run: false,
-    });
-    await run('mw_ide_start');
-    await run('mw_ide_open', { path: MWT });
-    await run('mw_ide_close');
+    // NO BODY CLEARING. It was added to work around a victim that other POUs referenced, and it
+    // caused its own failure: the clearing body named xSelect, which ServoTaskSlow does not
+    // declare, so the guard refused at the CLEARING step and no arm ever reached the edit or the
+    // delete. The victim is now Always_True, referenced nowhere in the project, so no clearing is
+    // needed and there is nothing to get wrong.
 
     let mutated;
     if (kind === 'edit') {
@@ -102,7 +94,10 @@ async function arm(kind, created, n) {
     const verdict = b.is_compiled === true ? 'CLEAN' : (b.stalled ? 'STALLED' : 'REJECTED');
     return { mutated, verdict };
   } catch (e) {
-    return { mutated: 'ERROR', verdict: 'ERROR: ' + String(e.message).split('\n')[0].slice(0, 40) };
+    // Keep enough of the message to identify WHICH step refused. Truncating it to 40 characters
+    // is what let two rounds of this probe report outcomes without saying what actually happened.
+    const msg = String(e.message).replace(/\s+/g, ' ').slice(0, 130);
+    return { mutated: 'ERROR', verdict: `ERROR: ${msg}` };
   }
 }
 
