@@ -2608,6 +2608,59 @@ export function apply(ctx) {
   // Kept for per-call workspace lookup: currentInitiator() reports the agent for the
   // current driver chain, so it can only be asked while a tool is executing.
   hostCtx = ctx;
+
+  // THE SKILL, REGISTERED — and until this existed it was never registered at all.
+  //
+  // SKILL.md has shipped in this package the whole time and nothing ever loaded it: the cordis
+  // patch registers the plugin row and nothing else, and this file had no reference to it. So the
+  // workspace rule was written down at line 764 of 777, in a document no agent ever opened, and the
+  // owner reported a third time that a project outside the workspace had been opened. Correctly —
+  // the rule had never once reached the agent that was breaking it.
+  //
+  // register() files into the calling context's layer, and a plugin mounted from the profile lands
+  // in the GLOBAL layer, so this reaches every agent in every workspace rather than only a session
+  // that happens to share this plugin's directory.
+  //
+  // The description and whenToUse carry the rule as much as the body does, because those are what an
+  // agent sees WITHOUT loading the skill. A rule that lives only in the body applies only to agents
+  // who already decided to read it.
+  try {
+    const skills = ctx.get?.('skills');
+    if (skills?.register) {
+      const raw = readFileSync(fileURLToPath(new URL('./SKILL.md', import.meta.url)), 'utf8');
+      // Drop the YAML frontmatter: those fields go through the registration instead, so leaving
+      // them in `content` would show the agent a second copy of its own description.
+      const body = raw.replace(/^---\r?\n[\s\S]*?\r?\n---\r?\n/, '');
+      // CALLED DIRECTLY, not inside ctx.effect(). The contract is "register a borrowed readonly
+      // runtime skill into the calling context's layer ... synchronously during plugin apply", and
+      // "fiber disposal unregisters the provider" - so the host already owns teardown, the same way
+      // it does for ctx.tools.register on the next line. Wrapping it in an effect was wrong twice
+      // over: the effect never ran under a context that only records them, and a skill registered
+      // inside one is not registered during apply at all.
+      skills.register({
+        name: 'motionworks-iec-use',
+        description: 'Operate a running Yaskawa MotionWorks IEC 3 Pro IDE and edit its code — stage '
+          + 'and open a project, read the live object model, read and rewrite POU Structured Text, '
+          + 'add variable declarations, compile, and read the compiler verdict and error text. '
+          + 'START HERE: run mw_project_find before anything else, and work only on a project inside '
+          + 'the workspace — never one from elsewhere on the machine, even if you know where it is.',
+        whenToUse: 'The user has MotionWorks IEC 3 Pro open or asks for work in it — a real build, a '
+          + 'compile verdict, the live project model, reading or changing POU Structured Text, or '
+          + 'the IDE error list. ALSO USE WHEN a MotionWorks project is mentioned at all, even to '
+          + 'ask a question about it, because the first step is always to find which project is '
+          + 'actually in the workspace.',
+        content: body,
+        source: 'bundled',
+        provider: 'dsh-motionworks-iec-use',
+        invocation: { modelInvocable: true, userInvocable: true },
+      });
+    }
+  } catch (e) {
+    // A skill that failed to register must not take the tools with it: the tools are the part that
+    // does the work, and a missing catalogue entry is a smaller loss than a dead plugin.
+    try { ctx.logger?.warn?.(`motionworks-iec-use: could not register the skill: ${e?.message ?? e}`); } catch { /* ignore */ }
+  }
+
   for (const definition of defineTools()) {
     // `defineTool()` Ã¢â‚¬â€ which we cannot import here Ã¢â‚¬â€ wraps execute in an async
     // function, so a validation throw becomes a rejection rather than a

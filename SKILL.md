@@ -1,10 +1,35 @@
 ---
 name: motionworks-iec-use
-description: Operate a running Yaskawa MotionWorks IEC 3 Pro IDE and edit its code â€” stage and open a project, read the live object model, read and rewrite POU Structured Text, add variable declarations, compile, and read the compiler's verdict and error text. Use when the user wants the agent to actually drive MotionWorks IEC rather than only inspect files. Never downloads to a controller and never commands motion.
-whenToUse: The user has MotionWorks IEC 3 Pro open or asks for work in it â€” a real build, a compile verdict, the live project model, reading or changing POU Structured Text, or reading the IDE's error list. For pure offline `.mwt` inspection without the IDE, the file-level tools alone are enough.
+description: Operate a running Yaskawa MotionWorks IEC 3 Pro IDE and edit its code — stage and open a project, read the live object model, read and rewrite POU Structured Text, add variable declarations, compile, and read the compiler's verdict and error text. START HERE: run mw_project_find before anything else, and work only on a project inside the workspace — never on one from elsewhere on the machine, even if you know where it is. Use when the user wants the agent to actually drive MotionWorks IEC rather than only inspect files. Never downloads to a controller and never commands motion.
+whenToUse: The user has MotionWorks IEC 3 Pro open or asks for work in it — a real build, a compile verdict, the live project model, reading or changing POU Structured Text, or reading the IDE's error list. ALSO USE WHEN a MotionWorks project is mentioned at all, even to ask a question about it, because the first step is always to find which project is actually in the workspace. For pure offline `.mwt` inspection without the IDE, the file-level tools alone are enough.
 ---
 
 # MotionWorks Use
+
+**Two rules come before everything else in this file.**
+
+**1. Find the project — `mw_project_find`, first, every time.** It scans the workspace and
+tells you which MotionWorks projects are actually here. **If it reports none, STOP AND ASK
+THE USER.** Tell them what you looked for (`.mwt` files) and where, and ask them to put the
+project in the workspace or to say which one they mean. **Do not go looking elsewhere on the
+machine.** A project outside the workspace is not one the task asked for, however sure you are
+that it is the right one — an agent that "knew where it was" opened a different project with
+the same name from the user's Desktop, and the user had to say so three times.
+
+**2. Work on a staged copy — `mw_ide_stage`.** It copies the workspace project into the
+plugin's `stage/` directory, and every read, write and build happens on the copy. That is why
+the real project can never be damaged from here. The guard refuses a source outside the
+workspace; `allow_outside_workspace: true` overrides it and should be used **only when the
+user has explicitly named that path** — it makes the exception visible in the transcript
+rather than silent.
+
+**These are enforced, not merely advised.** `mw_ide_stage` refuses an outside source. Every
+`mw_code_*` tool refuses a project outside the staging root. **So does the engine itself** —
+`code/mw_code.py` guards every verb, because the agent's own helper scripts call the engine
+directly and walked straight past the tool-level guard. Being stopped is the expected
+behaviour, not a bug to route around. If a call is refused, **ask the user**; do not reach for
+the COM interface, a bespoke script, or the IDE's own menus to get at a project the plugin
+declined.
 
 Twenty-one tools that drive a live MotionWorks IEC 3 Pro IDE and edit its code.
 They come from the `motionworks-iec-use` Cordis plugin; nothing here needs to be
@@ -760,18 +785,3 @@ grid carries it, and a global that is READ stalls even when it is declared prope
 This is verified end to end on every run by the capability matrix, which adds and uses declarations
 on an existing POU and rebuilds after each of its 13 cases. **A created POU's inherited declarations
 are fully usable** - that has always worked.
-
-## Where to work - the workspace rule
-
-**MotionWorks work happens on a project INSIDE THE WORKSPACE. If there is none, stop and ask.**
-
-    mw_project_find      what MotionWorks projects does this workspace hold?
-
-mw_ide_stage REFUSES a source outside the workspace unless llow_outside_workspace: true is
-passed, and that flag is for the case where the USER named the path. Reaching outside is a decision
-to make on purpose: in use, an agent opened a .mwt from the user's Desktop that the task never
-mentioned, because nothing stopped it.
-
-When mw_project_find returns nothing, that IS the instruction. Say what you looked for and where,
-then ask the user to put the project in the workspace or to name the one they mean. Do not go looking
-elsewhere on the machine - a project outside the workspace is not one the task asked for.
