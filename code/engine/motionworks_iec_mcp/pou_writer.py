@@ -648,14 +648,50 @@ def localize_variable_grid(raw: bytes) -> tuple[bytes, int, int]:
 
     localized = 0
     fb_instances = 0
+    marker_moved = 0
     for offset in offsets:
         usage = struct.unpack_from("<I", data, offset + 4)[0]
         if usage == 5:
             struct.pack_into("<I", data, offset + 4, 1)
+            # An external record says so twice: header usage 5, and 0xFFFFFFFF as the third
+            # word of its trailing run. Moving only the header left each converted record
+            # contradicting itself, and the clone then stalled the build and blew its grid up
+            # to 79 MB on the next append. Both halves move together.
+            tail = _record_tail_offset(data, offset)
+            if tail is not None and struct.unpack_from("<I", data, tail + 8)[0] == 0xFFFFFFFF:
+                struct.pack_into("<I", data, tail + 8, 0)
+                marker_moved += 1
             localized += 1
         elif usage == 0x00040001:
             fb_instances += 1
+    if localized and marker_moved != localized:
+        raise PouPlanError(
+            f"localized {localized} external record(s) but moved only {marker_moved} external "
+            f"marker(s); refusing to leave a record whose header says LOCAL while its trailing "
+            f"run still says EXTERNAL"
+        )
     return bytes(data), localized, fb_instances
+
+
+def _record_tail_offset(data: bytes | bytearray, offset: int) -> int | None:
+    """Where a record's trailing run begins, or None if its strings do not parse.
+
+    Six uint32 of header, then four length-prefixed UTF-16LE strings - type, address, initial
+    value, name - and then the trailing run. Located per record because the strings vary in
+    length, which is why this format defeated a fixed stride.
+    """
+    try:
+        cursor = offset + 24
+        for _ in range(4):
+            length = struct.unpack_from("<I", data, cursor)[0]
+            if length % 2 or cursor + 4 + length > len(data):
+                return None
+            cursor += 4 + length
+        if cursor + 16 > len(data):
+            return None
+        return cursor
+    except struct.error:
+        return None
 
 
 def _body_streams(pou) -> tuple[str | None, str | None, str | None]:

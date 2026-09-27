@@ -93,7 +93,7 @@ await run('mw_ide_start');
 await run('mw_ide_open', { path: MWT });
 
 const readBack = await run('mw_code_read_st', { pou: POU });
-const found = (readBack.declarations ?? []).map((d) => d.name);
+const found = (readBack.variables ?? []).map((d) => d.name);
 step('they read back from the file', found.includes('nCount') && found.includes('xCfgOk'),
   found.join(', '));
 
