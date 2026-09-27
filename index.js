@@ -756,6 +756,39 @@ function defineTools() {
       presentCall: () => ({ card: 'generic', title: 'Check compile state', kind: 'read' }),
       execute: () => verb('compile_state', {}, 30000),
     },
+    {
+      name: 'mw_ide_save',
+      description:
+        'Save the project open in the IDE (ActiveProject.Save). The agent could already '
+        + 'modify a project file by file, but not persist the state the IDE itself holds - '
+        + 'and that matters most for the one step only the user can perform: after they add '
+        + 'a program to a task in the Project Tree (mw_code_pou_assign explains why that '
+        + 'cannot be automated), a save is what makes it stick. Also worth calling after a '
+        + 'build when the user wants the compiled state written back. Reports elapsed_s and '
+        + 'the project is_modified and is_compiled afterwards, so the caller confirms rather '
+        + 'than assumes. Refuses when no project is open. This is the one operation here '
+        + 'that needs the IDE RUNNING, because it is the IDE own save rather than a file '
+        + 'write.',
+      parameters: { type: 'object', additionalProperties: false, properties: {} },
+      output: {
+        schema: {
+          type: 'object',
+          additionalProperties: true,
+          properties: {
+            saved: { oneOf: [{ type: 'boolean' }, { type: 'null' }] },
+            elapsed_s: { oneOf: [{ type: 'number' }, { type: 'null' }] },
+            is_modified: { oneOf: [{ type: 'boolean' }, { type: 'null' }] },
+            is_compiled: { oneOf: [{ type: 'boolean' }, { type: 'null' }] },
+          },
+        },
+        render: (_a, v) => text(
+          `saved in ${v.elapsed_s}s  modified=${v.is_modified}  compiled=${v.is_compiled}`,
+        ),
+      },
+      presentCall: () => ({ card: 'generic', title: 'Save the open project', kind: 'write' }),
+      execute: () => verb('save', {}, 60000),
+    },
+
 
     {
       name: 'mw_ide_errors',
