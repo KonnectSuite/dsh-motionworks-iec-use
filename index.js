@@ -1728,17 +1728,7 @@ function defineTools() {
         + 'calls it and a clean build says nothing about whether it is correct. Task names come '
         + 'from mw_code_tasks (for example Start, FastTsk, MedTsk, SlowTsk, BG). '
         + '**dry_run defaults to true.**'
-        + 'REFUSED, on measurement. Writing the instance node into PROJECT.TRE makes the '
-        + 'IDE rewrite the tree at open and lose a line from each of the Start, '
-        + 'Global_Variables and IO_Configuration blocks - three malformed nodes, then '
-        + '125 No-matching-global-variable errors, because the Globals node is gone and '
-        + 'the compiler has no global table. Writing only NODES.LST does no harm but the '
-        + 'IDE discards the assignment, so the tool would report success for an effect '
-        + 'that does not persist. Add the program to the task in the MotionWorks Project '
-        + 'Tree (right-click the task, add the program), then confirm with mw_code_tasks. '
-        + 'This is the same limitation as .VGR writes: this plugin cannot write '
-        + 'MotionWorks binary structures from a reconstruction, and the IDE rejects them '
-        + 'silently. ',
+        + 'REFUSED - and here is what to do instead, because the agent still needs to get this done. In the MotionWorks Project Tree: right-click the task and add the program. Then call mw_code_tasks to confirm it landed; that tool reads assignments from the tree, so a successful one appears there. WHY IT IS REFUSED: writing the instance node into PROJECT.TRE makes the IDE rewrite the tree at open - Start, Global_Variables and IO_Configuration each lose a line, and the build then reports 125 No-matching-global-variable errors because the Globals node is gone. NODES.LST alone avoids the damage but the IDE discards the assignment, so the tool would report success for an effect that does not persist. RULED OUT by test, so not worth retrying: the node content, its length (9 and 10 lines), its position (before and after the children), the program compiled state, and the cycle field. The IDE keeps the marker and GUID and rebuilds the layout, so it parses the node and cannot read its fields.',
       parameters: {
         type: 'object',
         additionalProperties: false,

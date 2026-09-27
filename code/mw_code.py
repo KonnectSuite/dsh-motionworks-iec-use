@@ -313,8 +313,18 @@ def verb_tasks(req):
         task_count=len(assignments),
         unassigned=sorted(set(known) - assigned),
         unassigned_note=(
-            "These POUs exist but are assigned to no task: they never run, and a "
-            "clean build does NOT prove they compile. Assign one with 'assign'."
+            "These POUs exist but are assigned to no task, so they never run and a clean "
+            "build does NOT prove they compile - measured, a POU with an undeclared "
+            "variable built cleanly while unassigned. THIS PLUGIN CANNOT ASSIGN: writing "
+            "the instance node into PROJECT.TRE makes MotionWorks rewrite the tree it "
+            "touches at open, so mw_code_pou_assign is refused. The step is manual and "
+            "takes a moment: in the MotionWorks Project Tree, right-click the task and add "
+            "the program. Then call this tool again to confirm it landed - the entries "
+            "above are read from the tree, so a successful assignment shows up here."
+        ),
+        next_step=(
+            "Tell the user which POU needs a task and which task, then re-run this tool to "
+            "verify. Do not report the POU as working until it appears under a task."
         ),
     )
 
