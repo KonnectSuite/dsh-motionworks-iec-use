@@ -551,3 +551,41 @@ open-and-build check could not be completed when it was tried: the IDE's COM sta
 "Internal error in OpenProject" after a force-kill and needs the environment restarted. So
 unassign stays refused on the evidence that ADDING damages the tree, not on evidence that
 removing does.
+
+
+### Both directions of tree editing break the project, and they break it differently
+
+Round 30 left this open: removing a node renders cleanly, so unassign might be safe even though
+assign is not. It is not, and the two failures are not even the same shape.
+
+On one restarted IDE, one staged project, with the tree the only variable:
+
+    C1  nothing changed       open OK,  build is_compiled=true
+    C2  one instance removed  OPEN FAILS: "Internal error in OpenProject"
+
+So a REMOVAL does not damage the tree on open the way an INSERT does - it stops the project
+opening at all. The insert path is the milder of the two: the project opens, and then three nodes
+have been rewritten and the build reports 125 unresolved-global errors. Removal is worse.
+
+**The structural check sees nothing wrong.** The removed tree is 563 lines, nine fewer, with no
+malformed node header anywhere - ``badIds=[]``. It looks valid by every test this plugin has, and
+the IDE will not open it. That is the same lesson the POU grid taught: a binary structure can
+satisfy every field that can be READ and still be refused, because the constraint that matters is
+in something that cannot be read.
+
+### Recovering a wedged IDE
+
+An "Internal error in OpenProject" that survives ``mw_ide_start`` is not permanent. What clears it:
+
+    1. mw_ide_close      the bridge's own close, which kills the process it knows about
+    2. taskkill          the remaining Mwt
+    3. mw_ide_start      returns already_running=false with a fresh window
+    4. mw_ide_open       succeeds
+
+Step 3 matters: ``mw_ide_start`` on an already-running process reports ``already_running`` and
+attaches to the stale one, so the COM state is never rebuilt. The close-then-start pair is what
+does it, and a force-kill ALONE leaves the bridge holding a dead COM object so every later
+OpenProject fails. This cost time twice before it was written down.
+
+``mw_code_pou_assign`` and ``mw_code_pou_unassign`` both stay refused, now on evidence for each
+direction rather than by analogy from one.
