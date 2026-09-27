@@ -364,3 +364,47 @@ Rebuild is not reachable programmatically. Use `mw_ide_build` (`Compile(2)`).
 - Compile error text is image-only.
 - `mw_code_var_edit` / `mw_code_var_delete` are not exposed yet â€” only
   `mw_code_var_add`; the engine already has the other two.
+
+
+## The IDE's own tree output, kept as a reference
+
+`docs/reference/` holds three snapshots of the SAME project tree, captured in one run of
+`test/tree_diff_damage.mjs`:
+
+| file | what it is |
+|---|---|
+| `pristine-tree.tre` | the staged project, before any edit |
+| `plugin-spliced-tree.tre` | after this plugin's assignment splice, before the IDE has seen it |
+| `ide-rewritten-tree.tre` | after the IDE opened the project |
+
+**This is the artifact that was missing for many rounds.** Every earlier attempt at task
+assignment reasoned about what the IDE MIGHT object to; these three files show what it
+actually does, and the answer is narrow and specific.
+
+Opening the project after a splice rewrites **only the one generated node** and leaves every
+real instance byte-for-byte alone:
+
+    real instance, untouched                 generated node, rewritten by the IDE
+    562 | '19'                               571 | '19'
+    563 | '46 6 0 0'                         572 | '62'          <- my '62 6 0 0', split
+    564 | 'ServoTaskSlow\t0\t0\t'            573 | '12 0 0 0'    <- a line that was never written
+    565 | 'ServoTaskSlow\teCLR\t...'          574 | 'DiffProbe\t0\t0\tCYCLIC\t-1\t'
+    566 | ''                                 575 | '\t\t\t\t-1\t'
+    567 | '0\t-1\t0\t0\t0\t0\t0\t0\t0'     576 | '0'
+    568 | ''                                 577 | '10410112\t0\t0\t0\t0\t0\t0\t0\t0'
+    569 | 'B7C90EAD 919B ...'                  578 | 'D861BDEB 0535 ...'   <- my GUID, kept
+    570 | '0\t0\t0\t0\t0\t0\t0\t0\t0\t0' 579 | '00000000 0000 ...'   <- zeroed
+
+Two facts follow, and neither was knowable from reasoning:
+
+* the IDE PARSED the generated node (it kept the marker `19` and my GUID), so the block is
+  recognised as a node rather than skipped;
+* it read the fields at DIFFERENT OFFSETS than this plugin writes them - `62 6 0 0` came back
+  as `62` followed by `12 0 0 0`, and the name line came back with the path's cycle field
+  folded into it.
+
+So the remaining question is a field-offset question, not a "does the format match" question,
+and the three files settle it by comparison instead of by guesswork.
+
+The assignment stays REFUSED. A tool that reports success and returns a project whose task
+list the IDE has rewritten is worse than one that declines.

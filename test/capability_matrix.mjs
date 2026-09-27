@@ -148,7 +148,22 @@ await kase('WRITE: POU declaration + unrelated body edit', async () => {
   return `decl+body applied=${w.result?.applied}`;
 });
 
-// 10. export, both formats
+// 10. POU-scoped declaration that is USED - the round-19 capability
+await kase('WRITE: POU declaration that the body USES', async () => {
+  const add = await run('mw_code_var_add', {
+    pou: 'TopCutterCamSetup', name: 'MatrixUsed', type: 'BOOL',
+    section: 'VAR', initial_value: 'FALSE', dry_run: false,
+  });
+  const r = await run('mw_code_read_st', { pou: 'TopCutterCamSetup' });
+  const w = await run('mw_code_write_st', {
+    pou: 'TopCutterCamSetup',
+    body: r.body.replace(/\s+$/, '') + `${NL}(* uses the declared variable *)${NL}MatrixUsed := NOT MatrixUsed;${NL}`,
+    dry_run: false,
+  });
+  return `declared=${add.result?.applied} used=${w.result?.applied}`;
+});
+
+// 11. export, both formats
 await kase('READ: export a POU to a file', async () => {
   const e = await run('mw_code_export_pou', { pou: 'TopCutterCamSetup' });
   return `bytes=${e.bytes} lines=${e.lines} decls=${e.declarations}`;

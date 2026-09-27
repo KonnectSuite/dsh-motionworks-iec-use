@@ -1,0 +1,621 @@
+V51
+62
+1
+0 0 61 0
+Project	0	0	
+				0	
+
+0	0	0	0	0	0	0	0	6522df69
+
+3D84B45B C9CE 4C2A B1 F2 B7 AC FC B1 A9 94
+0	0	0	0	0	0	0	0	0	0
+
+2
+1 1 7 0
+Libraries	0	0	
+LIB				0	
+
+0	0	0	0	0	0	0	0	0
+
+7CB2A3B1 3FA0 4609 8D 8A EA D8 15 5D 1F A1
+0	0	0	0	0	0	0	0	0	0
+
+31
+22 2 0 0
+PLCopenPlus_v_2_2a	0	0	
+C:\ProgramData\Yaskawa\MotionWorks IEC 3 Pro\3_7_5_1_667\plc\FW_LIB\PLCopenPlus_v_2_2a\PLCopenPlus_v_2_2a.fwl				-1	
+
+0	0	0	0	0	0	0	0	0
+
+8F960EA6 A381 4679 9A 01 ED 48 C1 E2 2C 1C
+0	0	0	0	0	0	0	0	0	0
+
+31
+37 2 0 0
+YMotion	0	0	
+C:\ProgramData\Yaskawa\MotionWorks IEC 3 Pro\3_7_5_1_667\plc\FW_LIB\YMotion\YMotion.fwl				-1	
+
+0	0	0	0	0	0	0	0	0
+
+7BB2A331 64E0 4485 A7 5F 17 25 2B A9 BD 81
+0	0	0	0	0	0	0	0	0	0
+
+3
+24 2 0 0
+DataTypes_Toolbox_v374	0	0	
+C:\Users\Public\Documents\MotionWorks IEC 3 Pro\Libraries\DataTypes_Toolbox_v374.mwt				-1	
+
+0	0	0	0	0	0	0	c73cb3ee	ca684e1a
+
+B80BDA23 31B9 47AD 84 1F CA CF 2C 33 3E CF
+0	0	0	0	0	0	0	0	0	0
+
+3
+34 2 0 0
+Math_Toolbox_v374	0	0	
+C:\Users\Public\Documents\MotionWorks IEC 3 Pro\Libraries\Math_Toolbox_v374.mwt				-1	
+
+0	0	0	0	0	0	0	b9631499	55cbdfff
+
+8561A0CB 27AD 4114 AC 18 52 FB 0C 1F 23 A8
+0	0	0	0	0	0	0	0	0	0
+
+3
+41 2 0 0
+Yaskawa_Toolbox_v375	0	0	
+C:\Users\Public\Documents\MotionWorks IEC 3 Pro\Libraries\Yaskawa_Toolbox_v375.mwt				-1	
+
+0	0	0	0	0	0	0	6242c3be	fac911a0
+
+1F67561E 1179 431B 9F BF 2C 4E A4 58 4B 5D
+0	0	0	0	0	0	0	0	0	0
+
+3
+38 2 0 0
+PLCopen_Toolbox_v375	0	0	
+C:\Users\Public\Documents\MotionWorks IEC 3 Pro\Libraries\PLCopen_Toolbox_v375.mwt				-1	
+
+0	0	0	0	0	0	0	a8c342c0	1b3b4443
+
+BFE660F1 11E1 4DEC B8 3F 6A B2 21 36 63 2B
+0	0	0	0	0	0	0	0	0	0
+
+3
+39 2 0 0
+Cam_Toolbox_v375	0	0	
+C:\Users\Public\Documents\MotionWorks IEC 3 Pro\Libraries\Cam_Toolbox_v375.mwt				-1	
+
+0	0	0	0	0	0	0	1f80dbd8	e51ef1f4
+
+0C520094 EBE5 4D51 A3 02 C4 AE 5B D8 2A 24
+0	0	0	0	0	0	0	0	0	0
+
+41
+2 1 0 0
+Data Types	0	0	
+DT				0	
+
+0	0	0	0	0	0	0	0	0
+
+E6F2D6ED 7602 4508 AD 5C D1 7C 0D 95 6F 44
+0	0	0	0	0	0	0	0	0	0
+
+5
+4 1 32 0
+Logical POUs	0	0	
+				0	
+
+0	0	0	0	0	0	0	0	0
+
+52D7CD95 15D2 4896 B6 C5 58 CB 88 F1 18 CC
+0	0	0	0	0	0	0	0	0	0
+
+7
+53 2 3 0
+TopCutterFFCamSetup	0	0	Configuration.Resource
+POE\TopCutterFFCamSetup				-1	
+
+0	-1	0	0	0	0	8ab18fdf	ffab3243	209e8808
+
+63E8EB84 8C58 4C0B A5 5E 94 78 C3 23 9F 74
+0	0	0	0	0	0	0	0	0	0
+
+42
+54 3 0 0
+TopCutterFFCamSetupT	0	0	
+POE\TopCutterFFCamSetup\TopCutterFFCamSetupT.TXT				-1	
+
+0	0	0	0	0	0	0	0	0
+
+E5EFF185 786A 4403 A6 A0 72 CE 86 E8 2F 93
+0	0	0	0	0	0	0	0	0	0
+
+8
+55 3 0 0
+TopCutterFFCamSetupV	0	0	
+POE\TopCutterFFCamSetup\TopCutterFFCamSetupV.VGR				-1	
+
+0	-1	0	0	0	0	0	0	0
+
+31B56B11 BABE 4DE7 B8 53 9E 83 45 E2 C7 E1
+1	0	0	0	0	0	0	0	0	0
+
+23
+56 3 0 0
+TopCutterFFCamSetup	0	0	
+POE\TopCutterFFCamSetup\TopCutterFFCamSetup.STB				-1	
+
+0	-1	0	0	0	0	0	0	0
+
+A97BF6E4 B360 4048 A1 63 21 A0 FD 15 51 86
+b3	1e	0	70	0	99	0	2	0	0
+
+7
+31 2 3 0
+TopCutterCamSetup	0	0	Configuration.Resource
+POE\TopCutterCamSetup				-1	
+
+0	-1	0	0	0	0	f8e0e4e7	6303622c	878f02b0
+
+20CEA717 5BCC 444A AC 4D B2 03 C5 A2 0B 99
+0	0	0	0	0	0	0	0	0	0
+
+42
+32 3 0 0
+TopCutterCamSetupT	0	0	
+POE\TopCutterCamSetup\TopCutterCamSetupT.TXT				-1	
+
+0	0	0	0	0	0	0	0	0
+
+89F095E6 EF5A 4E10 97 BD 68 6C 08 6D 16 58
+0	0	0	0	0	0	0	0	0	0
+
+8
+33 3 0 0
+TopCutterCamSetupV	0	0	
+POE\TopCutterCamSetup\TopCutterCamSetupV.VGR				-1	
+
+0	-1	0	0	0	0	0	0	0
+
+C4F3811A C8D9 4910 8D 0B 9A DE 21 7C EA 37
+1	0	0	0	0	0	0	0	0	0
+
+23
+36 3 0 0
+TopCutterCamSetup	0	0	
+POE\TopCutterCamSetup\TopCutterCamSetup.STB				-1	
+
+0	-1	0	0	0	0	0	0	0
+
+7661CBDE 8F86 4AD2 AA 2E C9 79 8B 54 89 9C
+0	0	0	70	0	0	0	2	0	0
+
+7
+6 2 3 0
+TopCutterCutControl	0	0	Configuration.Resource
+POE\TopCutterCutControl				-1	
+
+0	-1	0	0	0	0	a5318f3a	9fb69d2	586f3838
+
+AF7CA0E6 EE53 4FE0 93 2E E1 CC B5 A4 36 5C
+0	0	0	0	0	0	0	0	0	0
+
+42
+7 3 0 0
+TopCutterCutControlT	0	0	
+POE\TopCutterCutControl\TopCutterCutControlT.TXT				-1	
+
+0	0	0	0	0	0	0	0	0
+
+3741236B 9083 422B B0 F5 FF A2 C6 D1 E1 CB
+0	0	0	70	0	0	0	2	0	0
+
+8
+15 3 0 0
+TopCutterCutControlV	0	0	
+POE\TopCutterCutControl\TopCutterCutControlV.VGR				-1	
+
+0	-1	0	0	0	0	0	0	0
+
+8DE674E9 7189 43B3 B9 3C FD F2 A7 2B F1 4D
+1	0	0	0	0	0	0	0	0	0
+
+23
+16 3 0 0
+TopCutterCutControl	0	0	
+POE\TopCutterCutControl\TopCutterCutControl.STB				-1	
+
+0	-1	0	0	0	0	0	0	0
+
+B121003B DA2E 44F3 A5 1F 2B 5F C7 1A A2 D6
+183	c	0	70	0	1bc	0	2	0	0
+
+7
+42 2 3 0
+ServoTaskSlow	0	0	Configuration.Resource
+POE\ServoTaskSlow				-1	
+
+0	-1	0	0	0	0	49d19016	4e3d0b22	9c13a13a
+
+39B6F6F3 8142 4053 8C E5 65 44 85 CF A7 96
+0	0	0	0	0	0	0	0	0	0
+<3>
+42
+43 3 0 0
+ServoTaskSlowT	0	0	Configuration.Resource
+POE\ServoTaskSlow\ServoTaskSlowT.TXT				-1	
+
+0	0	0	0	0	0	dbf1a023	0	9442c853
+
+69DE1BA0 35DE 4ACE B8 9B F7 68 1F A6 2B 59
+0	0	0	0	0	0	0	0	0	0
+
+8
+44 3 0 0
+ServoTaskSlowV	0	0	Configuration.Resource
+POE\ServoTaskSlow\ServoTaskSlowV.VGR				-1	
+
+0	-1	0	0	0	0	dbf1a023	0	9442c853
+
+BE491A10 9BA0 410B 95 85 AB 67 4D 58 60 FF
+1	0	0	0	0	0	0	0	0	0
+
+11
+45 3 0 0
+ServoTaskSlow	0	0	Configuration.Resource
+POE\ServoTaskSlow\ServoTaskSlow.GB				-1	
+
+0	-1	0	0	0	0	dbf1a023	0	9442c853
+
+21EE2B63 3D36 476C BE 9E DF A2 B2 AE 24 52
+1	80000000	2803f	600	0	0	0	53000001	0	0
+
+7
+17 2 3 0
+ServoHoming	0	0	Configuration.Resource
+POE\ServoHoming				-1	
+
+0	-1	0	0	0	0	95c176fe	de56ae86	6fb12567
+
+84A4A09E 2BB5 4900 AA 6C BB 89 99 28 A6 06
+0	0	0	0	0	0	0	0	0	0
+
+42
+18 3 0 0
+ServoHomingT	0	0	
+POE\ServoHoming\ServoHomingT.TXT				-1	
+
+0	0	0	0	0	0	0	0	0
+
+DBD8EC21 6979 4988 85 FA 62 14 F8 60 D2 A0
+0	0	0	0	0	0	0	0	0	0
+
+8
+19 3 0 0
+ServoHomingV	0	0	
+POE\ServoHoming\ServoHomingV.VGR				-1	
+
+0	-1	0	0	0	0	0	0	0
+
+AB01C9E9 0A07 4282 85 3D FE C7 7C 66 E0 29
+1	0	0	0	0	0	0	0	0	0
+
+11
+21 3 0 0
+ServoHoming	0	0	
+POE\ServoHoming\ServoHoming.GB				-1	
+
+0	-1	0	0	0	0	0	0	0
+
+49B7D038 32DA 4370 80 B6 2A 6F 41 27 0E 45
+1	4a3d7100	3000003f	605	0	0	0	53000001	0	0
+
+7
+27 2 3 0
+TopCutterInitialize	0	0	Configuration.Resource
+POE\TopCutterInitialize				-1	
+
+0	-1	0	0	0	0	0	3083bf76	e025a6c7
+
+BA29DF55 905B 4FC6 A8 ED 7B 80 7B 75 40 78
+0	0	0	0	0	0	0	0	0	0
+<1>
+42
+28 3 0 0
+TopCutterInitializeT	0	0	Configuration.Resource
+POE\TopCutterInitialize\TopCutterInitializeT.TXT				-1	
+
+0	0	0	0	0	0	0	0	880581fa
+
+E0A342BE 7477 4744 BD F4 8D DF EC 9D 93 39
+0	0	0	70	0	0	0	2	0	0
+
+8
+29 3 0 0
+TopCutterInitializeV	0	0	Configuration.Resource
+POE\TopCutterInitialize\TopCutterInitializeV.VGR				-1	
+
+0	-1	0	10	0	0	0	0	880581fa
+
+26B4B6DB 6CF1 419E 97 69 0F 4D 61 54 49 77
+1	0	0	0	0	0	0	0	0	0
+
+23
+30 3 0 0
+TopCutterInitialize	0	0	Configuration.Resource
+POE\TopCutterInitialize\TopCutterInitialize.STB				-1	
+
+0	-1	0	0	0	0	0	0	880581fa
+
+601DB6AC 09AF 4312 B4 57 74 D5 4E 04 2B C1
+0	0	0	70	0	0	0	2	0	0
+
+7
+47 2 3 0
+EIP_ToCLX	0	0	Configuration.Resource
+POE\EIP_ToCLX				-1	
+
+0	-1	0	0	0	0	58eecc04	c578678e	199c2d3a
+
+41BA2B93 1C29 4173 9D 09 3F 3C 0B 31 3B 92
+0	0	0	0	0	0	0	0	0	0
+
+42
+48 3 0 0
+EIP_ToCLXT	0	0	
+POE\EIP_ToCLX\EIP_ToCLXT.TXT				-1	
+
+0	0	0	0	0	0	0	0	0
+
+4853DE51 26EA 4FAF 8A D0 77 C4 63 DE 16 02
+0	0	0	0	0	0	0	0	0	0
+
+8
+49 3 0 0
+EIP_ToCLXV	0	0	
+POE\EIP_ToCLX\EIP_ToCLXV.VGR				-1	
+
+0	-1	0	0	0	0	0	0	0
+
+5B7C237A 7D56 4424 B8 6F 59 9F E0 F4 B3 DE
+1	0	0	0	0	0	0	0	0	0
+
+11
+50 3 0 0
+EIP_ToCLX	0	0	
+POE\EIP_ToCLX\EIP_ToCLX.GB				-1	
+
+0	-1	0	0	0	0	0	0	0
+
+5FEAAF61 7878 42A4 8F 3A 53 7C 12 39 54 47
+1	4a3d7100	3f	600	0	0	0	53000001	0	0
+
+7
+58 2 3 0
+DiffProbe	0	0	Configuration.Resource
+POE\DiffProbe				-1	
+
+0	-1	0	0	0	0	0	3083bf76	e025a6c7
+
+335BA982 A935 435E AD A1 91 D6 3E C6 58 B1
+0	0	0	0	0	0	0	0	0	0
+<1>
+42
+59 3 0 0
+DiffProbeT	0	0	Configuration.Resource
+POE\DiffProbe\DiffProbeT.TXT				-1	
+
+0	0	0	0	0	0	0	0	880581fa
+
+2F4ECD7A 3E86 4171 8C 59 BD 18 E6 64 21 F3
+0	0	0	70	0	0	0	2	0	0
+
+8
+60 3 0 0
+DiffProbeV	0	0	Configuration.Resource
+POE\DiffProbe\DiffProbeV.VGR				-1	
+
+0	-1	0	10	0	0	0	0	880581fa
+
+3D266420 230E 4C3C B9 27 DC 1E BB 68 AE 48
+1	0	0	0	0	0	0	0	0	0
+
+23
+61 3 0 0
+DiffProbe	0	0	Configuration.Resource
+POE\DiffProbe\DiffProbe.STB				-1	
+
+0	-1	0	0	0	0	0	0	880581fa
+
+7BC7E8EF 76A0 4D16 89 7A 2C 81 83 EF 04 07
+0	0	0	70	0	0	0	2	0	0
+
+26
+8 1 17 0
+Physical Hardware	0	0	
+HW				0	
+
+0	-1	0	0	0	0	0	0	0
+
+6DE22D42 25D6 45EF 90 E8 20 81 0B 33 B9 AF
+0	0	0	0	0	0	0	0	0	0
+
+13
+9 2 16 0
+Configuration	0	0	
+C\Configuration	eCLR			303	
+
+0	-1	0	0	0	0	0	2daad127	1af365ea
+
+5C0F298F 8437 4BBF BA E5 5F 50 62 9E 59 30
+0	0	0	0	0	0	0	0	0	0
+
+14
+10 3 15 0
+Resource	0	0	
+C\Configuration\R\Resource	eCLR	MP2600iec		303	
+
+0	-1	8000	1000	0	0	cba0e8c1	cebff475	67ab06e7
+
+7FFDF4EF 41D4 4823 AB 4C D5 78 30 38 E6 FB
+0	0	0	0	0	0	0	0	0	0
+
+18
+11 4 12 0
+Tasks	0	0	
+	eCLR	MP2600iec		327	
+
+0	0	0	0	0	0	0	0	0
+
+3AD02393 8174 4790 BC F5 2C A4 53 1E E6 6E
+0	0	0	0	0	0	0	0	0	0
+
+20
+51 5 2 0
+BG	0	0	
+C\Configuration\R\Resource\BG	eCLR	MP2600iec	DEFAULT	319	
+
+0	0	0	0	0	0	0	0	0
+
+580AE748 926E 406F 81 91 77 03 BD EF DE 06
+0	0	0	0	0	0	0	0	0	0
+
+19
+52 6 0 0
+TopCutterCamSetup	0	0	
+TopCutterCamSetup	eCLR	MP2600iec	DEFAULT	-1	
+
+0	-1	0	0	0	0	0	0	0
+
+B8D8361F 833D 453B A6 38 9B 57 29 67 79 20
+0	0	0	0	0	0	0	0	0	0
+
+19
+57 6 0 0
+TopCutterFFCamSetup	0	0	
+TopCutterFFCamSetup	eCLR	MP2600iec	DEFAULT	-1	
+
+0	-1	0	0	0	0	0	0	0
+
+2E67E047 426B 4851 96 DC 80 4F 55 E5 99 3A
+0	0	0	0	0	0	0	0	0	0
+
+20
+20 5 1 0
+FastTsk	0	0	
+C\Configuration\R\Resource\FastTsk	eCLR	MP2600iec	CYCLIC	313	
+
+0	0	0	0	0	0	0	0	0
+
+10DA381F 0566 4D8E 9B E7 C2 25 BB 23 FB E8
+0	0	0	0	0	0	0	0	0	0
+
+19
+23 6 0 0
+TopCutterCutControl	0	0	
+TopCutterCutControl	eCLR	MP2600iec	CYCLIC	-1	
+
+0	-1	0	0	0	0	0	0	0
+
+72CAB42A 8F01 4727 86 7E 06 DF 39 2C 8A 9E
+0	0	0	0	0	0	0	0	0	0
+
+20
+14 5 2 0
+MedTsk	0	0	
+C\Configuration\R\Resource\MedTsk	eCLR	MP2600iec	CYCLIC	313	
+
+0	0	0	0	0	0	0	0	0
+
+52A543EF 04D2 44CF A6 88 D8 65 03 81 A5 D1
+0	0	0	0	0	0	0	0	0	0
+
+19
+3 6 0 0
+EIP_ToCLX	0	0	
+EIP_ToCLX	eCLR	MP2600iec	CYCLIC	-1	
+
+0	-1	0	0	0	0	0	0	0
+
+8A87A7F0 2534 453E 9B 7F 2B 17 E2 B7 02 B7
+0	0	0	0	0	0	0	0	0	0
+
+19
+5 6 0 0
+ServoHoming	0	0	
+ServoHoming	eCLR	MP2600iec	CYCLIC	-1	
+
+0	-1	0	0	0	0	0	0	0
+
+0918CA1C AB5F 47D7 9A 8C 8F A8 BF 54 CD 7E
+0	0	0	0	0	0	0	0	0	0
+
+20
+26 5 2 0
+SlowTsk	0	0	
+C\Configuration\R\Resource\SlowTsk	eCLR	MP2600iec	CYCLIC	313	
+
+0	0	0	0	0	0	0	0	0
+
+02F74D41 ED61 455E 83 C6 1B 2D 2D D6 46 D9
+0	0	0	0	0	0	0	0	0	0
+
+19
+46 6 0 0
+ServoTaskSlow	0	0	
+ServoTaskSlow	eCLR	MP2600iec	CYCLIC	-1	
+
+0	-1	0	0	0	0	0	0	0
+
+B7C90EAD 919B 42D6 B1 54 4B AE CB 16 8D 60
+0	0	0	0	0	0	0	0	0	0
+19
+62
+12 0 0 0
+DiffProbe	0	0	CYCLIC	-1	
+				-1	
+0
+10410112	0	0	0	0	0	0	0	0
+D861BDEB 0535 4AE8 9D 16 96 92 F5 A8 7E 2B
+00000000 0000 0000 00 00 00 00 00 00 00 00
+0	0	0	0	0	0	0	0	0	0
+20
+25
+13 0 0 0
+C\Configuration\R\Resource\Start	0	0	SYSTEM	317	
+				-1	
+0
+10410112	0	0	0	0	0	0	0	0
+E1D1B971 2DDE 46FD A6 E5 79 40 2F D9 19 92
+00000000 0000 0000 00 00 00 00 00 00 00 00
+0	0	0	0	0	0	0	0	0	0
+19
+35
+25 0 0 0
+TopCutterInitialize	0	0	SYSTEM	-1	
+				-1	
+0
+10410112	0	0	0	0	0	0	0	0
+048423A8 240B 494A 9A F0 80 07 01 D7 FD 92
+00000000 0000 0000 00 00 00 00 00 00 00 00
+0	0	0	0	0	0	0	0	0	0
+17
+12
+35 0 0 0
+C\Configuration\R\Resource\Global_Variables.VGR	0	0		321	
+				-1	
+0
+10410112	0	0	0	0	0	0	0	0
+21F46E2D 2AAF 4576 A0 1D FB 1B B2 98 F0 23
+00000001 0000 0000 00 00 00 00 00 00 00 00
+0	0	0	0	0	0	0	0	0	0
+36
+13
+40 0 0 0
+C\Configuration\R\Resource\IOCONFIG.CNF	0	0		323	
+				-1	
+0
+10410112	0	0	0	0	0	0	0	0
+D59A5881 5642 493A AF 82 2F 42 70 6B 37 09
+00000000 0000 0000 00 00 00 00 00 00 00 00
+0	0	0	0	0	0	0	0	0	0
