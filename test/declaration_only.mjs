@@ -1,15 +1,19 @@
 /**
- * ISOLATION: add a DECLARATION and change nothing else.
+ * ISOLATION: add ONE declaration and change nothing else at all.
  *
- * test/body_only.mjs proved a body write is clean on its own (baseline, identical rewrite
- * and a comment edit all compiled, each reaching "Building instance tree"). Every test
- * that added a variable ALSO edited the body, so this separates them the other way: add
- * one declaration - .VB text plus the now-correct .VGR record - and touch nothing else.
+ * Why this test exists. Every earlier failing run bundled a declaration with a body edit,
+ * so neither could be blamed. Splitting the other way:
  *
- * This decides what the plugin should do about declarations. If it fails, mw_code_var_add
- * is producing a project that stalls the build, which is the worst possible outcome for a
- * tool an agent is meant to trust, and it should refuse instead of writing. If it passes,
- * the earlier failures were some interaction with the body write and the path is fine.
+ *   test/body_only.mjs      baseline, an identical body rewrite, and a one-line comment
+ *                           edit  ->  ALL is_compiled=true, all reached "Building
+ *                           instance tree". The body path is clean.
+ *   test/grid_append_build  a declaration AND a body edit  ->  is_compiled=false with an
+ *                           empty Errors pane even after the .VGR record was made correct
+ *
+ * The plugin must not refuse a capability on inference - that mistake was already made
+ * once, when global writes were refused because a global add and a task assignment failed
+ * in the same run, and isolating it later showed globals were fine all along. So this
+ * decides it: add one declaration, touch nothing else, build.
  *
  * Run:  MW_PLUGIN=<installed> node test/declaration_only.mjs
  */
@@ -24,7 +28,8 @@ const run = (n, a = {}) => tools.get(n).execute(a, {});
 const STAGE = mod.__internals.STAGE_ROOT;
 const DIR = `${STAGE}\\TopCutter`;
 const MWT = `${DIR}.mwt`;
-const PY = `${process.env.LOCALAPPDATA}\\Programs\\AryaAI\\resources\\runtime\\primary-runtime\\dependencies\\python.exe`;
+const PY = `${process.env.LOCALAPPDATA}\\Programs\\AryaAI\\resources\\runtime\\primary-runtime\\dependencies\\python\\python.exe`;
+const HELPER = `${PLUGIN}\\test\\declaration_helper.py`;
 const line = (s) => console.log(`\n${'═'.repeat(74)}\n  ${s}\n${'═'.repeat(74)}`);
 
 const SOURCE = [
@@ -34,6 +39,13 @@ const SOURCE = [
 if (!SOURCE) { console.error('no pristine source'); process.exit(2); }
 
 const POU = 'TopCutterCamSetup';
+const VAR = 'ZZDeclOnly';
+let failures = 0;
+const check = (ok, msg) => { if (!ok) failures++; console.log(`  ${ok ? 'ok  ' : 'FAIL'} ${msg}`); };
+
+const helper = (op, ...rest) => JSON.parse(
+  execFileSync(PY, [HELPER, op, DIR, POU, VAR, ...rest], { encoding: 'utf8' }).trim(),
+);
 
 async function buildAndReport(label) {
   await run('mw_ide_start');
@@ -42,97 +54,48 @@ async function buildAndReport(label) {
   const e = await run('mw_ide_errors', { pane: 'Errors', limit: 200 });
   const bp = await run('mw_ide_errors', { pane: 'Build', limit: 80 });
   const inst = (bp.lines ?? []).some((l) => /Building instance tree/.test(l));
-  const stale = (e.lines ?? []).filter((l) => /not found|No matching global/i.test(l));
-  console.log(`  ${label.padEnd(34)} is_compiled=${String(b.is_compiled).padEnd(5)} (${b.elapsed_s}s)  `
-    + `Errors=${e.count} realProblems=${stale.length} instanceTree=${inst}`);
-  for (const l of stale.slice(0, 3)) console.log(`      ${l}`);
+  const real = (e.lines ?? []).filter((l) => /not found|No matching global/i.test(l));
+  console.log(`  ${label.padEnd(32)} is_compiled=${String(b.is_compiled).padEnd(5)} `
+    + `stalled=${String(b.stalled).padEnd(5)} (${b.elapsed_s}s)  Errors=${e.count} real=${real.length} instanceTree=${inst}`);
+  for (const l of real.slice(0, 3)) console.log(`      ${l}`);
   await run('mw_ide_close');
-  return { compiled: b.is_compiled, real: stale.length, inst };
+  return { compiled: b.is_compiled, stalled: b.stalled, real: real.length, inst };
 }
 
-/** Does the POU's declaration stream and grid agree, and is the grid still parseable? */
-function grids() {
-  return JSON.parse(execFileSync(PY, ['-c', `
-import sys, json, struct
-sys.path.insert(0, r"${PLUGIN}\\code\\engine")
-from motionworks_iec_mcp.cfb import CompoundFile
-from motionworks_iec_mcp import variables as V
-from motionworks_iec_mcp.project import Project
-from pathlib import Path
-pou = Project(root=Path(r"${DIR}")).pou("${POU}")
-cf = CompoundFile(pou.source_path)
-names = cf.stream_names()
-vg = next(n for n in names if n.upper().endswith("V.VGR"))
-vb = next(n for n in names if n.upper().endswith("V.VB"))
-raw = cf.read_stream(vg)
-recs = V.parse_grid_records(raw)
-names_decoded = []
-for r in recs:
-    try:
-        names_decoded.append(V.read_grid_record(raw, r["offset"])["name"])
-    except Exception as e:
-        names_decoded.append("ERR")
-print(json.dumps({
-  "count": struct.unpack_from("<I", raw, 8)[0],
-  "parsed": len(recs),
-  "names": names_decoded,
-  "text_has": "ZZDeclOnly" in cf.read_stream(vb).decode("latin1"),
-}))
-`], { encoding: 'utf8' }).trim());
-}
-
-line('1. fresh stage, build the UNCHANGED baseline');
+line('1. fresh stage, baseline build');
 try { await run('mw_ide_close'); } catch { /* not running */ }
 for (const p of [DIR, MWT]) { try { rmSync(p, { recursive: true, force: true }); } catch { /* absent */ } }
 await run('mw_ide_stage', { source: SOURCE });
 const baseline = await buildAndReport('baseline (nothing changed)');
-const g0 = grids();
-console.log(`  grid: count=${g0.count} parsed=${g0.parsed}`);
+const g0 = helper('grids');
+console.log(`  grid before: count=${g0.grid_count} parsed=${g0.grid_parsed} bytes=${g0.grid_bytes} textHasVar=${g0.text_has_var}`);
 
-line('2. add ONE declaration (.VB + correct .VGR record), touch nothing else');
-const out = execFileSync(PY, ['-c', `
-import sys, json
-sys.path.insert(0, r"${PLUGIN}\\code\\engine")
-from motionworks_iec_mcp import writer as W
-from motionworks_iec_mcp.cfb import CompoundFile
-from motionworks_iec_mcp import variables as V
-from motionworks_iec_mcp import project as P
-from pathlib import Path
-import struct
-root = Path(r"${DIR}")
-plan = W.plan_variable_add(root, "${POU}", "ZZDeclOnly", "BOOL", section="VAR")
-W.apply_declaration(plan, root, dry_run=False)
-pou = P.Project(root=root).pou("${POU}")
-cf = CompoundFile(pou.source_path)
-vg = next(n for n in cf.stream_names() if n.upper().endswith("V.VGR"))
-grid = cf.read_stream(vg)
-new_grid, handle = V.append_grid_variable(grid, "ZZDeclOnly", "BOOL")
-cf.replace_streams({vg: new_grid})
-cf2 = CompoundFile(pou.source_path)
-raw = cf2.read_stream(vg)
-recs = V.parse_grid_records(raw)
-last = V.read_grid_record(raw, recs[-1]["offset"])
-print(json.dumps({"handle": handle, "count": struct.unpack_from("<I", raw, 8)[0],
-                  "parsed": len(recs), "last": last}))
-`], { encoding: 'utf8' });
-console.log(`  ${out.trim()}`);
-const g1 = grids();
-console.log(`  grid now: count=${g1.count} parsed=${g1.parsed} textHasVar=${g1.text_has}`);
-console.log(`  names: ${JSON.stringify(g1.names.slice(-3))} …`);
+line('2. add ONE declaration (.VB text + .VGR record). No body write, no tree write.');
+const added = helper('add', 'BOOL');
+console.log(`  added '${added.added}' as handle ${added.handle}`);
+console.log(`  grid after : count=${added.grid_count} parsed=${added.grid_parsed} bytes=${added.grid_bytes} textHasVar=${added.text_has_var}`);
+const last = (added.records ?? []).slice(-1)[0];
+console.log(`  last record: ${JSON.stringify(last)}`);
+check(added.text_has_var === true, 'the .VB text carries the declaration');
+check(added.grid_count === added.grid_parsed, `grid count and parsed records agree (${added.grid_count})`);
+check(!!last && last.name === VAR, `the appended record decodes as '${VAR}'`);
 
 line('3. build');
 const after = await buildAndReport('after the declaration');
 
 line('VERDICT');
-console.log(`  baseline          : compiled=${baseline.compiled} realProblems=${baseline.real}`);
-console.log(`  + one declaration : compiled=${after.compiled} realProblems=${after.real} instanceTree=${after.inst}`);
+console.log(`  baseline          : compiled=${baseline.compiled} stalled=${baseline.stalled} real=${baseline.real}`);
+console.log(`  + one declaration : compiled=${after.compiled} stalled=${after.stalled} real=${after.real} instanceTree=${after.inst}`);
 if (!baseline.compiled) {
-  console.log('\n  baseline failed - inconclusive, rerun.');
+  console.log('\n  the BASELINE failed, so this run attributes nothing - rerun.');
 } else if (after.compiled) {
-  console.log('\n  *** DECLARATIONS WORK. *** The earlier failures were an interaction with');
-  console.log('  the body write, and the grid record was the missing piece all along.');
+  console.log('\n  *** DECLARATIONS ARE FINE ON THEIR OWN. ***');
+  console.log('  The earlier failures were an interaction with the body write, and the plugin');
+  console.log('  must NOT refuse mw_code_var_add.');
 } else {
-  console.log('\n  *** A DECLARATION ALONE BREAKS THE BUILD. *** Both stores are correct and');
-  console.log('  it still fails, so mw_code_var_add must REFUSE until that is solved - an');
-  console.log('  agent must never be handed a project that will not compile.');
+  console.log('\n  *** A DECLARATION ALONE BREAKS THE BUILD. ***');
+  console.log('  Both stores are correct and the Errors pane is silent, so something else must');
+  console.log('  carry the declaration. Until that is found, mw_code_var_add must warn loudly');
+  console.log('  and the agent must build immediately to verify.');
 }
+console.log(failures === 0 ? '\n  all structural checks passed' : `\n  ${failures} structural check(s) failed`);

@@ -375,6 +375,46 @@ def _refuse_global_write(pou_name: str | None, action: str) -> None:
     return None
 
 
+def _refuse_pou_variable_write(pou_name: str | None, action: str) -> None:
+    """Refuse a POU-scoped declaration write, because it destroys the POU.
+
+    This is not a precaution and not an inference - it was isolated, and the isolation is
+    the whole argument:
+
+        baseline (nothing changed)        is_compiled=true   stalled=false
+        + ONE declaration, nothing else   is_compiled=false  stalled=true
+
+    The declaration itself was written correctly to both stores: the .VB text carried it,
+    and the appended .VGR record decoded to {handle 1059, usage 1, type BOOL, name
+    ZZDeclOnly} with the header count agreeing. The Errors pane was SILENT. Then the build
+    STALLED, and afterwards the POU was wrecked:
+
+        pristine : V.VB 1112 bytes   V.VGR 1565 bytes
+        after    : V.VB    0 bytes   V.VGR 79,432,063 bytes
+
+    So MotionWorks rejects a .VGR record whose fields do not match what it expects, and on
+    rejecting one it rewrites the POU's streams into garbage - emptying the declaration
+    text and inflating the grid to 79 MB. A tool that silently destroys a POU is worse
+    than one that cannot add a variable, so this path refuses until the record is right.
+
+    Note: the BODY is fine. test/body_only.mjs proved a body write is clean - baseline, an
+    identical rewrite and a one-line comment edit all compiled and all reached "Building
+    instance tree". Only the declaration is refused.
+    """
+    if pou_name is not None:
+        raise WriteRefused(
+            f"refusing to {action} a POU-scoped variable: writing a declaration needs a "
+            f"matching record in the POU's binary .VGR grid, and a record MotionWorks does "
+            f"not accept does not merely fail to compile - it REWRITES the POU into "
+            f"garbage. Measured: one added declaration left the .VB text empty (1112 -> 0 "
+            f"bytes) and the grid at 79 MB (1565 bytes before), with the build stalled and "
+            f"an EMPTY Errors pane, so nothing warned. Until the record layout is right, "
+            f"add variables in the MotionWorks variable worksheet, re-read them with "
+            f"mw_code_read_st, and use the plugin for the BODY - mw_code_write_st is "
+            f"verified clean and is the part that matters for writing code."
+        )
+
+
 def _declaration_target(
     project_root: Path, pou_name: str | None
 ) -> tuple[Path, str, bytes, str]:
@@ -460,6 +500,7 @@ def plan_variable_add(
     outright; see ``_refuse_global_write``.
     """
     _refuse_global_write(pou_name, 'add')
+    _refuse_pou_variable_write(pou_name, 'add')
     from .declarations import add_variable
 
     source, stream, before, text = _declaration_target(project_root, pou_name)
@@ -493,6 +534,7 @@ def plan_variable_edit(
     unaddressed variable compiled cleanly.  Pass ``force=True`` to override.
     """
     _refuse_global_write(pou_name, 'edit')
+    _refuse_pou_variable_write(pou_name, 'edit')
     from . import project as P
     from .declarations import (
         _find_declaration_line,
@@ -568,6 +610,7 @@ def plan_variable_delete(
     override.
     """
     _refuse_global_write(pou_name, 'delete')
+    _refuse_pou_variable_write(pou_name, 'delete')
     from .declarations import delete_variable
 
     source, stream, before, text = _declaration_target(project_root, pou_name)
