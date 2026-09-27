@@ -102,63 +102,34 @@ including the initial value. Measured across the project: **239 records, 239 cle
 and the name, produced garbage for every local record because 12 is only correct when
 strings 2 AND 3 are both empty.
 
-### Writing is NOT, and is refused
+### Declaring is safe; USING needs the grid
 
-Adding a declaration is **refused by `mw_code_var_add` for POU scope**, and this is the
-evidence rather than caution:
-
-```
-baseline (nothing changed)         is_compiled=true   stalled=false
-+ ONE declaration, nothing else    is_compiled=false  stalled=true
-```
-
-The declaration was written correctly to both stores - text present, record matching a real
-local record field for field (`BOOL` / `''` / `FALSE` / name, zeros in the trailing run,
-handle, and a row equal to the declaration's line number) - and the Errors pane stayed
-**silent**. Afterwards the POU was wrecked:
+Isolated, each case on a freshly staged copy and each judged by a build:
 
 ```
-pristine : V.VB  1112 bytes    V.VGR    1,565 bytes
-after    : V.VB     0 bytes    V.VGR 79,432,063 bytes
+declaration only                        is_compiled=true
+declaration AND a body write            is_compiled=true
+declaration AND a body that USES it     is_compiled=false  (STALLED, empty Errors pane)
+body write only                         is_compiled=true
 ```
 
-MotionWorks rejects a record it disagrees with by REWRITING the POU, with no diagnostic. So
-something beyond the text and the grid carries a declaration, and it has not been found.
+and in **every** case the POU was intact afterwards - the `.VB` stayed at 1134 bytes and the
+grid at 1565. So `mw_code_var_add` for a POU works, and declaring is harmless.
 
-**What to do instead:** add variables in the MotionWorks variable worksheet, then read them
-back with `mw_code_read_st` (which shows type, initial value and description) and use them
-in the body. The body is the part that matters for writing code, and `mw_code_write_st` is
-verified clean.
+**The one limitation is precise: a declaration that exists only in the text cannot be
+USED.** The compiler resolves variables through the `.VGR` grid, and a variable declared
+only in the `.VB` is not in it. Referring to it in the body makes the build **stall** -
+`is_compiled=false`, `is_modified=true`, and an **empty** Errors pane, so nothing warns you.
 
-`test/declaration_helper.py` runs the declaration path outside the shipped tool, so the
-refusal does not block the experiment that will decide whether it can be lifted. The
-decisive experiment is to have the IDE add one variable itself and diff the result - the
-same approach that resolved the import/export question.
-## Global variables ARE writable - with one harmless quirk
+To actually use a new variable, either:
 
-Add a global by calling `mw_code_var_add` **without** `pou`:
+- add it in the MotionWorks **variable worksheet**, then re-read with `mw_code_read_st`; or
+- `mw_code_export_pou { format: "export" }`, edit the declarations in that file, and
+  **import** it — the IDE writes the grid itself from the text.
 
-```
-mw_code_var_add { name: "MyTag", type: "BOOL", section: "VAR_GLOBAL", initial_value: "TRUE", dry_run: false }
-mw_code_globals            # read them back
-```
-
-A global is stored in two places — `Global_Variables.VB` (text) and
-`Global_Variables.VGR` (a binary grid with a header count). The write updates only the
-text, so `mw_code_globals` reports:
-
-```
-warnings: ['declaration count mismatch: .VB declares 162 variables but the .VGR grid
-            header records 161']
-```
-
-**That mismatch is expected and harmless.** Verified end to end: a `.VB`-only global add
-builds cleanly with 0 reference problems, and the grid count never catches up, and it does
-not matter — the compiler takes its declarations from the text.
-
-An earlier version of this plugin REFUSED global writes, on the belief that this mismatch
-was breaking the build. That was wrong. The 125 "No matching global variable found" errors
-seen in the same run came from the **task assignment**, not the global; see below.
+An earlier version of this plugin REFUSED POU declarations outright. That was wrong: the
+POU destruction seen at the time came from this plugin's own `.VGR` append, not from the
+declaration. Removing the append removed the damage.
 ## Two traps that make a green build lie
 
 Both were measured on a real project, not inferred.

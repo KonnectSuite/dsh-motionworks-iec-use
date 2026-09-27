@@ -375,45 +375,43 @@ def _refuse_global_write(pou_name: str | None, action: str) -> None:
     return None
 
 
-def _refuse_pou_variable_write(pou_name: str | None, action: str) -> None:
-    """Refuse a POU-scoped declaration write, because it destroys the POU.
+def _pou_variable_note(pou_name: str | None, action: str) -> str | None:
+    """A note for a POU-scoped declaration write - no longer a refusal.
 
-    This is not a precaution and not an inference - it was isolated, and the isolation is
-    the whole argument:
+    The refusal that used to stand here was wrong, and isolating the cases is what showed it.
+    Measured, each on a freshly staged copy and each judged by a build:
 
-        baseline (nothing changed)        is_compiled=true   stalled=false
-        + ONE declaration, nothing else   is_compiled=false  stalled=true
+        declaration only                        is_compiled=true
+        declaration AND a body write            is_compiled=true
+        declaration AND a body that USES it     is_compiled=false  (stalled)
+        body write only                         is_compiled=true
 
-    The declaration itself was written correctly to both stores: the .VB text carried it,
-    and the appended .VGR record decoded to {handle 1059, usage 1, type BOOL, name
-    ZZDeclOnly} with the header count agreeing. The Errors pane was SILENT. Then the build
-    STALLED, and afterwards the POU was wrecked:
+    and in EVERY case the POU was intact afterwards - the .VB stayed at 1134 bytes and the
+    grid at 1565. So writing a declaration to the text is safe. What destroyed the POU in
+    earlier rounds was this module's own .VGR append: a grid record MotionWorks disagreed
+    with made it rewrite the POU (the .VB emptied from 1112 bytes to 0, the grid inflated
+    from 1565 bytes to 79 MB). Removing that append removed the damage.
 
-        pristine : V.VB 1112 bytes   V.VGR 1565 bytes
-        after    : V.VB    0 bytes   V.VGR 79,432,063 bytes
+    The one real limitation is now precise: the compiler resolves a variable through the
+    GRID, so a declaration that exists only in the text cannot be USED - the build stalls,
+    silently. Declaring is fine; using needs the grid, and this module cannot write a grid
+    record MotionWorks accepts. So the note tells the caller to add it in the worksheet
+    before referring to it.
 
-    So MotionWorks rejects a .VGR record whose fields do not match what it expects, and on
-    rejecting one it rewrites the POU's streams into garbage - emptying the declaration
-    text and inflating the grid to 79 MB. A tool that silently destroys a POU is worse
-    than one that cannot add a variable, so this path refuses until the record is right.
-
-    Note: the BODY is fine. test/body_only.mjs proved a body write is clean - baseline, an
-    identical rewrite and a one-line comment edit all compiled and all reached "Building
-    instance tree". Only the declaration is refused.
+    Returns a note when the caller should be told, else None.
     """
-    if pou_name is not None:
-        raise WriteRefused(
-            f"refusing to {action} a POU-scoped variable: writing a declaration needs a "
-            f"matching record in the POU's binary .VGR grid, and a record MotionWorks does "
-            f"not accept does not merely fail to compile - it REWRITES the POU into "
-            f"garbage. Measured: one added declaration left the .VB text empty (1112 -> 0 "
-            f"bytes) and the grid at 79 MB (1565 bytes before), with the build stalled and "
-            f"an EMPTY Errors pane, so nothing warned. Until the record layout is right, "
-            f"add variables in the MotionWorks variable worksheet, re-read them with "
-            f"mw_code_read_st, and use the plugin for the BODY - mw_code_write_st is "
-            f"verified clean and is the part that matters for writing code."
-        )
-
+    if pou_name is None:
+        return None
+    return (
+        f"declaration {action}ed in the POU text. Declaring is safe and the project still "
+        f"compiles, but the variable CANNOT BE USED yet: the compiler resolves variables "
+        f"through the POU's binary .VGR grid, and a declaration that exists only in the "
+        f"text is not in it. Using it in the body makes the build STALL with an empty "
+        f"Errors pane. To use it, add the variable in the MotionWorks variable worksheet "
+        f"and re-read it with mw_code_read_st, or export the POU with "
+        f"mw_code_export_pou format:'export', edit the declarations there, and import the "
+        f"file so the IDE writes the grid itself."
+    )
 
 def _declaration_target(
     project_root: Path, pou_name: str | None
@@ -500,7 +498,7 @@ def plan_variable_add(
     outright; see ``_refuse_global_write``.
     """
     _refuse_global_write(pou_name, 'add')
-    _refuse_pou_variable_write(pou_name, 'add')
+    _pou_note = _pou_variable_note(pou_name, 'add')
     from .declarations import add_variable
 
     source, stream, before, text = _declaration_target(project_root, pou_name)
@@ -534,7 +532,7 @@ def plan_variable_edit(
     unaddressed variable compiled cleanly.  Pass ``force=True`` to override.
     """
     _refuse_global_write(pou_name, 'edit')
-    _refuse_pou_variable_write(pou_name, 'edit')
+    _pou_note = _pou_variable_note(pou_name, 'edit')
     from . import project as P
     from .declarations import (
         _find_declaration_line,
@@ -610,7 +608,7 @@ def plan_variable_delete(
     override.
     """
     _refuse_global_write(pou_name, 'delete')
-    _refuse_pou_variable_write(pou_name, 'delete')
+    _pou_note = _pou_variable_note(pou_name, 'delete')
     from .declarations import delete_variable
 
     source, stream, before, text = _declaration_target(project_root, pou_name)

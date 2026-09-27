@@ -1433,7 +1433,8 @@ function defineTools() {
       description:
         'GLOBAL variables work too: omit pou and the declaration goes into the resource Global_Variables.VB. The .VGR grid header is NOT updated by that write, so mw_code_globals will report a declaration-count mismatch - that is expected and harmless, verified: a .VB-only global add builds cleanly with 0 reference problems. Read globals back with mw_code_globals.'
         + 
-        'Add a variable declaration to a POU (or project-global when `pou` is omitted). '
+        'IMPORTANT: declaring is SAFE - measured, a POU declaration builds cleanly, with or without a body edit, and nothing is damaged. But the variable CANNOT BE USED yet: the compiler resolves variables through the POU binary .VGR grid, and a declaration living only in the text is not in it, so referring to it in the body makes the build STALL with an EMPTY Errors pane. To use it, add the variable in the MotionWorks variable worksheet, or export the POU with mw_code_export_pou format export and import the edited file so the IDE writes the grid itself. '
+            + 'Add a variable declaration to a POU (or project-global when `pou` is omitted). '
         + 'Touches only the textual declaration stream. **dry_run defaults to true.**',
       parameters: {
         type: 'object',

@@ -127,7 +127,28 @@ await kase('WRITE: create then delete a POU', async () => {
   return `deleted=${!!d.result} ${before} -> ${after}`;
 });
 
-// 8. export
+// 8. POU-scoped declaration, not used
+await kase('WRITE: add a POU-scoped declaration (unused)', async () => {
+  const w = await run('mw_code_var_add', {
+    pou: 'TopCutterCamSetup', name: 'MatrixDecl', type: 'BOOL', section: 'VAR', dry_run: false,
+  });
+  const r = await run('mw_code_read_st', { pou: 'TopCutterCamSetup' });
+  return `applied=${w.result?.applied} visible=${(r.variables ?? []).some((v) => v.name === 'MatrixDecl')}`;
+});
+
+// 9. POU-scoped declaration plus a body write
+await kase('WRITE: POU declaration + unrelated body edit', async () => {
+  await run('mw_code_var_add', {
+    pou: 'TopCutterCamSetup', name: 'MatrixDecl2', type: 'BOOL', section: 'VAR', dry_run: false,
+  });
+  const r = await run('mw_code_read_st', { pou: 'TopCutterCamSetup' });
+  const w = await run('mw_code_write_st', {
+    pou: 'TopCutterCamSetup', body: r.body.replace(/\s+$/, '') + `${NL}(* matrix decl+body *)${NL}`, dry_run: false,
+  });
+  return `decl+body applied=${w.result?.applied}`;
+});
+
+// 10. export, both formats
 await kase('READ: export a POU to a file', async () => {
   const e = await run('mw_code_export_pou', { pou: 'TopCutterCamSetup' });
   return `bytes=${e.bytes} lines=${e.lines} decls=${e.declarations}`;
