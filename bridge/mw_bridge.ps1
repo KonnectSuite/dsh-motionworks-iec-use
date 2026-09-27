@@ -98,6 +98,14 @@ public class MWW {
   [DllImport("user32.dll")] public static extern bool AttachThreadInput(uint a, uint b, bool f);
   [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr h, out uint p);
   [DllImport("kernel32.dll")] public static extern uint GetCurrentThreadId();
+
+  // Capture a window's OWN content into a DC, even when it is occluded.
+  // CopyFromScreen grabs a screen REGION, so a window stacked over the IDE is
+  // what you actually get in the PNG - which is how a screenshot of the IDE
+  // came back showing an unrelated window. PW_RENDERFULLCONTENT (0x2) asks the
+  // window to render itself instead.
+  [DllImport("user32.dll")] public static extern bool PrintWindow(IntPtr hwnd, IntPtr hdcBlt, uint nFlags);
+  [DllImport("user32.dll")] public static extern bool IsIconic(IntPtr h);
 }
 '@
 
@@ -648,18 +656,31 @@ public class KILLW {
                 if ($still) { $err = 'the IDE window is still present after 40s' }
             }
 
-            # Capture the IDE window from the desktop DC. PrintWindow is NOT used:
-            # measured on this app it returns 0 for both flag values and yields an
-            # all-black bitmap, whereas a screen-region copy works.
+            # Capture the IDE window's OWN content.
+            #
+            # CopyFromScreen copies a screen REGION, so whatever window happens to
+            # be stacked over the IDE is what lands in the PNG - a "screenshot of
+            # the IDE" that shows an unrelated application. PrintWindow asks the
+            # window to render itself into a DC and is occlusion-independent, so
+            # it is tried first; a blank bitmap (measured on some builds) falls
+            # back to a screen copy taken with the IDE foregrounded.
             'screenshot' {
                 $out = [string]$req.path
                 if ([string]::IsNullOrWhiteSpace($out)) { throw 'screenshot requires "path"' }
                 $ideW = Get-IdeWindow
                 if (-not $ideW) { throw 'no running MotionWorks IDE window to capture' }
+                $ideW = [IntPtr]$ideW
+
+                # A minimized or hidden window cannot be captured either way.
+                if ([MWW]::IsIconic($ideW)) { [void][MWW]::ShowWindow($ideW, 9) }   # SW_RESTORE
+                [void][MWW]::ShowWindow($ideW, 5)                                   # SW_SHOW
+                [void][MWW]::BringWindowToTop($ideW)
+                [void][MWW]::SetForegroundWindow($ideW)
+                Start-Sleep -Milliseconds 350
 
                 Add-Type -AssemblyName System.Drawing
                 $rc = New-Object MWW+RECT
-                if (-not [MWW]::GetWindowRect([IntPtr]$ideW, [ref]$rc)) { throw 'GetWindowRect failed' }
+                if (-not [MWW]::GetWindowRect($ideW, [ref]$rc)) { throw 'GetWindowRect failed' }
                 $w = $rc.Right - $rc.Left
                 $h = $rc.Bottom - $rc.Top
                 if ($w -le 0 -or $h -le 0) { throw "unusable window rect ${w}x${h}" }
@@ -667,12 +688,47 @@ public class KILLW {
                 $dir = Split-Path -Parent $out
                 if ($dir -and -not (Test-Path $dir)) { New-Item -ItemType Directory -Force -Path $dir | Out-Null }
 
+                # True when every sampled pixel has the same colour, i.e. the
+                # capture produced a flat image rather than the window.
+                function Test-Blank([System.Drawing.Bitmap]$b) {
+                    $first = $b.GetPixel(0, 0).ToArgb()
+                    for ($y = 1; $y -lt 6; $y++) {
+                        for ($x = 1; $x -lt 6; $x++) {
+                            $px = [int]($b.Width * $x / 6); $py = [int]($b.Height * $y / 6)
+                            if ($b.GetPixel($px, $py).ToArgb() -ne $first) { return $false }
+                        }
+                    }
+                    return $true
+                }
+
+                $method = $null
                 $bmp = New-Object System.Drawing.Bitmap $w, $h
-                $g = [System.Drawing.Graphics]::FromImage($bmp)
-                $g.CopyFromScreen($rc.Left, $rc.Top, 0, 0, (New-Object System.Drawing.Size $w, $h))
-                $g.Dispose()
+
+                foreach ($flags in @(2, 0)) {          # PW_RENDERFULLCONTENT, then plain
+                    if ($method) { break }
+                    $g = [System.Drawing.Graphics]::FromImage($bmp)
+                    $hdc = $g.GetHdc()
+                    $rendered = $false
+                    try { $rendered = [MWW]::PrintWindow($ideW, $hdc, [uint32]$flags) }
+                    finally { $g.ReleaseHdc($hdc); $g.Dispose() }
+                    if ($rendered -and -not (Test-Blank $bmp)) { $method = "printwindow($flags)" }
+                }
+
+                if (-not $method) {
+                    $g = [System.Drawing.Graphics]::FromImage($bmp)
+                    $g.CopyFromScreen($rc.Left, $rc.Top, 0, 0, (New-Object System.Drawing.Size $w, $h))
+                    $g.Dispose()
+                    $method = 'screen-region'
+                }
+
                 $bmp.Save($out, [System.Drawing.Imaging.ImageFormat]::Png)
                 $bmp.Dispose()
+
+                # Which route was taken is a diagnostic, so it goes to the log rather
+                # than the response: the registered output schema for this tool is an
+                # exact shape (additionalProperties: false) and a running DSH keeps
+                # the schema it loaded, so an extra field fails output validation.
+                Log "screenshot $out via $method (${w}x${h})"
 
                 $ok = $true
                 $data = [ordered]@{ path = $out; width = $w; height = $h }
