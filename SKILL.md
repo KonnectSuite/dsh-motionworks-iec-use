@@ -1,4 +1,4 @@
-﻿---
+---
 name: motionworks-iec-use
 description: Operate a running Yaskawa MotionWorks IEC 3 Pro IDE and edit its code â€” stage and open a project, read the live object model, read and rewrite POU Structured Text, add variable declarations, compile, and read the compiler's verdict and error text. Use when the user wants the agent to actually drive MotionWorks IEC rather than only inspect files. Never downloads to a controller and never commands motion.
 whenToUse: The user has MotionWorks IEC 3 Pro open or asks for work in it â€” a real build, a compile verdict, the live project model, reading or changing POU Structured Text, or reading the IDE's error list. For pure offline `.mwt` inspection without the IDE, the file-level tools alone are enough.
@@ -55,6 +55,41 @@ mw_ide_errors  -> 24 message(s)
 
 `mw_ide_compile_state` reports `is_compiled` / `is_modified` without building, which
 is the cheap check before deciding whether a build is needed at all.
+## The one that actually bites: assigning a CLONED POU
+
+Isolated by bisection on one project, changing one step at a time:
+
+```
+create + declare variables        -> is_compiled=true    clean
++ write the body                  -> is_compiled=true    clean
++ add a global variable           -> is_compiled=true    clean
++ ASSIGN it to a task             -> is_compiled=false   125 reference errors
+```
+
+`mw_code_pou_create` clones a template, and a clone inherits the template's
+**external variable records** — declarations that expect a matching VAR_GLOBAL. While
+the POU is unassigned nothing compiles it, so nothing notices. Assign it and the
+compiler evaluates those records:
+
+```
+No matching global variable found for 'TopCutterCamSetup:TopCutterCamTableID' in resource 'Resource'!
+... 125 of them
+```
+
+**This is the root of the whole chain.** The failing build then drops the `Start`
+task (see below), so the project ends up both uncompilable AND missing an assignment
+— which reads exactly like corruption caused by whatever was written last.
+
+What to do:
+
+1. After `mw_code_pou_assign`, **always** run `mw_ide_build` and then `mw_ide_errors`.
+   Never treat a successful assign as done.
+2. If the messages say `No matching global variable found for '<POU>:<name>'`, the
+   clone carried externals that do not resolve. `mw_code_pou_unassign` puts it back,
+   or declare the missing globals with `mw_code_var_add`.
+3. Prefer a template whose variables are plain locals. Check first with
+   `mw_code_read_st` — its `variables` list shows a `group` on any declaration that is
+   an external reference.
 ## Two traps that make a green build lie
 
 Both were measured on a real project, not inferred.

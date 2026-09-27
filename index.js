@@ -1332,7 +1332,7 @@ function defineTools() {
       description:
         'Delete a variable declaration. Refuses while any POU body still references it, because '
         + 'that leaves a dangling reference and a failed build â€” pass `force` to override. '
-        + '**dry_run defaults to true.**',
+        + '**dry_run defaults to true.** ALWAYS follow this with mw_ide_build and mw_ide_errors - a cloned POU inherits the external variable records of its template, and assigning it is what first makes the compiler check them. Measured: create, declare and add-a-global were all clean, and the ASSIGN alone turned a compiling project into 125 No-matching-global-variable errors.',
       parameters: {
         type: 'object',
         additionalProperties: false,
