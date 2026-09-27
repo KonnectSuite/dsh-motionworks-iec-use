@@ -283,6 +283,89 @@ def verb_pou_delete(req):
     return _ok(dry_run=False, result=_jsonable(result))
 
 
+def verb_tasks(req):
+    """List the tasks and which POU is assigned to each, plus the unassigned ones.
+
+    This matters more than it looks. A POU that exists but is assigned to no task
+    NEVER RUNS, and -- measured -- it is also not flagged by the build: a POU
+    containing an undeclared variable compiled cleanly while it was unassigned.
+    So an agent that creates a POU and stops there has produced code that does
+    nothing, and a green build will not tell it so.
+    """
+    from motionworks_iec_mcp.cfb import CompoundFile
+    from motionworks_iec_mcp.tree import load_tree, task_assignments
+
+    root = Path(req["project"])
+    roots = load_tree(root)[0]
+    assignments = task_assignments(roots)
+
+    # Which POUs exist at all, from the registry, so "unassigned" can be computed.
+    known = []
+    for line in (root / "LIST.POU").read_text(encoding="latin-1", errors="replace").splitlines():
+        parts = line.split("\t")
+        if len(parts) > 1 and parts[0].strip().upper() == "PROGRAM" and parts[1].strip():
+            known.append(parts[1].strip())
+    assigned = {p for programs in assignments.values() for p in programs}
+
+    return _ok(
+        project=str(root),
+        tasks={k: sorted(v) for k, v in sorted(assignments.items())},
+        task_count=len(assignments),
+        unassigned=sorted(set(known) - assigned),
+        unassigned_note=(
+            "These POUs exist but are assigned to no task: they never run, and a "
+            "clean build does NOT prove they compile. Assign one with 'assign'."
+        ),
+    )
+
+
+def verb_assign(req):
+    """Assign a POU to a task. dry_run defaults to True.
+
+    Without this, a created POU is inert: it is not called by anything, so it never
+    executes and the compiler does not check it.
+    """
+    from motionworks_iec_mcp.cfb import CompoundFile
+    from motionworks_iec_mcp.tree import parse_document
+    from motionworks_iec_mcp.tree_writer import apply_assignment, plan_assign
+
+    root = Path(req["project"])
+    src = root / "src.st1"
+    dry = bool(req.get("dry_run", True))
+    document = parse_document(
+        CompoundFile(src).read_stream("PROJECT.TRE").decode("latin1")
+    )
+    kwargs = {}
+    if req.get("cycle"):
+        kwargs["cycle"] = str(req["cycle"])
+    if req.get("controller"):
+        kwargs["controller"] = str(req["controller"])
+    plan = plan_assign(document, str(req["task"]), str(req["pou"]), **kwargs)
+    if dry:
+        return _ok(dry_run=True, plan=_plan_summary(plan), summary=plan.summary())
+    result = apply_assignment(src, root, plan, backup_dir=_backup_dir(req, root))
+    return _ok(dry_run=False, result=_jsonable(result))
+
+
+def verb_unassign(req):
+    """Remove a POU's assignment from a task. dry_run defaults to True."""
+    from motionworks_iec_mcp.cfb import CompoundFile
+    from motionworks_iec_mcp.tree import parse_document
+    from motionworks_iec_mcp.tree_writer import apply_assignment, plan_unassign
+
+    root = Path(req["project"])
+    src = root / "src.st1"
+    dry = bool(req.get("dry_run", True))
+    document = parse_document(
+        CompoundFile(src).read_stream("PROJECT.TRE").decode("latin1")
+    )
+    plan = plan_unassign(document, str(req["task"]), str(req["pou"]))
+    if dry:
+        return _ok(dry_run=True, plan=_plan_summary(plan), summary=plan.summary())
+    result = apply_assignment(src, root, plan, backup_dir=_backup_dir(req, root))
+    return _ok(dry_run=False, result=_jsonable(result))
+
+
 def verb_ide_closed(req):
     """Report whether the IDE gate would let a write through."""
     from motionworks_iec_mcp import ide as I
@@ -309,6 +392,9 @@ VERBS = {
     "var_delete": verb_var_delete,
     "pou_create": verb_pou_create,
     "pou_delete": verb_pou_delete,
+    "tasks": verb_tasks,
+    "assign": verb_assign,
+    "unassign": verb_unassign,
     "ide_closed": verb_ide_closed,
 }
 

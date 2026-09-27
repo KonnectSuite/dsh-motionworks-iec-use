@@ -1290,6 +1290,102 @@ function defineTools() {
     },
 
     {
+      name: 'mw_code_tasks',
+      description:
+        'List the project\'s tasks and which POU is assigned to each, plus the POUs that are '
+        + 'assigned to NOTHING. **Call this before claiming a new POU works.** A POU that exists '
+        + 'but is assigned to no task never runs, and — measured — the build does not catch it '
+        + 'either: a POU containing an undeclared variable compiled cleanly while it was '
+        + 'unassigned. So a clean build is not evidence that an unassigned POU is correct. '
+        + 'Assign it with mw_code_pou_assign.',
+      parameters: {
+        type: 'object',
+        additionalProperties: false,
+        properties: {
+          project: { type: 'string', description: 'Project directory; defaults to the staged project.' },
+        },
+      },
+      output: {
+        schema: {
+          type: 'object',
+          additionalProperties: false,
+          required: ['tasks', 'task_count', 'unassigned'],
+          properties: {
+            project: { type: 'string' },
+            task_count: { type: 'integer' },
+            // task name -> list of assigned POU names
+            tasks: { type: 'object', additionalProperties: true },
+            unassigned: { type: 'array', items: { type: 'string' } },
+            unassigned_note: { type: 'string' },
+          },
+        },
+        render: (_a, v) => {
+          const lines = [`${v.task_count} task(s):`];
+          for (const [task, programs] of Object.entries(v.tasks ?? {})) {
+            lines.push(`  ${task}: ${programs.join(', ') || '(nothing assigned)'}`);
+          }
+          if ((v.unassigned ?? []).length) {
+            lines.push(`NOT ASSIGNED (never run, not compile-checked): ${v.unassigned.join(', ')}`);
+          }
+          return text(lines.join('\n'));
+        },
+      },
+      presentCall: () => ({ card: 'generic', title: 'List tasks and assignments', kind: 'read' }),
+      execute: (args) => runCode('tasks', { project: projectOf(args) }),
+    },
+
+    {
+      name: 'mw_code_pou_assign',
+      description:
+        'Assign a POU to a task so it actually RUNS and is compile-checked. A POU created by '
+        + 'mw_code_pou_create is not assigned to anything, so without this it is inert: nothing '
+        + 'calls it and a clean build says nothing about whether it is correct. Task names come '
+        + 'from mw_code_tasks (for example Start, FastTsk, MedTsk, SlowTsk, BG). '
+        + '**dry_run defaults to true.**',
+      parameters: {
+        type: 'object',
+        additionalProperties: false,
+        required: ['task', 'pou'],
+        properties: {
+          task: { type: 'string', description: 'Task to assign to, e.g. "SlowTsk".' },
+          pou: { type: 'string', description: 'POU to assign.' },
+          cycle: { type: 'string', description: 'Task cycle; defaults to the task\'s own style (CYCLIC).' },
+          controller: { type: 'string', description: 'Controller name; defaults to MP2600iec.' },
+          project: { type: 'string' },
+          dry_run: { type: 'boolean', description: 'Defaults to true.' },
+        },
+      },
+      output: { schema: WRITE_SCHEMA, render: renderWrite },
+      presentCall: (a) => ({ card: 'generic', title: `Assign ${a.pou} to ${a.task}`, kind: 'edit' }),
+      execute: (args) => runCode('assign', {
+        ...(args ?? {}), project: projectOf(args), dry_run: args?.dry_run !== false,
+      }),
+    },
+
+    {
+      name: 'mw_code_pou_unassign',
+      description:
+        'Remove a POU\'s task assignment, so it stops being called. The POU itself stays in the '
+        + 'project. **dry_run defaults to true.**',
+      parameters: {
+        type: 'object',
+        additionalProperties: false,
+        required: ['task', 'pou'],
+        properties: {
+          task: { type: 'string', description: 'Task the POU is currently assigned to.' },
+          pou: { type: 'string' },
+          project: { type: 'string' },
+          dry_run: { type: 'boolean', description: 'Defaults to true.' },
+        },
+      },
+      output: { schema: WRITE_SCHEMA, render: renderWrite },
+      presentCall: (a) => ({ card: 'generic', title: `Unassign ${a.pou}`, kind: 'delete' }),
+      execute: (args) => runCode('unassign', {
+        ...(args ?? {}), project: projectOf(args), dry_run: args?.dry_run !== false,
+      }),
+    },
+
+    {
       name: 'mw_code_unsupported',
       description:
         'Name the POUs whose bodies cannot be edited safely — graphical LD/FBD (proprietary '

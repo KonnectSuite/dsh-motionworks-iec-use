@@ -1166,6 +1166,33 @@ public class KILLW {
         if ($verb -in @('make', 'build', 'patch', 'worksheet', 'datatypes')) {
             $app = Connect-App
             if (-not $app.IsProjectOpen()) { throw 'no project is open in the IDE' }
+
+            # Snapshot the project container BEFORE compiling.
+            #
+            # A FAILING build damages the project. Measured under control on a pristine
+            # copy: a successful build left all five tasks alone, while a build that
+            # returned is_compiled=false dropped the `Start` task and its
+            # TopCutterInitialize assignment out of PROJECT.TRE - with the same check
+            # taken immediately before the build showing them present. So the IDE
+            # rewrites the tree when a compile fails and loses assignments with it.
+            #
+            # That is almost certainly what "the first attempt corrupted the project"
+            # turned out to be: not a code write, but a build that failed. Capturing
+            # the container here means the damage can be detected and undone instead of
+            # discovered later by a surprised user.
+            $projDir = $null; $treeBefore = $null; $filesBefore = @{}
+            try {
+                $mwt = [string]$app.ActiveProject.FullName
+                if ($mwt -and (Test-Path $mwt)) {
+                    $cand = Join-Path ([IO.Path]::GetDirectoryName($mwt)) ([IO.Path]::GetFileNameWithoutExtension($mwt))
+                    $srcFile = Join-Path $cand 'src.st1'
+                    if (Test-Path $srcFile) {
+                        $projDir = $cand
+                        $treeBefore = [IO.File]::ReadAllBytes($srcFile)
+                    }
+                }
+            } catch { Log "could not snapshot the tree before compiling: $($_.Exception.Message)" }
+
             $sw = [Diagnostics.Stopwatch]::StartNew()
             $accepted = $false; $lastErr = $null
             # A compile is refused while the compiler is busy ("Operation not
@@ -1204,6 +1231,35 @@ public class KILLW {
             #   accepted=true, is_compiled=false -> compiled and FAILED
             #   accepted=true, is_compiled=true  -> compiled cleanly
             $settled = $true
+
+            # Undo the damage a failed build does to the project tree.
+            #
+            # The IDE rewrites the container when a compile fails and drops task
+            # assignments while doing it. Restoring the pre-build bytes puts the project
+            # back exactly as the agent left it, so a failed build costs the agent a
+            # verdict and nothing else. Only ever applied to the STAGED copy, and only
+            # after a failed build, so a successful build is never second-guessed.
+            $treeRepaired = $false
+            if (-not $isCompiled -and $projDir -and $treeBefore) {
+                try {
+                    $srcFile = Join-Path $projDir 'src.st1'
+                    if (Test-Path $srcFile) {
+                        $now = [IO.File]::ReadAllBytes($srcFile)
+                        $same = ($now.Length -eq $treeBefore.Length)
+                        if ($same) {
+                            for ($i = 0; $i -lt $now.Length; $i++) {
+                                if ($now[$i] -ne $treeBefore[$i]) { $same = $false; break }
+                            }
+                        }
+                        if (-not $same) {
+                            [IO.File]::WriteAllBytes($srcFile, $treeBefore)
+                            $treeRepaired = $true
+                            Log "failed build rewrote PROJECT.TRE; restored the pre-build container"
+                        }
+                    }
+                } catch { Log "tree repair after a failed build failed: $($_.Exception.Message)" }
+            }
+
             $ok = $true
             $data = [ordered]@{
                 mode          = $verb

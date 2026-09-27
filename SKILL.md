@@ -35,6 +35,56 @@ an **activation** form (`Activate Online` / `Activate by Phone` / `Retry`, no
 `Use Trial`), no trial remains and no automation can proceed — that is licensing,
 not a defect.
 
+## Two traps that make a green build lie
+
+Both were measured on a real project, not inferred.
+
+### 1. An unassigned POU is never compiled
+
+`mw_code_pou_create` leaves the new POU assigned to **no task**. Such a POU never
+runs, and — measured — the build does not check it either. A POU containing
+`UndefinedThingXYZ := UndefinedThingXYZ + 1;` reported **`is_compiled=true`** while
+unassigned, and **`is_compiled=false`** the moment it was assigned to a task.
+
+So after creating a POU:
+
+```
+mw_code_pou_create { name: "Helper", template: "Main", dry_run: false }
+mw_code_pou_assign { task: "SlowTsk", pou: "Helper", dry_run: false }   # or it is inert
+mw_code_tasks                                                          # confirm
+```
+
+`mw_code_tasks` lists every task, what each one calls, and which POUs are assigned
+to nothing. **Check that `unassigned` is empty before believing a clean build.**
+
+### 2. Opening a project that contains a broken POU DROPS a task
+
+Measured under control on a pristine copy:
+
+```
+after create + assign (before open) : 5 tasks  — SlowTsk(2) Start(1)
+after OPEN, before any build        : 4 tasks  — Start GONE
+```
+
+`Start` and its `TopCutterInitialize` assignment disappeared from `PROJECT.TRE`,
+`NODES.LST` **and** the resource `NODES.LST`. The raw tree shows why it is invisible:
+one line is deleted, so the node header reads `13 0 0 0` (level 0) instead of
+`13 5 1 0` (level 5), and the task simply ceases to exist as a task.
+
+**This is almost certainly what "the first attempt corrupted the project" was** — not
+a code write, but the IDE's own handling of a project holding a POU that does not
+compile.
+
+What to do about it:
+
+- **Write code that compiles before you reopen.** The linter catches undeclared
+  names for you; `mw_code_write_st` refuses such a body unless you pass
+  `run_lint: false`. Do not override it casually.
+- **After opening any project you know holds broken code, run `mw_code_tasks`** and
+  compare with what you expect. A missing task is this bug, not your edit.
+- The deleted assignment is recoverable: the plugin backs up before every write, and
+  `mw_code_pou_assign` can put the task back.
+
 ## NEVER conclude "the IDE closed" without checking
 
 This is the single easiest way to get lost here. An `mw_ide_*` call fails, or
