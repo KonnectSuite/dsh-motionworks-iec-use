@@ -163,7 +163,38 @@ await kase('WRITE: POU declaration that the body USES', async () => {
   return `declared=${add.result?.applied} used=${w.result?.applied}`;
 });
 
-// 11. export, both formats
+// 11. rename a POU-scoped declaration, then USE the new name
+await kase('WRITE: RENAME a POU declaration and use it', async () => {
+  await run('mw_code_var_add', {
+    pou: 'TopCutterCamSetup', name: 'MatrixRen', type: 'BOOL',
+    section: 'VAR', initial_value: 'FALSE', dry_run: false,
+  });
+  const e = await run('mw_code_var_edit', {
+    pou: 'TopCutterCamSetup', name: 'MatrixRen', new_name: 'MatrixRen2', dry_run: false,
+  });
+  const r = await run('mw_code_read_st', { pou: 'TopCutterCamSetup' });
+  const w = await run('mw_code_write_st', {
+    pou: 'TopCutterCamSetup',
+    body: r.body.replace(/\s+$/, '') + `${NL}(* uses the renamed variable *)${NL}MatrixRen2 := NOT MatrixRen2;${NL}`,
+    dry_run: false,
+  });
+  return `renamed=${e.result?.applied} used=${w.result?.applied}`;
+});
+
+// 12. delete a POU-scoped declaration
+await kase('WRITE: DELETE a POU declaration', async () => {
+  await run('mw_code_var_add', {
+    pou: 'TopCutterCamSetup', name: 'MatrixDel', type: 'BOOL',
+    section: 'VAR', initial_value: 'FALSE', dry_run: false,
+  });
+  const d = await run('mw_code_var_delete', {
+    pou: 'TopCutterCamSetup', name: 'MatrixDel', dry_run: false,
+  });
+  const r = await run('mw_code_read_st', { pou: 'TopCutterCamSetup' });
+  return `deleted=${d.result?.applied} gone=${!(r.variables ?? []).some((v) => v.name === 'MatrixDel')}`;
+});
+
+// 13. export, both formats
 await kase('READ: export a POU to a file', async () => {
   const e = await run('mw_code_export_pou', { pou: 'TopCutterCamSetup' });
   return `bytes=${e.bytes} lines=${e.lines} decls=${e.declarations}`;

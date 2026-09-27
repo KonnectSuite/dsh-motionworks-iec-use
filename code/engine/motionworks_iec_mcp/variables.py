@@ -532,6 +532,224 @@ def append_grid_variable(
     return bytes(out), new_handle
 
 
+def update_grid_variable(
+    grid: bytes,
+    old_name: str,
+    new_name: str | None = None,
+    type_name: str | None = None,
+    initial_value: str | None = None,
+) -> tuple[bytes, dict]:
+    """Rewrite one record's name, type or initial value IN PLACE. Returns (grid, info).
+
+    A rename has to reach the grid as well as the text, and that is not cosmetic: the compiler
+    resolves a variable through the grid, so renaming in the .VB alone leaves the old name in
+    the grid and the new one unresolvable. The build then STALLS - is_compiled=false,
+    is_modified=true, an EMPTY Errors pane - which is the same failure that made variable
+    addition look impossible for a dozen rounds.
+
+    The record's LENGTH changes when the name or type changes, so the bytes after it shift; the
+    row, handle and usage are preserved, and the records that follow are re-emitted unchanged.
+    Because the record keeps its position in the row order, nothing else has to move.
+    """
+    records = parse_grid_records(grid)
+    if not records:
+        raise UnsupportedFormat("no variable records found in the grid; refusing to guess")
+
+    target = None
+    for index, record in enumerate(records):
+        decoded = read_grid_record(grid, record["offset"])
+        if decoded["name"].upper() == old_name.upper():
+            target = (index, record, decoded)
+            break
+    if target is None:
+        raise NotFound(
+            f"{old_name!r} has no record in the grid, so a rename would leave the text and the "
+            f"grid disagreeing. Refusing rather than writing a half change."
+        )
+
+    index, record, decoded = target
+    keep_name = new_name if new_name is not None else decoded["name"]
+    keep_type = type_name if type_name is not None else decoded["type"]
+    keep_init = initial_value if initial_value is not None else decoded["initial_value"]
+
+    def _string(text: str) -> bytes:
+        return struct.pack("<I", (len(text) + 1) * 2) + text.encode("utf-16-le") + b"\x00\x00"
+
+    start = record["offset"]
+    end = start + _record_extent(grid, records, index)
+    trailing = bytes(grid[decoded["after_name"]:end])
+    # The record dict carries only handle/offset/row/usage; the other three - group, flags and
+    # the trailing flags word - are read straight from the six uint32 that open the record, so
+    # a field this module does not model cannot be silently zeroed by a rewrite.
+    fields = struct.unpack_from("<6I", grid, start)
+    replacement = struct.pack("<6I", fields[0], fields[1], fields[2], fields[3], fields[4], fields[5])
+    replacement += _string(keep_type) + _string("") + _string(keep_init) + _string(keep_name)
+    replacement += trailing
+
+    out = bytearray(grid[:start]) + bytearray(replacement) + bytearray(grid[end:])
+    return bytes(out), {
+        "handle": record["handle"],
+        "row": record["row"],
+        "from": decoded["name"],
+        "to": keep_name,
+        "type": keep_type,
+        "initial_value": keep_init,
+        "old_bytes": end - start,
+        "new_bytes": len(replacement),
+    }
+
+
+def remove_grid_variable(grid: bytes, name: str) -> tuple[bytes, dict]:
+    """Delete one record from the grid. Returns (grid, info).
+
+    The mirror of append: a variable deleted from the .VB must lose its grid record too, or the
+    grid carries a name with no declaration behind it. The header count and last-handle are left
+    alone - the count drops by one and the handle was already spent, which is what the IDE's own
+    grids show.
+    """
+    records = parse_grid_records(grid)
+    if not records:
+        raise UnsupportedFormat("no variable records found in the grid; refusing to guess")
+
+    target = None
+    for index, record in enumerate(records):
+        decoded = read_grid_record(grid, record["offset"])
+        if decoded["name"].upper() == name.upper():
+            target = (index, record, decoded)
+            break
+    if target is None:
+        raise NotFound(f"{name!r} has no record in the grid; nothing to remove")
+
+    index, record, decoded = target
+    if len(records) == 1:
+        raise UnsupportedFormat(
+            "refusing to remove the only record in the grid; a POU with an empty grid is not a "
+            "state this plugin has ever seen and is not worth guessing at"
+        )
+
+    start = record["offset"]
+    end = start + _record_extent(grid, records, index)
+    out = bytearray(grid[:start]) + bytearray(grid[end:])
+    struct.pack_into("<I", out, 8, len(records) - 1)
+    return bytes(out), {
+        "handle": record["handle"],
+        "row": record["row"],
+        "name": decoded["name"],
+        "removed_bytes": end - start,
+        "records_before": len(records),
+        "records_after": len(records) - 1,
+    }
+
+
+def update_grid_variable(
+    grid: bytes,
+    old_name: str,
+    new_name: str | None = None,
+    type_name: str | None = None,
+    initial_value: str | None = None,
+) -> tuple[bytes, dict]:
+    """Rewrite one record's name, type or initial value IN PLACE. Returns (grid, info).
+
+    A rename has to reach the grid as well as the text, and that is not cosmetic: the compiler
+    resolves a variable through the grid, so renaming in the .VB alone leaves the old name in
+    the grid and the new one unresolvable. The build then STALLS - is_compiled=false,
+    is_modified=true, an EMPTY Errors pane - which is the same failure that made variable
+    addition look impossible for a dozen rounds.
+
+    The record's LENGTH changes when the name or type changes, so the bytes after it shift; the
+    row, handle and usage are preserved, and the records that follow are re-emitted unchanged.
+    Because the record keeps its position in the row order, nothing else has to move.
+    """
+    records = parse_grid_records(grid)
+    if not records:
+        raise UnsupportedFormat("no variable records found in the grid; refusing to guess")
+
+    target = None
+    for index, record in enumerate(records):
+        decoded = read_grid_record(grid, record["offset"])
+        if decoded["name"].upper() == old_name.upper():
+            target = (index, record, decoded)
+            break
+    if target is None:
+        raise NotFound(
+            f"{old_name!r} has no record in the grid, so a rename would leave the text and the "
+            f"grid disagreeing. Refusing rather than writing a half change."
+        )
+
+    index, record, decoded = target
+    keep_name = new_name if new_name is not None else decoded["name"]
+    keep_type = type_name if type_name is not None else decoded["type"]
+    keep_init = initial_value if initial_value is not None else decoded["initial_value"]
+
+    def _string(text: str) -> bytes:
+        return struct.pack("<I", (len(text) + 1) * 2) + text.encode("utf-16-le") + b"\x00\x00"
+
+    start = record["offset"]
+    end = start + _record_extent(grid, records, index)
+    trailing = bytes(grid[decoded["after_name"]:end])
+    # The record dict carries only handle/offset/row/usage; the other three - group, flags and
+    # the trailing flags word - are read straight from the six uint32 that open the record, so
+    # a field this module does not model cannot be silently zeroed by a rewrite.
+    fields = struct.unpack_from("<6I", grid, start)
+    replacement = struct.pack("<6I", fields[0], fields[1], fields[2], fields[3], fields[4], fields[5])
+    replacement += _string(keep_type) + _string("") + _string(keep_init) + _string(keep_name)
+    replacement += trailing
+
+    out = bytearray(grid[:start]) + bytearray(replacement) + bytearray(grid[end:])
+    return bytes(out), {
+        "handle": record["handle"],
+        "row": record["row"],
+        "from": decoded["name"],
+        "to": keep_name,
+        "type": keep_type,
+        "initial_value": keep_init,
+        "old_bytes": end - start,
+        "new_bytes": len(replacement),
+    }
+
+
+def remove_grid_variable(grid: bytes, name: str) -> tuple[bytes, dict]:
+    """Delete one record from the grid. Returns (grid, info).
+
+    The mirror of append: a variable deleted from the .VB must lose its grid record too, or the
+    grid carries a name with no declaration behind it. The header count and last-handle are left
+    alone - the count drops by one and the handle was already spent, which is what the IDE's own
+    grids show.
+    """
+    records = parse_grid_records(grid)
+    if not records:
+        raise UnsupportedFormat("no variable records found in the grid; refusing to guess")
+
+    target = None
+    for index, record in enumerate(records):
+        decoded = read_grid_record(grid, record["offset"])
+        if decoded["name"].upper() == name.upper():
+            target = (index, record, decoded)
+            break
+    if target is None:
+        raise NotFound(f"{name!r} has no record in the grid; nothing to remove")
+
+    index, record, decoded = target
+    if len(records) == 1:
+        raise UnsupportedFormat(
+            "refusing to remove the only record in the grid; a POU with an empty grid is not a "
+            "state this plugin has ever seen and is not worth guessing at"
+        )
+
+    start = record["offset"]
+    end = start + _record_extent(grid, records, index)
+    out = bytearray(grid[:start]) + bytearray(grid[end:])
+    struct.pack_into("<I", out, 8, len(records) - 1)
+    return bytes(out), {
+        "handle": record["handle"],
+        "row": record["row"],
+        "name": decoded["name"],
+        "removed_bytes": end - start,
+        "records_before": len(records),
+        "records_after": len(records) - 1,
+    }
+
+
 def read_grid_variable_count(grid: bytes) -> int | None:
     """Return the variable count recorded in a ``.VGR`` binary grid header.
 

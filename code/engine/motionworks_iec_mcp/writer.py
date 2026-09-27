@@ -40,7 +40,7 @@ from datetime import datetime
 from pathlib import Path
 
 from .cfb import CfbError, CompoundFile
-from .errors import MotionWorksError
+from .errors import MotionWorksError, NotFound, UnsupportedFormat
 from .variables import DeclarationTable, Variable, parse_declarations
 
 #: Marker text MotionWorks writes before each declaration block, e.g.
@@ -513,7 +513,7 @@ def plan_variable_add(
     outright; see ``_refuse_global_write``.
     """
     _refuse_global_write(pou_name, 'add')
-    _pou_note = _pou_variable_note(pou_name, 'add')
+    _pou_note = None  # add writes both stores, so there is nothing to warn about
     from .declarations import add_variable
 
     source, stream, before, text = _declaration_target(project_root, pou_name)
@@ -633,9 +633,39 @@ def plan_variable_edit(
                 f"FORCED rename while referenced by: {', '.join(referencing)}"
             )
 
+    # A rename has to reach the GRID as well as the text, and that is not cosmetic: the
+    # compiler resolves a variable through the grid, so renaming only in the .VB leaves the
+    # old name in the grid and the new one unresolvable, and the build STALLS with an empty
+    # Errors pane rather than reporting anything. A type or initial-value change is carried
+    # there too, because the grid holds those as well. Measured: renaming without this
+    # updated the text correctly and the build still stalled.
+    extra: dict[str, bytes] = {}
+    if pou_name and (new_name is not None or type_name is not None or initial_value is not None):
+        from . import variables as V
+
+        names = CompoundFile(source).stream_names()
+        grid_stream = next((n for n in names if n.upper().endswith("V.VGR")), None)
+        if grid_stream is not None:
+            grid = CompoundFile(source).read_stream(grid_stream)
+            try:
+                new_grid, info = V.update_grid_variable(
+                    grid, name, new_name=new_name, type_name=type_name,
+                    initial_value=initial_value,
+                )
+            except (UnsupportedFormat, NotFound) as exc:
+                raise WriteRefused(
+                    f"the declaration text could be changed but its grid record could not, "
+                    f"so the build would stall with no error shown: {exc}"
+                ) from exc
+            extra[grid_stream] = new_grid
+            notes_extra = list(notes_extra) + [
+                f"grid record handle={info['handle']} row={info['row']} "
+                f"{info['from']!r} -> {info['to']!r}"
+            ]
+
     return WritePlan(
         target=source, stream=stream, before=before,
-        after=updated.encode("latin1"), notes=notes + notes_extra,
+        after=updated.encode("latin1"), notes=notes + notes_extra, extra_streams=extra,
     )
 
 
@@ -673,9 +703,32 @@ def plan_variable_delete(
         notes.append(f"FORCED delete while referenced by: {', '.join(referencing)}")
 
     updated, transform_notes = delete_variable(text, name)
+    # The grid record goes with the text. Leaving it behind gives the grid a name with no
+    # declaration behind it, which is the mirror of the rename problem.
+    extra: dict[str, bytes] = {}
+    if pou_name:
+        from . import variables as V
+
+        names = CompoundFile(source).stream_names()
+        grid_stream = next((n for n in names if n.upper().endswith("V.VGR")), None)
+        if grid_stream is not None:
+            grid = CompoundFile(source).read_stream(grid_stream)
+            try:
+                new_grid, info = V.remove_grid_variable(grid, name)
+            except (UnsupportedFormat, NotFound) as exc:
+                raise WriteRefused(
+                    f"the declaration could be removed but its grid record could not, so "
+                    f"the grid would keep a name with nothing behind it: {exc}"
+                ) from exc
+            extra[grid_stream] = new_grid
+            notes = notes + [
+                f"grid record handle={info['handle']} row={info['row']} removed "
+                f"({info['records_before']} -> {info['records_after']} records)"
+            ]
+
     return WritePlan(
         target=source, stream=stream, before=before,
-        after=updated.encode("latin1"), notes=notes + transform_notes,
+        after=updated.encode("latin1"), notes=notes + transform_notes, extra_streams=extra,
     )
 
 
