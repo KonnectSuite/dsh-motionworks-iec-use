@@ -468,35 +468,34 @@ def append_grid_variable(grid: bytes, name: str, type_name: str) -> tuple[bytes,
                 return False
         return True
 
-    # Prefer a LOCAL record of the same type that decodes cleanly; fall back to any
-    # clean local record, since the type string is rewritten either way.
-    donor = None
+    # Choose the donor by SHAPE, not by usage or type:
+    #
+    #   * usage is rewritten to 1 regardless, so restricting to local records only threw
+    #     away the clean ones. In the grid this was measured on, the plain BOOL records
+    #     are marked external - and requiring usage == 1 left only the init-value BOOLs,
+    #     whose three-string shape decodes wrongly.
+    #   * the type is rewritten too, so a different type is fine.
+    #   * the SMALLEST matching record wins, because a big trailing run means structure
+    #     (a struct's sub-fields), and cloning that for a scalar drags it along. The
+    #     CamSegmentStruct record is 180 bytes against a BOOL's 106 for exactly that
+    #     reason.
+    candidates: list[tuple[int, int, dict]] = []
     for index in range(len(records)):
-        if records[index]["usage"] != 1:
-            continue
         try:
             info = decoded(index)
         except Exception:                                   # noqa: BLE001
             continue
         if not clean(info):
             continue
-        if info["type"].upper() == wanted:
-            donor = index
-            break
-    if donor is None:
-        for index in range(len(records)):
-            if records[index]["usage"] != 1:
-                continue
-            try:
-                if clean(decoded(index)):
-                    donor = index
-                    break
-            except Exception:                               # noqa: BLE001
-                continue
-    if donor is None:
+        candidates.append((index, _record_extent(grid, records, index), info))
+    if not candidates:
         raise PouPlanError(
             "no variable record with a plain type/name pair to clone in the grid"
         )
+
+    same_type = [c for c in candidates if c[2]["type"].upper() == wanted]
+    pool = same_type or candidates
+    donor = min(pool, key=lambda c: c[1])[0]
 
     info = decoded(donor)
     start = records[donor]["offset"]
@@ -525,7 +524,13 @@ def append_grid_variable(grid: bytes, name: str, type_name: str) -> tuple[bytes,
         + bytes(chunk[info["after_name"] - start :])
     )
 
-    insert_at = start + extent if records else len(grid)
+    # The donor supplies the SHAPE; it does not decide where the record goes. Appending
+    # at the donor's end splices into the middle of the grid whenever the donor is not
+    # the last record, displacing everything after it - which is why choosing a small
+    # donor made the result worse rather than better. A new record always goes after the
+    # LAST record, just before the grid's trailer.
+    last = records[-1]
+    insert_at = last["offset"] + _record_extent(grid, records, len(records) - 1)
     out = bytearray(grid[:insert_at]) + rebuilt + bytearray(grid[insert_at:])
     struct.pack_into("<I", out, 4, new_handle)
     struct.pack_into("<I", out, 8, struct.unpack_from("<I", grid, 8)[0] + 1)
