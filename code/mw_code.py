@@ -106,19 +106,23 @@ def verb_read_st(req):
 
     variables = []
     try:
+        # DeclarationTable exposes `.variables` (a flat list of Variable), plus
+        # `warnings` and `source_stream`. It has NO `.blocks` — iterating that
+        # silently produced an empty list, so callers could read a POU's body but
+        # never its declarations.
         table = info.declarations()
-        for block in getattr(table, "blocks", []) or []:
-            for decl in getattr(block, "declarations", []) or []:
-                variables.append({
-                    "name": getattr(decl, "name", None),
-                    "type": getattr(decl, "type_name", None),
-                    "section": getattr(block, "kind", None),
-                    "initial_value": getattr(decl, "initial_value", None),
-                    "address": getattr(decl, "address", None),
-                    "description": getattr(decl, "description", None),
-                })
+        for v in getattr(table, "variables", []) or []:
+            variables.append({
+                "name": getattr(v, "name", None),
+                "type": getattr(v, "type_name", None),
+                "section": getattr(v, "section", None),
+                "group": getattr(v, "group", None),
+                "address": getattr(v, "address", None),
+                "initial_value": getattr(v, "initial_value", None),
+                "description": getattr(v, "description", None),
+            })
     except Exception as exc:
-        variables = [{"error": str(exc)}]
+        variables = [{"error": f"{type(exc).__name__}: {exc}"}]
 
     return _ok(
         pou=req["pou"],
