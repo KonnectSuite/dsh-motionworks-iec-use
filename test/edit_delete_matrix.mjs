@@ -71,6 +71,20 @@ async function arm(kind, created, n) {
       await run('mw_ide_open', { path: MWT });
       await run('mw_ide_close');
     }
+    // CLEAR THE BODY FIRST. The template's body references xGenerate, and var_edit/var_delete
+    // correctly refuse while a reference exists - which is what the first version of this test
+    // measured instead of the thing it was written for. Every arm came back "WriteRefused:
+    // 'xGenerate' is still referenced", and the summary mislabelled those refusals as stalls.
+    await run('mw_ide_close');
+    await run('mw_code_write_st', {
+      pou,
+      body: '(* cleared so the declaration below is unreferenced *)\nxSelect := NOT xSelect;\n',
+      dry_run: false,
+    });
+    await run('mw_ide_start');
+    await run('mw_ide_open', { path: MWT });
+    await run('mw_ide_close');
+
     let mutated;
     if (kind === 'edit') {
       const e = await run('mw_code_var_edit', {
@@ -110,7 +124,8 @@ for (const [label, kind, created] of ARMS) {
     outcomes.push(r.verdict);
   }
   const clean = outcomes.filter((o) => o === 'CLEAN').length;
-  summary.push({ label, mutated, clean, outcomes });
+  const refused = outcomes.filter((o) => o.startsWith('ERROR')).length;
+  summary.push({ label, mutated, clean, refused, outcomes });
   console.log(`  ${label.padEnd(28)} ${mutated.padEnd(12)} ${clean} clean / ${RUNS - clean} not`
     + `   [${outcomes.join(' ')}]`);
 }
@@ -119,12 +134,32 @@ await run('mw_ide_close').catch(() => {});
 
 console.log(`\n${'═'.repeat(92)}`);
 for (const s of summary) {
-  const verdict = s.clean === RUNS ? 'safe' : (s.clean === 0 ? 'ALWAYS STALLS' : 'MIXED');
-  console.log(`  ${verdict.padEnd(14)} ${s.label}`);
+  const verdict = s.refused === RUNS ? 'REFUSED - NOT TESTED'
+    : (s.clean === RUNS ? 'safe' : (s.clean === 0 ? 'ALWAYS STALLS' : 'MIXED'));
+  console.log(`  ${verdict.padEnd(20)} ${s.label}`);
 }
-const createdBad = summary.slice(0, 2).filter((s) => s.clean < RUNS);
-const existingBad = summary.slice(2).filter((s) => s.clean < RUNS);
-if (createdBad.length) {
+const untested = summary.filter((s) => s.refused === RUNS);
+if (untested.length) {
+  console.log(`\n  ${untested.length} arm(s) never reached a build: the tool refused first.`);
+  console.log('  A REFUSAL IS NOT A STALL. The first version of this test printed ALWAYS STALLS for');
+  console.log('  exactly these rows, which is the same mislabelling that produced four contradictory');
+  console.log('  findings in rounds 53 to 56.');
+}
+const createdBad = summary.slice(0, 2).filter((s) => s.clean < RUNS && s.refused < RUNS);
+const existingBad = summary.slice(2).filter((s) => s.clean < RUNS && s.refused < RUNS);
+const allRefused = summary.every((s) => s.refused === RUNS);
+
+if (allRefused) {
+  // This is where the test actually ended up, twice. xGenerate turned out to be referenced across
+  // the project, not just by the POU being edited, so var_edit and var_delete refused every arm and
+  // no build was ever reached. Printing a conclusion about stalling from these rows would be the
+  // same mistake as rounds 53 to 56 - reading an outcome that was never produced.
+  console.log('\n  INCONCLUSIVE. Every arm was refused before a build, so this says nothing about');
+  console.log('  whether edit or delete stalls a created POU. What it does show is that the');
+  console.log('  undeclared-reference guard on those two tools is working, and is broader than the');
+  console.log('  target POU - xGenerate is referenced project-wide, so clearing one body was not');
+  console.log('  enough. To measure the real question, pick a declaration no POU references.');
+} else if (createdBad.length) {
   console.log(`\n  ${createdBad.map((s) => s.label.trim()).join(' and ')} stall a CREATED POU.`);
   console.log('  The round-60 guard covers var_add only and must be extended to these.');
 } else {
