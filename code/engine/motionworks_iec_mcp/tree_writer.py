@@ -511,6 +511,49 @@ def apply_assignment(
     through :class:`CompoundFile` -- reading or writing the file as raw text would
     corrupt the container.
     """
+    _refuse_tree_assignment()
+
+def _refuse_tree_assignment() -> None:
+    """Refuse writing a program instance into PROJECT.TRE.
+
+    Isolated, which is what settles it. Assign writes two things - an instance node in the
+    tree and a line in NODES.LST - and earlier work treated the pair as one operation. Run
+    separately, on freshly staged copies:
+
+        tree edit only     tree 0 -> 3 malformed   Global_Variables lost   compiled=false
+        NODES.LST only     tree 0 -> 0 malformed   intact                  compiled=true
+        both               tree 0 -> 3 malformed   Global_Variables lost   compiled=false
+
+    So the tree edit is the damage, on its own. The IDE rewrites PROJECT.TRE at OPEN and
+    loses a line from each of three later blocks - Start, Global_Variables and
+    IO_Configuration - which is what makes the build report 125 "No matching global
+    variable found" errors: the Globals node is gone, so the compiler has no global table.
+    The generated node itself was verified correct first: 581 lines from 572, zero malformed
+    nodes, Start intact. MotionWorks rejects it anyway.
+
+    NODES.LST alone does no harm but does not persist - the IDE discards the assignment, so
+    the tool would report success for an effect that evaporates. A tool whose success is not
+    real is worse than one that declines, so this refuses.
+
+    Note the pattern, because it is the same one twice: a .VGR record makes the IDE destroy
+    the POU (.VB 1132 bytes -> 0, grid 1665 -> 79 MB) and a tree node makes it destroy three
+    tree nodes. Both are this plugin attempting to write a MotionWorks binary structure from
+    a reconstruction, and both are rejected silently.
+
+    What works instead: add the program to the task in the MotionWorks Project Tree, which
+    is a right-click and a pick, and then use mw_code_tasks to confirm it landed.
+    """
+    raise TreeWriteRefused(
+        "refusing to assign a program to a task from the files: writing the instance node "
+        "into PROJECT.TRE makes the IDE rewrite the tree at open and lose a line from the "
+        "Start, Global_Variables and IO_Configuration blocks - measured, three malformed "
+        "nodes and then 125 'No matching global variable found' errors, because the Globals "
+        "node is gone so the compiler has no global table. Writing only NODES.LST avoids "
+        "that but the IDE discards the assignment, so the tool would report success for an "
+        "effect that does not persist. Add the program to the task in the MotionWorks "
+        "Project Tree instead (right-click the task, add the program), then confirm with "
+        "mw_code_tasks."
+    )
     from .cfb import CompoundFile
     from .ide import ensure_ide_closed
 
