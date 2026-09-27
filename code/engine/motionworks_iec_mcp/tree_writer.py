@@ -59,10 +59,20 @@ LEVEL_INSTANCE = 6
 #: case study bumps exactly these two, so that is what this module does.
 COUNT_MOVES_ON_INSTANCE_EDIT = ("task", "root")
 
-#: Lines a program-instance record occupies.  Nine, not ten: the blank line that
-#: separates records already exists before the following node, and a parser-derived
-#: span stops at that separator -- so treating the record as ten lines makes insert
-#: and remove disagree by one, which the verification catches.
+#: Lines a program-instance record occupies: the marker line through the final state line.
+#: Nine, and the separating blank is NOT included - it sits just past ``end_line``, and
+#: ``plan_assign`` inserts at that blank, so nine lines push it down and keep the separator.
+#:
+#: Verified line for line against a real instance from the tree:
+#:     0 | '19'                      marker
+#:     1 | '52 6 0 0'                params
+#:     2 | 'TopCutterCamSetup  0  0'
+#:     3 | '...eCLR...DEFAULT  -1'
+#:     4 | ''                        blank
+#:     5 | '0  -1  0  0  0  0  0  0  0'
+#:     6 | ''                        blank
+#:     7 | 'B8D8361F 833D 453B A6 38 9B 57 29 67 79 20'
+#:     8 | '0  0  0  0  0  0  0  0  0  0'
 INSTANCE_LINES = 9
 
 #: The resource task cycle field carried by instance records.
@@ -222,10 +232,24 @@ def _instance_block(
 ) -> list[str]:
     """Build the 9-line program-instance record.
 
-    Field order mirrors an existing instance exactly: count, params, name,
+    Field order mirrors an existing instance exactly: marker, params, name,
     ``name\\teCLR\\t<controller>\\t<cycle>\\t-1``, a blank, a state line, a blank,
-    a fresh GUID and a trailing state line.  The blank that separates it from the
-    next record is not part of the block.
+    a fresh GUID, a trailing state line, and the blank that separates it from the
+    next record.
+
+    NINE, and the trailing blank is NOT part of it - which was worth checking, because
+    getting it wrong the other way is easy and looks plausible.
+
+    Measured against a real instance: the parser's span runs from the MARKER line through the
+    final state line, nine lines, and the separating blank sits just past ``end_line``.
+    ``plan_assign`` inserts at ``task.end_line``, which IS that blank, so inserting nine lines
+    pushes the blank down and the separator is preserved. Emitting ten - adding a blank to the
+    block - would leave TWO blanks and an over-long record.
+
+    An earlier attempt added that tenth line on the theory that a missing separator was why
+    the IDE rewrote the tree at open. The line count was wrong, and so was the theory: with
+    nine lines the block already matches a real instance line for line. The tree damage has
+    some other cause, and this was not it.
 
     ``marker`` is the value an existing instance carries on its first line; see
     :func:`_instance_marker`.
