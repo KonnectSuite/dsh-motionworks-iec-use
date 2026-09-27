@@ -414,7 +414,55 @@ def verb_ide_closed(req):
     return _ok(running=running, helper_names=[n for n in dir(I) if not n.startswith("_")][:40])
 
 
+def verb_types(request):
+    """Read the project's user-defined data types, or one of them in full.
+
+    Nothing else in this plugin could see a UDT, so an agent editing a POU that declares
+    ``CamData : CamSegmentStruct`` had no way to learn what a CamSegmentStruct contains.
+    The definitions are plain text in DT/Tyllist.typ, parsed by motionworks_iec_mcp
+    .datatypes, whose module docstring records the field layout and how it was measured.
+
+    Returns through ``_ok`` like every other verb: the Node side rejects a response whose
+    ``ok`` is not true, so a bare dict here fails as "code engine failed 'types'" with no
+    message, which is what happened the first time this verb was wired up.
+    """
+    from motionworks_iec_mcp import datatypes as DT
+
+    project = Path(request["project"])
+    name = request.get("name")
+    if name:
+        t = DT.find_type(project, str(name))
+        return _ok(
+            project=str(project),
+            name=t.name,
+            kind=t.kind,
+            type_id=t.type_id,
+            container=t.container,
+            declared_members=t.declared_members,
+            element_type=t.element_type,
+            members=[
+                {"name": m.name, "type": m.type_name, "type_id": m.type_id,
+                 "array_size": m.array_size}
+                for m in t.members
+            ],
+        )
+
+    types, counts = DT.read_types(project)
+    return _ok(
+        project=str(project),
+        defined=len(types),
+        header_counts=counts,
+        types=[
+            {"name": t.name, "kind": t.kind, "type_id": t.type_id,
+             "container": t.container, "members": len(t.members),
+             "declared_members": t.declared_members, "element_type": t.element_type}
+            for t in sorted(types, key=lambda x: (x.container, x.name))
+        ],
+    )
+
+
 VERBS = {
+    "types": verb_types,
     "pous": verb_pous,
     "read_st": verb_read_st,
     "unsupported": verb_unsupported,

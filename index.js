@@ -1162,6 +1162,60 @@ function defineTools() {
       execute: (args) => runCode('pous', { project: projectOf(args), ...(args ?? {}) }),
     },
     {
+      name: 'mw_code_types',
+      description:
+        'Read the project\'s user-defined data types (UDTs) from DT/Tyllist.typ - the member '
+        + 'names and types an agent needs to write correct Structured Text. Without this you '
+        + 'are writing code against types you cannot see: a POU here declares CamData : '
+        + 'CamSegmentStruct and CamTable : Y_MS_CAM_STRUCT, and touching either needs its '
+        + 'members. Omit name to list every type the project defines (297 in the measured '
+        + 'project, matching the file\'s own NDTE header exactly); pass name to get one type '
+        + 'in full, with members, types and array bounds. Types used by POUs but absent from '
+        + 'the list (CamGenerator, Y_CamStructSelect) come from an installed LIBRARY rather '
+        + 'than the project and are reported as not defined here - they are not missing, they '
+        + 'are elsewhere.',
+      parameters: {
+        type: 'object',
+        additionalProperties: false,
+        properties: {
+          name: { type: 'string', description: 'One type to read in full; omit to list all.' },
+          project: { type: 'string', description: 'Project directory; defaults to the staged project.' },
+        },
+      },
+      output: {
+        schema: {
+          type: 'object',
+          additionalProperties: true,
+          properties: {
+            project: { type: 'string' },
+            defined: { type: 'integer' },
+            header_counts: { type: 'object', additionalProperties: true },
+            types: { type: 'array', items: { type: 'object', additionalProperties: true } },
+            name: { type: 'string' },
+            kind: { type: 'string' },
+            type_id: { type: 'integer' },
+            container: { type: 'string' },
+            declared_members: { type: 'integer' },
+            element_type: { type: 'string' },
+            members: { type: 'array', items: { type: 'object', additionalProperties: true } },
+          },
+        },
+        render: (r) => {
+          if (r.name) {
+            const ms = (r.members ?? []).map((m) => `${m.name}${m.array_size ? `[${m.array_size}]` : ''} : ${m.type}`).join(', ');
+            return `${r.name} [${r.kind}] ${(r.members ?? []).length} members: ${ms}`;
+          }
+          const kinds = {};
+          for (const t of r.types ?? []) kinds[t.kind] = (kinds[t.kind] ?? 0) + 1;
+          const summary = Object.entries(kinds).map(([k, v]) => `${v} ${k || 'other'}`).join(', ');
+          return `${r.defined} data types defined in this project (${summary})`;
+        },
+      },
+      execute: async (args) => runCode('types', {
+        project: projectOf(args),
+        ...(args?.name ? { name: String(args.name) } : {}),
+      }),
+    },    {
       name: 'mw_code_globals',
       description:
         'List the project VAR_GLOBAL declarations - the tags every POU can see, with type, '
