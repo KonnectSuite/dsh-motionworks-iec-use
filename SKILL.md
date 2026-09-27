@@ -408,3 +408,43 @@ and the three files settle it by comparison instead of by guesswork.
 
 The assignment stays REFUSED. A tool that reports success and returns a project whose task
 list the IDE has rewritten is worse than one that declines.
+
+
+### The IDE's own node format, read off its output
+
+The three snapshots in `docs/reference/` show the IDE writing nodes in a form that does NOT
+match what this plugin reads and writes. Side by side, for the same three nodes:
+
+    this plugin reads / writes            the IDE writes
+    ----------                            ----------
+    id 13 @563  '13 4 0 0'                id 13 @442  '13' / '9 2 16 0' / 'Configuration'
+    id 25 @533  '25 5 1 0'                id 25 @582  '25' / '13 0 0 0' / 'C\...\Start'
+    id 35 @543  '35 6 0 0'                id 35 @592  '35' / '25 0 0 0' / 'TopCutterInitialize'
+
+Two differences, and the first is the one that matters:
+
+* **the id is on its own line**, and the numbers that follow are a DIFFERENT SET OF FIELDS -
+  ``<parent> <children> <flags> <unknown>`` rather than ``<id> <level> <children> <flags>``.
+  A node's "level" in this plugin's model is really a node TYPE, and the IDE does not carry it
+  in that position at all.
+* **the name and path are merged onto one line**, with the path's cycle and runtime fields
+  appended: ``C\Configuration\R\Resource\Start<TAB>0<TAB>0<TAB>SYSTEM<TAB>317``.
+
+The ids do not correspond between the two formats either - the IDE's 13 is ``Configuration``
+where this plugin's 13 is ``IO_Configuration`` - so any comparison has to go by NAME, not id.
+
+**What this explains.** The parser in ``tree.py`` reproduces the stream byte-for-byte and its
+spans tile the source, so reading is consistent with itself; but a node WRITTEN in the read
+format is not what the IDE expects, which is why it re-emits the affected nodes rather than
+accepting them. The damage is confined to nodes adjacent to the insert, and the ids it hits
+are the same three every time (13, 35, 40 by this plugin's numbering), independent of which
+program is being assigned and of the tree's size.
+
+**What is still missing: an IDE-written instance.** Every node the IDE wrote in these
+snapshots is one it was REWRITING, so its output shows the field layout but not a clean
+example of a program instance it created itself. That is the artifact that would settle the
+assignment, and the same request as before: add a program to a task in the MotionWorks
+Project Tree, save, and the tree will contain one.
+
+Until then ``mw_code_pou_assign`` stays refused. The evidence is committed rather than
+described, so the next attempt compares files instead of reconstructing them.
