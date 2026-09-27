@@ -1,4 +1,4 @@
-<#
+﻿<#
   MotionWorks Use - COM bridge (32-bit Windows PowerShell).
 
   WHY THIS PROCESS EXISTS
@@ -141,6 +141,27 @@ public class MWW {
   // window to render itself instead.
   [DllImport("user32.dll")] public static extern bool PrintWindow(IntPtr hwnd, IntPtr hdcBlt, uint nFlags);
   [DllImport("user32.dll")] public static extern bool IsIconic(IntPtr h);
+
+  // Read the Message Window's lists as TEXT.
+  //
+  // The compiler's messages live in a SysListView32, and a screenshot is useless to
+  // an agent that has to act on them - it cannot turn a PNG into a fix. MSAA exposes
+  // the rows through IAccessible and accName(i) returns each row verbatim, so the
+  // exact compiler text comes back. AccessibleChildren with an [Out] object[] fails
+  // from PowerShell with E_INVALIDARG (0x80070057), so children are read by index.
+  [DllImport("oleacc.dll")] public static extern int AccessibleObjectFromWindow(IntPtr hwnd, uint id, ref Guid iid, [MarshalAs(UnmanagedType.IUnknown)] out object ppv);
+  [DllImport("user32.dll", EntryPoint="SendMessageW")] public static extern IntPtr SendMessagePtr(IntPtr h, uint m, IntPtr w, IntPtr l);
+
+  public static object GetAccessible(IntPtr hwnd) {
+    try {
+      Guid iid = new Guid("618736E0-3C3D-11CF-810C-00AA00389B71");   // IAccessible
+      object acc;
+      int hr = AccessibleObjectFromWindow(hwnd, 0xFFFFFFFC, ref iid, out acc);
+      return hr == 0 ? acc : null;
+    } catch { return null; }
+  }
+  // LVM_GETITEMCOUNT = 0x1004
+  public static int ListRowCount(IntPtr h) { return (int)SendMessagePtr(h, 0x1004, IntPtr.Zero, IntPtr.Zero); }
 
   // Modal-dialog inspection. MotionWorks asks questions in standard Win32 #32770
   // dialogs, whose text and buttons are readable through WM_GETTEXT/GetDlgCtrlID.
@@ -1047,6 +1068,95 @@ while ($true) {
                 $data = [ordered]@{ name = $name; caption = [string]$hit.Caption; activated = $true }
             }
 
+            # Read an output pane AS TEXT - this is how the agent gets compiler messages.
+            #
+            # Activating the pane brings its list to the front, then the visible
+            # SysListView32 with rows is read through MSAA. Verified against a real
+            # failing build: it returns the messages verbatim, for example
+            #   "No matching global variable found for 'x:y' in resource 'Resource'!"
+            #   "Instance 'CalcSplineMatrix' is used more than once!"
+            # which a screenshot could never give an agent that has to act on them.
+            'read_output' {
+                $name = if ($req.pane) { [string]$req.pane } else { 'Errors' }
+                $limit = if ($req.limit) { [int]$req.limit } else { 200 }
+                $app = Connect-App
+                # Activate first: a pane that is not showing has no visible list.
+                try {
+                    $ow = $app.OutputWindows
+                    for ($i = 1; $i -le $ow.Count; $i++) {
+                        $w = $ow.Item($i)
+                        if ("$($w.Name)" -eq $name) { $w.Activate(); break }
+                    }
+                } catch { }
+                Start-Sleep -Milliseconds 700
+
+                $idePid = Get-IdePid
+
+                # Find the MESSAGE WINDOW first, then read only its lists.
+                #
+                # Picking "the visible list with the most rows" across the whole IDE is
+                # wrong: the Edit Wizard owns a SysListView32 too, so activating a pane
+                # that happens to be empty returned the Edit Wizard's contents instead.
+                # Scoping to the Message Window excludes every other list in the app.
+                $script:msgWin = $null
+                $ideWin = Get-IdeWindow
+                if ($ideWin) {
+                    # The Message Window is a CHILD of the IDE frame (an AfxControlBar120
+                    # dock pane), not a top-level window, so EnumWindows never sees it.
+                    $cbTop = [MWW+EnumWindowsProc]{
+                        param($h, $l)
+                        $t = New-Object System.Text.StringBuilder 128
+                        [void][MWW]::GetWindowTextW($h, $t, 128)
+                        $title = $t.ToString()
+                        if ($title -eq 'Message Window' -or $title -eq 'Messages') { $script:msgWin = $h }
+                        return $true
+                    }
+                    [void][MWW]::EnumChildWindows([IntPtr]$ideWin, $cbTop, [IntPtr]::Zero)
+                }
+
+                $script:best = $null
+                $script:bestRows = 0
+                $root = if ($script:msgWin) { [IntPtr]$script:msgWin } else { [IntPtr]::Zero }
+                if ($root -ne [IntPtr]::Zero) {
+                    $cbList = [MWW+EnumWindowsProc]{
+                        param($k, $l2)
+                        $cls = New-Object System.Text.StringBuilder 64
+                        [void][MWW]::GetClassNameW($k, $cls, 64)
+                        if ($cls.ToString() -ne 'SysListView32') { return $true }
+                        if (-not [MWW]::IsWindowVisible($k)) { return $true }
+                        $rows = [MWW]::ListRowCount($k)
+                        # Only the active tab's list is visible; a pane with nothing to
+                        # report has rows=0 and is skipped, which is itself the answer.
+                        if ($rows -gt $script:bestRows) { $script:bestRows = $rows; $script:best = $k }
+                        return $true
+                    }
+                    [void][MWW]::EnumChildWindows($root, $cbList, [IntPtr]::Zero)
+                }
+
+                if ($null -eq $script:best) {
+                    $ok = $true
+                    $data = [ordered]@{ pane = $name; lines = @(); count = 0; note = 'no readable list found for this pane' }
+                } else {
+                    $acc = [MWW]::GetAccessible([IntPtr]$script:best)
+                    $lines = New-Object System.Collections.ArrayList
+                    if ($null -ne $acc) {
+                        $n = [MWW]::ListRowCount([IntPtr]$script:best)
+                        for ($i = 0; $i -lt [Math]::Min($n, $limit); $i++) {
+                            $t = ''
+                            try { $t = [string]$acc.accName($i) } catch { }
+                            if ($t) { [void]$lines.Add($t) }
+                        }
+                    }
+                    $ok = $true
+                    $data = [ordered]@{
+                        pane  = $name
+                        count = $lines.Count
+                        lines = @($lines)
+                        note  = $(if ($lines.Count -eq 0) { "the '$name' pane is empty - that is a clean result" } else { $null })
+                    }
+                }
+            }
+
             # Close the IDE so a file-level code write can proceed. The write engine
             # refuses while the IDE holds the project, because the IDE's cached state
             # would overwrite an external edit.
@@ -1159,7 +1269,7 @@ public class KILLW {
             }
 
             default {
-                throw "unknown verb '$verb' (allowed: ping, status, start_ide, open, close_ide, trial_state, dismiss_trial, ide_state, answer_dialog, pous, variables, compile_state, make, build, patch, worksheet, datatypes, output_windows, activate_output, command_id, command, feature_state, screenshot, stop)"
+                throw "unknown verb '$verb' (allowed: ping, status, start_ide, open, close_ide, trial_state, dismiss_trial, ide_state, answer_dialog, pous, variables, compile_state, make, build, patch, worksheet, datatypes, output_windows, activate_output, command_id, command, feature_state, screenshot, read_output, stop)"
             }
         }
 

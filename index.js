@@ -1,16 +1,16 @@
-/**
- * MotionWorks Use — a Cordis plugin for DeepSeek Harness.
+﻿/**
+ * MotionWorks Use â€” a Cordis plugin for DeepSeek Harness.
  *
  * Gives the agent the ability to *operate* a running Yaskawa MotionWorks IEC 3 Pro
  * IDE: detect the live instance, stage and open a project in it, read the live
  * object model (POUs, variables), run the IDE's own compiler, and read the
- * verdict — plus see the IDE.
+ * verdict â€” plus see the IDE.
  *
  * WHY THERE ARE NO PACKAGE IMPORTS HERE
  * -------------------------------------
  * A profile plugin lives at `profiles/<p>/node_modules/@local/<name>/`. Node
  * resolves imports upward from that path, and `@deepseek-ai/*` is NOT reachable
- * from there — measured on this machine:
+ * from there â€” measured on this machine:
  *
  *     require.resolve('@deepseek-ai/dsh-tools', { paths: [.../@local/...] })
  *       -> MODULE_NOT_FOUND
@@ -20,7 +20,7 @@
  *
  * CONSEQUENCE: `parameters` and `output.schema` are PLAIN JSON SCHEMA.
  * `defineTool()` exists to convert the terse spec DSL (inline `required: true`)
- * into JSON Schema, and `ctx.tools.register` takes the converted form — a
+ * into JSON Schema, and `ctx.tools.register` takes the converted form â€” a
  * ToolDefinition whose `parameters` is JSON Schema. Because `defineTool` is not
  * importable from here, the schemas below are written in JSON Schema directly:
  * `required` is an ARRAY of property names, never an inline boolean.
@@ -69,7 +69,7 @@ const PS32 = join(
   'SysWOW64', 'WindowsPowerShell', 'v1.0', 'powershell.exe',
 );
 
-// ─── the code engine ─────────────────────────────────────────────────────────
+// â”€â”€â”€ the code engine â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 //
 // Coding does NOT go through the IDE's automation API, because that API cannot
 // touch POU code. Measured, all three candidate routes closed:
@@ -90,8 +90,8 @@ const CODE_RES = join(CODE_DIR, 'res.json');
 /**
  * First working Python interpreter.
  *
- * The code path is stdlib-only — `win32com` is imported lazily inside one
- * function in ide.py — so any Python 3 will do. The one AryaAI already ships is
+ * The code path is stdlib-only â€” `win32com` is imported lazily inside one
+ * function in ide.py â€” so any Python 3 will do. The one AryaAI already ships is
  * preferred, which keeps the plugin independent of any particular developer venv.
  * Override with MW_PYTHON.
  */
@@ -132,14 +132,14 @@ function logTail(lines = 6) {
   }
 }
 
-// ─── bridge transport ────────────────────────────────────────────────────────
+// â”€â”€â”€ bridge transport â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 /**
  * One request/response round trip.
  *
  * The request is written to a temp name and renamed into place so the bridge can
  * never read a half-written file, and a reply is accepted only when its `id`
- * matches this call's — so an earlier call's answer is never mistaken for this one.
+ * matches this call's â€” so an earlier call's answer is never mistaken for this one.
  */
 async function call(verb, params = {}, timeoutMs = 30000) {
   const id = nextId++;
@@ -154,7 +154,7 @@ async function call(verb, params = {}, timeoutMs = 30000) {
     try {
       // Strip a UTF-8 BOM defensively. The bridge writes without one, but
       // PowerShell's `Set-Content -Encoding UTF8` (5.1) adds one, and JSON.parse
-      // throws on a leading U+FEFF — which made a perfectly healthy bridge look
+      // throws on a leading U+FEFF â€” which made a perfectly healthy bridge look
       // like a timeout.
       res = JSON.parse(readFileSync(RES, 'utf8').replace(/^\uFEFF/, ''));
     } catch {
@@ -184,15 +184,15 @@ async function bridgeAlive() {
  * Start the 32-bit bridge if it is not already serving.
  *
  * stdio is `ignore` deliberately: a confined harness cannot open named pipes, so a
- * piped child fails with EPERM. This bridge never carries data over stdio — it
- * uses req.json/res.json — so ignoring stdio costs nothing.
+ * piped child fails with EPERM. This bridge never carries data over stdio â€” it
+ * uses req.json/res.json â€” so ignoring stdio costs nothing.
  */
 async function ensureBridge() {
   if (await bridgeAlive()) return;
   if (!existsSync(BRIDGE_SCRIPT)) throw new Error(`bridge script missing: ${BRIDGE_SCRIPT}`);
   mkdirSync(BRIDGE_DIR, { recursive: true });
   // A leftover request would be consumed by the new bridge on startup, and the
-  // `stop` verb exits — which is how a previous run's stale request killed a
+  // `stop` verb exits â€” which is how a previous run's stale request killed a
   // freshly started bridge. Clear both files first.
   rmSync(REQ, { force: true });
   rmSync(RES, { force: true });
@@ -250,7 +250,7 @@ function runCode(codeVerb, request, timeoutMs = 180000) {
     }
     const py = pythonExe();
     if (!existsSync(py)) {
-      reject(new Error(`python not found at ${py} — set MW_PYTHON to a Python 3 interpreter`));
+      reject(new Error(`python not found at ${py} â€” set MW_PYTHON to a Python 3 interpreter`));
     }
     mkdirSync(CODE_DIR, { recursive: true });
     rmSync(CODE_RES, { force: true });
@@ -265,7 +265,7 @@ function runCode(codeVerb, request, timeoutMs = 180000) {
         PYTHONIOENCODING: 'utf-8',
         // Every write backs the file up first and the engine REFUSES the write if
         // it cannot create the backup location. Its default (~\.motionworks-iec-mcp)
-        // is not writable here — measured: WinError 5 on the first real write — so
+        // is not writable here â€” measured: WinError 5 on the first real write â€” so
         // point it at the plugin's own directory. Without this, every write fails.
         MOTIONWORKS_MCP_BACKUP_DIR: join(HERE, 'backups'),
         MOTIONWORKS_MCP_ROOT: STAGE_ROOT,
@@ -330,7 +330,7 @@ function copyTree(from, to, onFile) {
   }
 }
 
-// ─── schemas (plain JSON Schema: `required` is an array) ─────────────────────
+// â”€â”€â”€ schemas (plain JSON Schema: `required` is an array) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 const STATUS_SCHEMA = {
   type: 'object',
@@ -367,7 +367,7 @@ const BUILD_SCHEMA = {
  * like a project that does not compile.
  *
  * Compile types come from Ade.tlb. The commonly repeated 1=Build / 2=Rebuild
- * guess is wrong — 1 is Make, 2 is Build, and there is no Rebuild compile type
+ * guess is wrong â€” 1 is Make, 2 is Build, and there is no Rebuild compile type
  * at all (Rebuild is a command, and ExecuteCommand is a stub in this build).
  */
 function renderBuild(_a, v) {
@@ -376,7 +376,7 @@ function renderBuild(_a, v) {
     v.is_compiled
       ? `${v.mode}: compiled cleanly (is_compiled=true, ${v.elapsed_s}s).`
       : `${v.mode}: COMPILE FAILED (is_compiled=false, ${v.elapsed_s}s). `
-        + 'The automation API returns the verdict but never the messages — call mw_ide_errors to '
+        + 'The automation API returns the verdict but never the messages â€” call mw_ide_errors to '
         + 'bring the IDE Errors pane up and capture it.',
   );
 }
@@ -398,7 +398,7 @@ function renderWrite(_a, v) {
   const p = (v && v.plan) || {};
   if (v && v.dry_run) {
     if (p.pou_name) {
-      return text(`DRY RUN — nothing changed. Plan for POU '${p.pou_name}'`
+      return text(`DRY RUN â€” nothing changed. Plan for POU '${p.pou_name}'`
         + (p.template_name ? ` from template '${p.template_name}'` : '')
         + (p.files ? `; would touch ${p.files.length} file(s)` : '')
         + (p.referenced_by && p.referenced_by.length
@@ -406,7 +406,7 @@ function renderWrite(_a, v) {
         + (p.assigned_to && p.assigned_to.length
           ? `; assigned to tasks ${p.assigned_to.join(', ')}` : ''));
     }
-    return text(`DRY RUN — nothing changed.`
+    return text(`DRY RUN â€” nothing changed.`
       + (r.target ? ` Would write ${r.target}` : '')
       + (r.stream ? ` (stream ${r.stream})` : ''));
   }
@@ -431,7 +431,7 @@ function projectOf(args) {
   const given = args?.project;
   if (given) return assertStaged(String(given));
   if (!existsSync(STAGE_ROOT)) {
-    throw new Error(`no staged project: ${STAGE_ROOT} does not exist — stage one first`);
+    throw new Error(`no staged project: ${STAGE_ROOT} does not exist â€” stage one first`);
   }
   // A staged PROJECT is a directory with a sibling `<name>.mwt`. Requiring that
   // matters: writing a POU creates stage/backups, and a plain "newest directory"
@@ -515,7 +515,7 @@ function defineTools() {
 
         // REPLACE, do not merge. Copying onto an existing staged copy left POUs and
         // edits from the previous run in place, so "re-stage" did not produce a
-        // clean copy — a repeat test then ran against a dirty project.
+        // clean copy â€” a repeat test then ran against a dirty project.
         const stageRoot = resolve(STAGE_ROOT);
         for (const target of [targetMwt, targetDir]) {
           if (resolve(target).startsWith(stageRoot + sep)) {
@@ -568,7 +568,7 @@ function defineTools() {
       }),
       // The bridge retries OpenProject for up to 90s while a freshly started IDE
       // initialises its project services, answers any modal prompt it raises on the
-      // way, and then waits for the project to appear — so the budget here has to
+      // way, and then waits for the project to appear â€” so the budget here has to
       // cover all three, not just the first retry window.
       execute: (args) => verb('open', { path: assertStaged(String(args.path)) }, 300000),
     },
@@ -704,7 +704,7 @@ function defineTools() {
         + 'This is the compile-verification step for code the agent wrote: it waits until a '
         + 'second compile is accepted, which proves the first one finished, then reads '
         + 'IsCompiled. `accepted` and `settled` distinguish "compiled and failed" from '
-        + '"never ran". Note there is no Rebuild compile type — Rebuild is an IDE command, and '
+        + '"never ran". Note there is no Rebuild compile type â€” Rebuild is an IDE command, and '
         + 'ExecuteCommand is a stub in this build.',
       parameters: { type: 'object', additionalProperties: false, properties: {} },
       output: { schema: BUILD_SCHEMA, render: renderBuild },
@@ -715,17 +715,24 @@ function defineTools() {
     {
       name: 'mw_ide_errors',
       description:
-        'Read the IDE\'s compile errors. The automation API returns the verdict (IsCompiled) but '
-        + 'never the messages, and the output windows expose only Activate/Clear/AddEntry — so '
-        + 'this brings the Errors pane to the front and captures the IDE window to a PNG. Read '
-        + 'the returned path with the image-reading tool to see the actual error text.',
+        'Read the IDE compiler messages AS TEXT. Call this after any build that did not compile '
+        + 'cleanly: the automation API returns the verdict but never the messages, so this reads '
+        + 'the Message Window list control through MSAA and returns each line verbatim, e.g. '
+        + '"No matching global variable found for \'x:y\' in resource \'Resource\'!". Panes: '
+        + 'Errors (default), Warnings, Build, Info. A pane with zero lines is a CLEAN result, not '
+        + 'a failure. Set screenshot:true to also capture the pane, and limit to raise the cap.',
       parameters: {
         type: 'object',
         additionalProperties: false,
         properties: {
           pane: {
             type: 'string',
-            description: 'Output pane to show: Errors (default), Warnings, Infos, or Build.',
+            description: 'Output pane to read: Errors (default), Warnings, Build, or Info.',
+          },
+          limit: { type: 'integer', description: 'Maximum lines to return. Defaults to 200.' },
+          screenshot: {
+            type: 'boolean',
+            description: 'Also capture the pane to a PNG and return its path. Defaults to false.',
           },
         },
       },
@@ -733,24 +740,46 @@ function defineTools() {
         schema: {
           type: 'object',
           additionalProperties: false,
-          required: ['pane', 'path', 'width', 'height'],
+          required: ['pane', 'count', 'lines'],
           properties: {
             pane: { type: 'string' },
-            path: { type: 'string' },
-            width: { type: 'integer' },
-            height: { type: 'integer' },
+            count: { type: 'integer' },
+            lines: { type: 'array', items: { type: 'string' } },
+            note: { oneOf: [{ type: 'string' }, { type: 'null' }] },
+            screenshot: { oneOf: [{ type: 'string' }, { type: 'null' }] },
           },
         },
-        render: (_a, v) => text(`IDE '${v.pane}' pane captured: ${v.path} (${v.width}x${v.height})`),
+        render: (_a, v) => {
+          if (v.count === 0) {
+            return text(`The '${v.pane}' pane is EMPTY - nothing to report.`
+              + (v.screenshot ? `\nScreenshot: ${v.screenshot}` : ''));
+          }
+          return text(`'${v.pane}': ${v.count} message(s)\n`
+            + v.lines.map((l) => `  ${l}`).join('\n')
+            + (v.screenshot ? `\nScreenshot: ${v.screenshot}` : ''));
+        },
       },
       presentCall: () => ({ card: 'generic', title: 'Read MotionWorks errors', kind: 'read' }),
       execute: async (args) => {
         const pane = args?.pane ? String(args.pane) : 'Errors';
-        await verb('activate_output', { name: pane }, 20000);
-        const out = join(HERE, 'shots', `pane-${pane.replace(/\W+/g, '')}-${Date.now()}.png`);
-        mkdirSync(dirname(out), { recursive: true });
-        const shot = await verb('screenshot', { path: out }, 30000);
-        return { pane, ...shot };
+        const limit = Number.isInteger(args?.limit) ? args.limit : 200;
+        const read = await verb('read_output', { pane, limit }, 60000);
+        let shotPath = null;
+        if (args?.screenshot) {
+          const out = join(HERE, 'shots', `pane-${pane.replace(/\W+/g, '')}-${Date.now()}.png`);
+          mkdirSync(dirname(out), { recursive: true });
+          try {
+            const shot = await verb('screenshot', { path: out }, 30000);
+            shotPath = shot.path;
+          } catch { shotPath = null; }
+        }
+        return {
+          pane,
+          count: read.count ?? 0,
+          lines: read.lines ?? [],
+          note: read.note ?? null,
+          screenshot: shotPath,
+        };
       },
     },
 
@@ -799,7 +828,7 @@ function defineTools() {
     {
       name: 'mw_ide_trial',
       description:
-        'Check for — and optionally answer — the MotionWorks licence/trial dialog. An '
+        'Check for â€” and optionally answer â€” the MotionWorks licence/trial dialog. An '
         + 'unlicensed build shows a modal dialog ("Use Trial" / "Activate Online" / '
         + '"Activate by Phone") BEFORE the IDE creates any window of its own, and until '
         + 'it is answered the IDE has no project services, so every OpenProject fails '
@@ -836,7 +865,7 @@ function defineTools() {
               ? `Licence dialog was present and is now answered (via ${v.method}).`
               : 'LICENCE DIALOG IS UP and could not be dismissed automatically. Click '
                 + '"Use Trial" once by hand, or activate a licence. This affects only the '
-                + 'mw_ide_* tools — the mw_code_* tools work without the IDE and without a licence.')
+                + 'mw_ide_* tools â€” the mw_code_* tools work without the IDE and without a licence.')
             : 'No licence dialog is present.',
         ),
       },
@@ -856,7 +885,7 @@ function defineTools() {
         + 'dialog is up, the COM API returns nothing useful: IsProjectOpen reports false '
         + 'or throws, so "no project open" or a bare failure must NOT be read as "the IDE '
         + 'closed". Returns whether the IDE is blocked, and for each dialog its exact '
-        + 'message text and button labels — read with WM_GETTEXT from the standard Win32 '
+        + 'message text and button labels â€” read with WM_GETTEXT from the standard Win32 '
         + 'dialog, so it is exact rather than an OCR guess. Set screenshot:true to also '
         + 'capture the IDE when a dialog is owner-drawn and has no readable text (the .NET '
         + 'licence dialog is one such case).',
@@ -923,7 +952,7 @@ function defineTools() {
           }
           if (v.blocked && v.dialogs.length) {
             lines.push('The IDE is waiting for a button. The COM API cannot proceed until it is '
-              + 'answered — use mw_ide_dialog.');
+              + 'answered â€” use mw_ide_dialog.');
           }
           if (v.screenshot) lines.push(`Screenshot: ${v.screenshot}`);
           return text(lines.join('\n'));
@@ -956,7 +985,7 @@ function defineTools() {
         'Answer a modal dialog that MotionWorks is waiting on. The IDE asks questions '
         + '(defragment this project?, load a project that was not closed cleanly?, licence '
         + 'notices) in standard Win32 dialogs, and while one is up the automation API is '
-        + 'silent — which is what makes a healthy IDE look closed. Name the button to press '
+        + 'silent â€” which is what makes a healthy IDE look closed. Name the button to press '
         + '("Yes", "No", "OK", ...) and it is clicked with BM_CLICK, no synthetic input. '
         + 'mw_ide_open already answers the safe, recurring ones by itself; this is for '
         + 'anything else. Only ever relevant to a STAGED COPY: the plugin never opens your '
@@ -997,7 +1026,7 @@ function defineTools() {
         },
         render: (_a, v) => text(
           v.answered
-            ? `Pressed "${v.pressed}" on dialog ${v.dialog}${v.dialog_closed ? ' — it closed.' : ' — the dialog is still open.'}`
+            ? `Pressed "${v.pressed}" on dialog ${v.dialog}${v.dialog_closed ? ' â€” it closed.' : ' â€” the dialog is still open.'}`
               + (v.message ? `\nIt said: ${v.message}` : '')
             : `Nothing to answer: ${v.reason ?? 'no dialog is up'}`,
         ),
@@ -1030,13 +1059,13 @@ function defineTools() {
         },
         render: (_a, v) => text(v.closed
           ? `MotionWorks closed (pids ${JSON.stringify(v.killed_pids)}). Code writes can proceed.`
-          : 'MotionWorks is STILL running — do not write code yet.'),
+          : 'MotionWorks is STILL running â€” do not write code yet.'),
       },
       presentCall: () => ({ card: 'generic', title: 'Close MotionWorks IEC', kind: 'execute' }),
       execute: () => verb('close_ide', {}, 60000),
     },
 
-    // ── code ──────────────────────────────────────────────────────────────────
+    // â”€â”€ code â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     {
       name: 'mw_code_pous',
@@ -1128,7 +1157,7 @@ function defineTools() {
     {
       name: 'mw_code_write_st',
       description:
-        'Replace a POU\'s Structured Text body — this is how the agent writes code. Backs the '
+        'Replace a POU\'s Structured Text body â€” this is how the agent writes code. Backs the '
         + 'file up first and verifies the untouched sibling streams are byte-identical. '
         + '**dry_run defaults to true**: the first call returns a preview and changes nothing. '
         + 'The IDE must be closed (mw_ide_close), because the IDE\'s cached state would '
@@ -1214,7 +1243,7 @@ function defineTools() {
       name: 'mw_code_var_delete',
       description:
         'Delete a variable declaration. Refuses while any POU body still references it, because '
-        + 'that leaves a dangling reference and a failed build — pass `force` to override. '
+        + 'that leaves a dangling reference and a failed build â€” pass `force` to override. '
         + '**dry_run defaults to true.**',
       parameters: {
         type: 'object',
@@ -1238,7 +1267,7 @@ function defineTools() {
     {
       name: 'mw_code_pou_create',
       description:
-        'Create a new POU by cloning a template POU that already exists in the project — '
+        'Create a new POU by cloning a template POU that already exists in the project â€” '
         + 'creation clones that POU\'s directory and renames its streams, so a POU cannot be '
         + 'authored from nothing. The new POU starts with the template\'s body and variables; '
         + 'use mw_code_write_st to replace the body. **dry_run defaults to true** and returns '
@@ -1294,7 +1323,7 @@ function defineTools() {
       description:
         'List the project\'s tasks and which POU is assigned to each, plus the POUs that are '
         + 'assigned to NOTHING. **Call this before claiming a new POU works.** A POU that exists '
-        + 'but is assigned to no task never runs, and — measured — the build does not catch it '
+        + 'but is assigned to no task never runs, and â€” measured â€” the build does not catch it '
         + 'either: a POU containing an undeclared variable compiled cleanly while it was '
         + 'unassigned. So a clean build is not evidence that an unassigned POU is correct. '
         + 'Assign it with mw_code_pou_assign.',
@@ -1388,7 +1417,7 @@ function defineTools() {
     {
       name: 'mw_code_unsupported',
       description:
-        'Name the POUs whose bodies cannot be edited safely — graphical LD/FBD (proprietary '
+        'Name the POUs whose bodies cannot be edited safely â€” graphical LD/FBD (proprietary '
         + 'binary) and compressed declaration streams. Call this before promising a change, so '
         + 'the agent never claims work it cannot do.',
       parameters: {
@@ -1419,7 +1448,7 @@ function defineTools() {
       name: 'mw_ide_screenshot',
       description:
         'Capture the MotionWorks IDE window to a PNG and return its path, so you can see what '
-        + 'the IDE is actually showing — a dialog, the Project Tree, or the Message Window error '
+        + 'the IDE is actually showing â€” a dialog, the Project Tree, or the Message Window error '
         + 'list. Read the returned path with the image-reading tool.',
       parameters: { type: 'object', additionalProperties: false, properties: {} },
       output: {
@@ -1452,7 +1481,7 @@ function defineTools() {
  */
 export function apply(ctx) {
   for (const definition of defineTools()) {
-    // `defineTool()` — which we cannot import here — wraps execute in an async
+    // `defineTool()` â€” which we cannot import here â€” wraps execute in an async
     // function, so a validation throw becomes a rejection rather than a
     // synchronous throw out of the registry's dispatch. Registering directly, we
     // must do that ourselves; otherwise an argument error like the staging guard
