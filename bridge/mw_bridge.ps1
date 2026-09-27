@@ -1,4 +1,4 @@
-﻿<#
+<#
   MotionWorks Use - COM bridge (32-bit Windows PowerShell).
 
   WHY THIS PROCESS EXISTS
@@ -721,6 +721,30 @@ while ($true) {
                 $data = [ordered]@{ count = $col.Count; pous = $items }
             }
 
+            # Save the open project through the IDE.
+            #
+            # Worth having for its own sake, but added to test a specific suspicion: the
+            # plugin edits the project ON DISK while the IDE is closed, so when the IDE
+            # reopens it may hold a model that disagrees with the files. A compile then
+            # runs against an inconsistent view and can report errors that are not in the
+            # project - which would explain why adding a program to a task turns a clean
+            # build into 125 unresolved-external errors while the files are provably fine.
+            'save' {
+                $app = Connect-App
+                if (-not $app.IsProjectOpen()) { throw 'no project is open in the IDE' }
+                $swSave = [Diagnostics.Stopwatch]::StartNew()
+                $app.ActiveProject.Save()
+                $swSave.Stop()
+                Start-Sleep -Milliseconds 500
+                $ok = $true
+                $data = [ordered]@{
+                    saved       = $true
+                    elapsed_s   = [math]::Round($swSave.Elapsed.TotalSeconds, 2)
+                    is_modified = [bool]$app.ActiveProject.IsModified
+                    is_compiled = [bool]$app.ActiveProject.IsCompiled
+                }
+            }
+
             'compile_state' {
                 $app = Connect-App
                 if (-not $app.IsProjectOpen()) { throw 'no project is open in the IDE' }
@@ -1269,7 +1293,7 @@ public class KILLW {
             }
 
             default {
-                throw "unknown verb '$verb' (allowed: ping, status, start_ide, open, close_ide, trial_state, dismiss_trial, ide_state, answer_dialog, pous, variables, compile_state, make, build, patch, worksheet, datatypes, output_windows, activate_output, command_id, command, feature_state, screenshot, read_output, stop)"
+                throw "unknown verb '$verb' (allowed: ping, status, start_ide, open, close_ide, trial_state, dismiss_trial, ide_state, answer_dialog, pous, variables, compile_state, make, build, patch, worksheet, datatypes, output_windows, activate_output, command_id, command, feature_state, screenshot, read_output, save, stop)"
             }
         }
 
@@ -1290,7 +1314,7 @@ public class KILLW {
             # turned out to be: not a code write, but a build that failed. Capturing
             # the container here means the damage can be detected and undone instead of
             # discovered later by a surprised user.
-            $projDir = $null; $treeBefore = $null; $filesBefore = @{}
+            $projDir = $null; $treeBefore = $null; $registriesBefore = @{}; $filesBefore = @{}
             try {
                 $mwt = [string]$app.ActiveProject.FullName
                 if ($mwt -and (Test-Path $mwt)) {
@@ -1300,6 +1324,21 @@ public class KILLW {
                         $projDir = $cand
                         $treeBefore = [IO.File]::ReadAllBytes($srcFile)
                     }
+                    # Snapshot the node registries too.
+                    #
+                    # MEASURED: a build that FAILS rewrites NODES.LST from its internal
+                    # model and TRUNCATES it at the last unit it managed to process. On a
+                    # project with five tasks, a failed build took the resource NODES.LST
+                    # from 802 bytes to 499, deleting TASK Start, PROGRAM
+                    # TopCutterInitialize, VAR_GLOBALS and IO/CONFIGURATION. Losing
+                    # VAR_GLOBALS is what makes every later build report "No matching
+                    # global variable found", so one failure cascades into a project that
+                    # looks destroyed.
+                    #
+                    # Both copies matter: a project has NODES.LST at the root and in the
+                    # resource directory, and the failed build truncated both.
+                    Get-ChildItem -Path $cand -Filter 'NODES.LST' -Recurse -File -ErrorAction SilentlyContinue |
+                        ForEach-Object { $registriesBefore[$_.FullName] = [IO.File]::ReadAllBytes($_.FullName) }
                 }
             } catch { Log "could not snapshot the tree before compiling: $($_.Exception.Message)" }
 
@@ -1368,6 +1407,32 @@ public class KILLW {
                         }
                     }
                 } catch { Log "tree repair after a failed build failed: $($_.Exception.Message)" }
+            }
+
+            # Undo the registry truncation a failed build causes.
+            #
+            # This runs on the same condition as the tree repair - only after a FAILED
+            # build - because a successful build is entitled to rewrite these files.
+            $registriesRepaired = @()
+            if (-not $isCompiled -and $registriesBefore.Count -gt 0) {
+                foreach ($path in $registriesBefore.Keys) {
+                    try {
+                        if (-not (Test-Path $path)) { continue }
+                        $now = [IO.File]::ReadAllBytes($path)
+                        $was = $registriesBefore[$path]
+                        $same = ($now.Length -eq $was.Length)
+                        if ($same) {
+                            for ($i = 0; $i -lt $now.Length; $i++) {
+                                if ($now[$i] -ne $was[$i]) { $same = $false; break }
+                            }
+                        }
+                        if (-not $same) {
+                            [IO.File]::WriteAllBytes($path, $was)
+                            $registriesRepaired += [IO.Path]::GetFileName($path)
+                            Log "failed build rewrote $([IO.Path]::GetFileName($path)) ($($was.Length) -> $($now.Length) bytes); restored it"
+                        }
+                    } catch { Log "registry repair failed for $path : $($_.Exception.Message)" }
+                }
             }
 
             $ok = $true
