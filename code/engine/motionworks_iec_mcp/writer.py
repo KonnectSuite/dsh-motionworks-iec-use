@@ -62,10 +62,16 @@ class WritePlan:
     after: bytes
     backup: Path | None = None
     notes: list[str] = field(default_factory=list)
+    # Additional streams in the SAME container that must change with this one. A POU
+    # declaration lives in two stores - the .VB text and the .VGR grid - and the compiler
+    # resolves variables from the grid, so writing only the text leaves a declaration that
+    # reads back but cannot be used. They are carried here so both are written and verified
+    # in one operation rather than two.
+    extra_streams: dict[str, bytes] = field(default_factory=dict)
 
     @property
     def changed(self) -> bool:
-        return self.before != self.after
+        return self.before != self.after or bool(self.extra_streams)
 
     def describe(self) -> str:
         return (
@@ -128,7 +134,7 @@ def _apply(
     siblings_before = {
         name: cfb.read_stream(name)
         for name in cfb.stream_names()
-        if name != plan.stream
+        if name != plan.stream and name not in plan.extra_streams
     }
 
     if dry_run:
@@ -166,7 +172,9 @@ def _apply(
     ) as handle:
         scratch = Path(handle.name)
     try:
-        cfb.replace_streams({plan.stream: plan.after}, destination=scratch)
+        writes = {plan.stream: plan.after}
+        writes.update(plan.extra_streams)
+        cfb.replace_streams(writes, destination=scratch)
         staged = CompoundFile(scratch)
         written = staged.read_stream(plan.stream)
         if written != plan.after:
@@ -191,7 +199,14 @@ def _apply(
     finally:
         scratch.unlink(missing_ok=True)
 
-    cfb.replace_streams({plan.stream: plan.after})
+    # The REAL write must carry the extra streams too. The scratch verification above
+    # already did, which is exactly what made this hard to see: the plan was right, the
+    # dry run was right, the verification was right, and only the commit wrote one stream -
+    # so a declaration landed in the .VB and never in the .VGR, and the tool reported
+    # success while the variable stayed unusable.
+    commit = {plan.stream: plan.after}
+    commit.update(plan.extra_streams)
+    cfb.replace_streams(commit)
 
     check = CompoundFile(plan.target)
     written = check.read_stream(plan.stream)
@@ -506,9 +521,40 @@ def plan_variable_add(
         text, name, type_name, section=section, address=address,
         initial_value=initial_value, description=description,
     )
+    # A POU declaration lives in TWO stores, and the compiler resolves variables from the
+    # GRID - which is why a text-only declaration reads back fine but cannot be USED. The
+    # record goes in at the position its ROW belongs; appending at the end is what used to
+    # destroy the POU, because the grid's rows must stay ascending.
+    extra: dict[str, bytes] = {}
+    if pou_name:
+        from . import variables as V
+
+        names = CompoundFile(source).stream_names()
+        grid_stream = next((n for n in names if n.upper().endswith("V.VGR")), None)
+        if grid_stream is not None:
+            grid = CompoundFile(source).read_stream(grid_stream)
+            # The row IS the declaration's 1-based line number, so read it out of the text
+            # that was just built rather than guessing a number.
+            line_number = None
+            for index, text_line in enumerate(updated.splitlines()):
+                stripped = text_line.lstrip()
+                if stripped.startswith(name) and ":" in stripped:
+                    line_number = index + 1
+                    break
+            if line_number is not None:
+                new_grid, handle = V.append_grid_variable(
+                    grid, name, type_name, row=line_number, initial_value=initial_value,
+                )
+                extra[grid_stream] = new_grid
+                notes = list(notes) + [
+                    f"wrote grid record handle={handle} at row={line_number}, in row order - "
+                    f"the compiler resolves variables from the grid, so without this the "
+                    f"declaration could be read back but never used"
+                ]
+
     return WritePlan(
         target=source, stream=stream, before=before,
-        after=updated.encode("latin1"), notes=notes,
+        after=updated.encode("latin1"), notes=notes, extra_streams=extra,
     )
 
 

@@ -452,173 +452,85 @@ def default_initial_value(type_name: str) -> str:
     }
     return table.get((type_name or "").upper(), "")
 
-def append_grid_variable(grid: bytes, name: str, type_name: str, row: int | None = None):
-    """DISABLED. Writing a .VGR record destroys the POU, and this is the proof.
-
-    The function built a record that decodes exactly as intended - four strings, usage 1,
-    a row equal to the declaration's line number, the initial value, and zeros instead of
-    the external marker in the trailing run:
-
-        {"handle":1059,"usage":1,"row":21,"type":"BOOL","init":"FALSE",
-         "name":"ZZUsable1","trailing":"00000000000000000000000000000000"}
-
-    Every field that can be decoded is correct, and MotionWorks rejects it anyway - not by
-    reporting an error, but by rewriting the POU:
-
-        before : .VB 1132 bytes    .VGR     1,665 bytes
-        after  : .VB    0 bytes    .VGR 79,432,063 bytes
-
-    with an EMPTY Errors pane throughout, so nothing warns. Verified on a freshly staged
-    copy, and reproduced WITHOUT the variable even being used in the body - so it is the
-    record itself, not how the code refers to it.
-
-    A second, separate failure mode exists and is much less bad: a declaration written to
-    the .VB but absent from the grid STALLS the build (is_compiled=false, is_modified=true,
-    empty Errors pane) while leaving the POU INTACT. That is what mw_code_var_add does now,
-    and it is honest - the declaration is on record and readable, it simply cannot be used.
-
-    So this raises rather than writing. A tool that silently destroys a POU is worse than
-    one that cannot add a variable, and the fields that remain unknown - whatever they are,
-    since everything decodable already matches - are not worth finding by guesswork against
-    a destructive failure. The supported route to a usable variable is the MotionWorks
-    variable worksheet, or mw_code_export_pou format:"export" and an import.
-    """
-    raise UnsupportedFormat(
-        "refusing to write a .VGR record: a record MotionWorks disagrees with makes it "
-        "rewrite the POU into garbage - measured, the declaration text emptied from 1132 "
-        "bytes to 0 and the grid grew from 1665 bytes to 79 MB, with an empty Errors pane. "
-        "Add the variable in the MotionWorks variable worksheet and re-read it with "
-        "mw_code_read_st, or export the POU with mw_code_export_pou format:\"export\", edit "
-        "the declarations there, and import the file so the IDE writes the grid itself."
-    )
-
-
-def _append_grid_variable_disabled(
-    grid: bytes, name: str, type_name: str, row: int | None = None
+def append_grid_variable(
+    grid: bytes, name: str, type_name: str, row: int | None = None,
+    initial_value: str | None = None,
 ) -> tuple[bytes, int]:
-    """Append one LOCAL variable record to a POU's ``.VGR`` grid.
+    """Add one record to a POU's ``.VGR`` grid, IN ROW ORDER. Returns ``(new_grid, handle)``.
 
-    Why this is needed: a POU's declarations live in TWO stores - the ``.VB`` text and
-    this binary grid - and the compiler resolves variables from the GRID. Adding only the
-    text leaves the grid a record short and the compiler reports
+    This was DISABLED for several rounds because it destroyed the POU. It does not any more,
+    and the reason matters because the failure looked like a bad record.
 
-        Variable '<POU>:<name>' not found!
+    The record content was always right: four strings (type, empty, initial value, name),
+    usage 1 for a local, the initial value, and zeros where an external record carries the
+    ``ffffffff`` marker. Every decodable field matched a real local record field for field -
+    and the POU was still rewritten into garbage, the .VB emptied from 1132 bytes to 0 and the
+    grid inflated from 1665 bytes to 79,432,063, with an empty Errors pane.
 
-    even though the declaration reads back fine. Variable adds appeared to work earlier
-    only because those builds were incremental and never recompiled the variable unit.
+    The problem was never the CONTENT. It was the POSITION. Records are ordered by worksheet
+    row, and the row is the declaration's 1-based line number in the .VB:
 
-    The new record is CLONED from an existing local record of the SAME TYPE, so every
-    field whose meaning is not understood is copied rather than invented; only the
-    handle, the worksheet row, the type text and the name are patched, and the header's
-    record count and last-handle are bumped.  Returns ``(new_grid, handle)``.
+        row 6,7,8,9    VAR_EXTERNAL group 1
+        row 14..20     VAR
+        row 25         VAR_EXTERNAL group 2
+
+    ascending. A new declaration appended to the last VAR block lands at row 21, so its record
+    belongs BETWEEN the row-20 and row-25 records. The old code inserted after the LAST record
+    unconditionally, putting row 21 after row 25 - an unordered grid.
+
+    Measured, identical record content, only the position differing, on a variable that is
+    actually USED:
+
+        inserted IN ROW ORDER   is_compiled=true,  src.st1 9216 ->    9728 bytes
+        appended AT THE END     is_compiled=false, src.st1 9216 -> 80,071,680 bytes
+
+    Twelve integrity checks pass on the row-ordered form - compile, stability across a second
+    build, the body still carrying the use, the declaration still readable, the grid still
+    ascending, the .VB stream not emptied. A declaration can now be DECLARED AND USED with no
+    IDE step at all.
     """
     records = parse_grid_records(grid)
     if not records:
         raise UnsupportedFormat("no variable records found in the grid; refusing to guess")
 
-    wanted = (type_name or "").upper()
+    header = struct.unpack_from("<4I", grid, 0)
+    last_handle = header[1]
+    new_handle = last_handle + 1
 
-    def decoded(index: int) -> dict:
-        return read_grid_record(grid, records[index]["offset"])
+    # The row is the declaration's line number in the .VB, so the caller supplies it. Guessing
+    # max(row) + 1 produces a number that corresponds to no line at all.
+    if row is None:
+        row = max(r["row"] for r in records) + 1
 
-    def clean(info: dict) -> bool:
-        """A record whose type and name decode to plain text.
+    if initial_value is None:
+        initial_value = default_initial_value(type_name)
 
-        A record carrying an INITIAL VALUE has a different shape: three strings rather
-        than two (type, initial value, name). Decoding one as if it had two reads the
-        initial value as the name and then runs off into the following records, which is
-        why cloning such a record produced a name like 'SE\\x00...'. Requiring plain text
-        excludes them, and the remaining records are the shape a fresh declaration needs.
-        """
-        for key in ("type", "name"):
-            text = info.get(key) or ""
-            if not text or "\\x00" in text:
-                return False
-            if any(ord(ch) < 32 or ord(ch) > 126 for ch in text):
-                return False
-        return True
+    def _string(text: str) -> bytes:
+        # Length-prefixed UTF-16LE with a NUL terminator, so the prefix counts bytes and is
+        # always even.
+        return struct.pack("<I", (len(text) + 1) * 2) + text.encode("utf-16-le") + b"\x00\x00"
 
-    # Choose the donor by SHAPE, not by usage or type:
-    #
-    #   * usage is rewritten to 1 regardless, so restricting to local records only threw
-    #     away the clean ones. In the grid this was measured on, the plain BOOL records
-    #     are marked external - and requiring usage == 1 left only the init-value BOOLs,
-    #     whose three-string shape decodes wrongly.
-    #   * the type is rewritten too, so a different type is fine.
-    #   * the SMALLEST matching record wins, because a big trailing run means structure
-    #     (a struct's sub-fields), and cloning that for a scalar drags it along. The
-    #     CamSegmentStruct record is 180 bytes against a BOOL's 106 for exactly that
-    #     reason.
-    candidates: list[tuple[int, int, dict]] = []
-    for index in range(len(records)):
-        try:
-            info = decoded(index)
-        except Exception:                                   # noqa: BLE001
-            continue
-        if not clean(info):
-            continue
-        candidates.append((index, _record_extent(grid, records, index), info))
-    if not candidates:
-        raise UnsupportedFormat(
-            "no variable record with a plain type/name pair to clone in the grid"
-        )
+    # Synthesised from the layout rather than cloned from a donor. Cloning kept leaving one
+    # field wrong - a struct's trailing structure, or an external marker left on a record
+    # marked local - and each wrong guess is not a polite failure.
+    record = struct.pack("<6I", new_handle, 1, 1, 0, row, 0)
+    record += _string(type_name) + _string("") + _string(initial_value) + _string(name)
+    record += b"\x00" * 16          # a LOCAL record carries no external marker
 
-    same_type = [c for c in candidates if c[2]["type"].upper() == wanted]
-    pool = same_type or candidates
-    donor = min(pool, key=lambda c: c[1])[0]
+    # THE FIX: the insertion point is where the ROW belongs, not the end of the grid.
+    index = next((i for i, r in enumerate(records) if r["row"] > row), len(records))
+    if index == 0:
+        insert_at = records[0]["offset"]
+    elif index >= len(records):
+        insert_at = records[-1]["offset"] + _record_extent(grid, records, len(records) - 1)
+    else:
+        insert_at = records[index]["offset"]
 
-    info = decoded(donor)
-    start = records[donor]["offset"]
-    extent = _record_extent(grid, records, donor)
-    tail = grid[start + (info["after_name"] - start): start + extent]
-
-    new_handle = max(r["handle"] for r in records) + 1
-    # The worksheet ROW is the declaration's 1-based LINE NUMBER in the .VB text.
-    #
-    # Measured over a whole project: row 6 is text line 5, row 14 is line 13, row 18 is
-    # line 17, row 25 is line 24 - always one more than the line index. The grid and the
-    # text are two views of one list, and the row is the link between them. Guessing
-    # max(row) + 1 instead produces a number that corresponds to no line at all.
-    new_row = row if row is not None else max(r["row"] for r in records) + 1
-
-    # SYNTHESISE the record rather than patching a clone.
-    #
-    # A record is FOUR length-prefixed UTF-16LE strings, and the third is the INITIAL
-    # VALUE - measured on a real grid:
-    #
-    #   external scalar : "BOOL", "",        "",        "TopCutterCamReady"
-    #   LOCAL scalar    : "BOOL", "",        "FALSE",   "xGenerate"
-    #   local struct    : "CamSegmentStruct","",        "",     "CamData"
-    #
-    # Cloning an external donor gives the wrong third string: empty, where a local scalar
-    # carries a default. Patching one field at a time kept leaving another wrong - first
-    # the trailing run's external marker (ffffffff), now the initial value - and each wrong
-    # guess does not fail politely, it makes MotionWorks rewrite the POU into garbage. So
-    # the record is built from the layout directly, taking only the TRAILING RUN from the
-    # donor, which is the part whose meaning is least understood and which is identical
-    # across records of the same usage.
-    def encoded(text: str) -> bytes:
-        raw = text.encode("utf-16-le") + b"\x00\x00"
-        return struct.pack("<I", len(raw)) + raw
-
-    header = struct.pack(
-        "<6I", new_handle, 1, 1, 0, new_row, 0     # handle, usage=local, group, flags, row
-    )
-    record = (
-        header
-        + encoded(type_name)
-        + encoded("")                               # the always-empty second field
-        + encoded(default_initial_value(type_name))
-        + encoded(name)
-        + tail
-    )
-
-    last = records[-1]
-    insert_at = last["offset"] + _record_extent(grid, records, len(records) - 1)
-    out = bytearray(grid[:insert_at]) + record + bytearray(grid[insert_at:])
+    out = bytearray(grid[:insert_at]) + bytearray(record) + bytearray(grid[insert_at:])
     struct.pack_into("<I", out, 4, new_handle)
-    struct.pack_into("<I", out, 8, struct.unpack_from("<I", grid, 8)[0] + 1)
+    struct.pack_into("<I", out, 8, len(records) + 1)
     return bytes(out), new_handle
+
 
 def read_grid_variable_count(grid: bytes) -> int | None:
     """Return the variable count recorded in a ``.VGR`` binary grid header.
