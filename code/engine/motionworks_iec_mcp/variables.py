@@ -341,6 +341,169 @@ def parse_declarations(text: str, source_stream: str | None = None) -> Declarati
     return table
 
 
+def parse_grid_records(grid: bytes) -> list[dict]:
+    """Locate every variable record in a POU's binary ``.VGR`` grid.
+
+    Layout, confirmed by dumping a real grid: the header is four uint32
+    (magic, last-handle, record-count, first-handle), and from offset 12 each record
+    opens with six uint32 - handle, usage, group, flags, worksheet row, final flags -
+    followed by length-prefixed UTF-16LE strings and a fixed tail.
+
+    A record is found by its field pattern rather than a fixed stride, because the
+    variable-length name and type make the stride uneven (84 to 258 bytes in the grid
+    this was measured on). ``usage`` is 5 for an external variable, 1 for a local one
+    and 0x00040001 for a function-block instance.
+    """
+    if len(grid) < 12:
+        return []
+    records = []
+    for offset in range(12, max(12, len(grid) - 23)):
+        handle, usage, group, flags, row, final_flags = struct.unpack_from(
+            "<6I", grid, offset
+        )
+        if (
+            1000 <= handle <= 10000
+            and usage in (1, 5, 0x00040001)
+            and group == 1
+            and flags == 0
+            and 1 <= row <= 999
+            and final_flags == 0
+        ):
+            records.append(
+                {
+                    "offset": offset,
+                    "handle": handle,
+                    "usage": usage,
+                    "row": row,
+                }
+            )
+    return records
+
+
+def _grid_record_extent(grid: bytes, records: list[dict], index: int) -> int:
+    """Byte length of the record at ``index``.
+
+    The next record's offset bounds it.  The last record is bounded by the first
+    plausible successor - the grid carries a trailer, so the tail is walked rather than
+    assumed - and any trailing gap is left where it is.
+    """
+    start = records[index]["offset"]
+    if index + 1 < len(records):
+        return records[index + 1]["offset"] - start
+    # Last record: find where the next six-uint32 field block would begin after its
+    # strings, i.e. skip the length-prefixed UTF-16 strings and stop at the tail.
+    pos = start + 24
+    for _ in range(2):                      # type, then name
+        if pos + 4 > len(grid):
+            return len(grid) - start
+        length = struct.unpack_from("<I", grid, pos)[0]
+        pos += 4 + length
+    # Whatever follows the name is this record's fixed tail; keep it, and stop before
+    # the grid's own trailer.
+    return min(len(grid) - start, pos + 24 - start)
+
+
+def append_grid_variable(
+    grid: bytes, name: str, type_name: str
+) -> tuple[bytes, int]:
+    """Append one LOCAL variable record to a POU's ``.VGR`` grid.
+
+    Why this is needed: a POU's declarations live in TWO stores - the ``.VB`` text and
+    this binary grid - and the compiler resolves variables from the GRID. Adding only
+    text leaves the grid one record short and the compiler reports
+
+        Variable '<POU>:<name>' not found!
+
+    even though the declaration reads back fine. Measured: an earlier variable add
+    appeared to work only because those builds were incremental and never recompiled the
+    variable unit; change the POU's body and the unit is rebuilt, and it surfaces.
+
+    The new record is CLONED from an existing local record with the same type, so every
+    field whose meaning is not understood is copied verbatim rather than invented. Only
+    the handle, the worksheet row and the name are patched, and the header count and
+    last-handle are bumped.
+
+    Returns ``(new_grid, handle)``.
+    """
+    records = parse_grid_records(grid)
+    if not records:
+        raise PouPlanError("no variable records found in the grid; refusing to guess")
+
+    # Find a donor with the same type and a local usage, so the cloned fields match.
+    wanted = (type_name or "").upper().encode("utf-16-le")
+
+    def read_strings(record: dict) -> tuple[str, str]:
+        pos = record["offset"] + 24
+        out = []
+        for _ in range(2):
+            length = struct.unpack_from("<I", grid, pos)[0]
+            raw = grid[pos + 4 : pos + 4 + length]
+            out.append(raw.decode("utf-16-le", errors="replace").rstrip("\x00"))
+            pos += 4 + length
+        return out[0], out[1]
+
+    donor = None
+    for index, record in enumerate(records):
+        if record["usage"] != 1:
+            continue
+        try:
+            donor_type, _ = read_strings(record)
+        except Exception:                                    # noqa: BLE001
+            continue
+        if donor_type.upper().encode("utf-16-le") == wanted:
+            donor = index
+            break
+    if donor is None:
+        # Fall back to any local record; the type string is patched below regardless.
+        donor = next((i for i, r in enumerate(records) if r["usage"] == 1), None)
+    if donor is None:
+        raise PouPlanError("no local variable record to clone in the grid")
+
+    donor_record = records[donor]
+    extent = _grid_record_extent(grid, records, donor)
+    if extent <= 24:
+        raise PouPlanError("the donor record is too short to clone")
+    chunk = bytearray(grid[donor_record["offset"] : donor_record["offset"] + extent])
+
+    last_handle = max(r["handle"] for r in records)
+    new_handle = last_handle + 1
+    new_row = max(r["row"] for r in records) + 1
+    struct.pack_into("<I", chunk, 0, new_handle)      # handle
+    struct.pack_into("<I", chunk, 4, 1)               # usage: local
+    struct.pack_into("<I", chunk, 16, new_row)        # worksheet row
+
+    # Rewrite the type string (first length-prefixed string) and the name (second),
+    # then rebuild the tail that followed them.
+    pos = 24
+    type_len = struct.unpack_from("<I", chunk, pos)[0]
+    type_start = pos
+    after_type = pos + 4 + type_len
+    name_len = struct.unpack_from("<I", chunk, after_type)[0]
+    name_start = after_type
+    after_name = name_start + 4 + name_len
+
+    def encoded(text: str) -> bytes:
+        raw = text.encode("utf-16-le") + b"\x00\x00"
+        return struct.pack("<I", len(raw)) + raw
+
+    rebuilt = (
+        bytes(chunk[:type_start])
+        + encoded(type_name)
+        + encoded(name)
+        + bytes(chunk[after_name:])
+    )
+
+    # Insert before the grid's trailer: the trailer follows the last record.
+    insert_at = len(grid)
+    if records:
+        last = records[-1]
+        insert_at = min(len(grid), last["offset"] + _grid_record_extent(grid, records, len(records) - 1))
+
+    out = bytearray(grid[:insert_at]) + rebuilt + bytearray(grid[insert_at:])
+    struct.pack_into("<I", out, 4, new_handle)                       # last handle
+    struct.pack_into("<I", out, 8, struct.unpack_from("<I", grid, 8)[0] + 1)   # count
+    return bytes(out), new_handle
+
 def read_grid_variable_count(grid: bytes) -> int | None:
     """Return the variable count recorded in a ``.VGR`` binary grid header.
 
