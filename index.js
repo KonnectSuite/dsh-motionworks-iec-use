@@ -472,6 +472,80 @@ function diagnoseBuild(verdict) {
   };
 }
 
+const RESTORE_SCHEMA = {
+  type: 'object',
+  additionalProperties: false,
+  required: ['dry_run'],
+  properties: {
+    dry_run: { type: 'boolean' },
+    ok: { oneOf: [{ type: 'boolean' }, { type: 'null' }] },
+    // list mode
+    snapshots: { oneOf: [{ type: 'integer' }, { type: 'null' }] },
+    restorable_pous: { oneOf: [{ type: 'integer' }, { type: 'null' }] },
+    most_recent: { oneOf: [{ type: 'string' }, { type: 'null' }] },
+    damaged: { oneOf: [{ type: 'array' }, { type: 'null' }] },
+    // single-POU mode
+    pou: { oneOf: [{ type: 'string' }, { type: 'null' }] },
+    snapshot: { oneOf: [{ type: 'string' }, { type: 'null' }] },
+    snapshot_taken: { oneOf: [{ type: 'string' }, { type: 'null' }] },
+    snapshots_available: { oneOf: [{ type: 'integer' }, { type: 'null' }] },
+    before: { oneOf: [{ type: 'object' }, { type: 'null' }] },
+    after: { oneOf: [{ type: 'object' }, { type: 'null' }] },
+    restored: { oneOf: [{ type: 'boolean' }, { type: 'null' }] },
+    would_restore: { oneOf: [{ type: 'boolean' }, { type: 'null' }] },
+    bytes_restored: { oneOf: [{ type: 'integer' }, { type: 'null' }] },
+    saved_current_to: { oneOf: [{ type: 'string' }, { type: 'null' }] },
+    refused: { oneOf: [{ type: 'string' }, { type: 'null' }] },
+    note: { oneOf: [{ type: 'string' }, { type: 'null' }] },
+  },
+};
+
+/**
+ * Report a restore in the terms the caller asked in: a survey of what is restorable, or what one
+ * restore did. Two shapes, because the tool has two modes.
+ */
+function renderRestore(_a, v) {
+  const r = (v && v.result) || {};
+
+  // ── list mode ────────────────────────────────────────────────────────────────
+  if (typeof r.snapshots === 'number') {
+    const damaged = Array.isArray(r.damaged) ? r.damaged : [];
+    const who = damaged.length
+      ? `DAMAGED: ${damaged.map((d) => `${d.pou} (${d.bytes} B, ${d.snapshots} snapshot(s))`).join('; ')}`
+      : 'nothing looks damaged';
+    return text(`${r.snapshots} snapshot(s), ${r.restorable_pous} POU(s) restorable`
+      + (r.most_recent ? `, newest ${r.most_recent}` : '')
+      + `. ${who}.`);
+  }
+
+  // ── one POU ──────────────────────────────────────────────────────────────────
+  if (!r.pou) return text('nothing to report');
+
+  const before = r.before ?? {};
+  const after = r.after ?? {};
+  const sizes = `${before.bytes ?? '?'} B -> ${after.bytes ?? '?'} B`;
+  const where = r.snapshot_taken
+    ? `from the snapshot taken ${r.snapshot_taken} (${r.snapshots_available} available)`
+    : '';
+
+  if (r.refused) {
+    return text(`Refused to restore '${r.pou}'. ${r.refused}`);
+  }
+  if (r.dry_run) {
+    const verdict = r.would_restore ? 'would restore' : 'would NOT restore';
+    return text(`DRY RUN - nothing changed. '${r.pou}' ${verdict} ${where}. Size ${sizes}.`
+      + ' Call again with dry_run:false to do it.');
+  }
+  if (r.restored) {
+    return text(`Restored '${r.pou}' ${where}. Size ${sizes}.`
+      + (r.saved_current_to
+        ? ` The file it replaced was kept at ${r.saved_current_to}, so this is undoable.`
+        : ''));
+  }
+  return text(`Could not restore '${r.pou}' ${where}. Size ${sizes}.`
+    + (r.note ? ` ${r.note}` : ''));
+}
+
 const BUILD_SCHEMA = {
   type: 'object',
   additionalProperties: false,
@@ -1949,7 +2023,7 @@ function defineTools() {
           dry_run: { type: 'boolean', description: 'Defaults to true.' },
         },
       },
-      output: { schema: WRITE_SCHEMA, render: renderWrite },
+      output: { schema: RESTORE_SCHEMA, render: renderRestore },
       presentCall: (a) => ({
         card: 'generic',
         title: a?.pou ? `Restore ${a.pou}` : 'Restorable POUs',
