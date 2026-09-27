@@ -1302,28 +1302,93 @@ function defineTools() {
       presentCall: () => ({ card: 'generic', title: 'Export POU source', kind: 'read' }),
       execute: async (args) => {
         const pou = String(args.pou);
+        const wantExport = args?.format === 'export';
         const read = await runCode('read_st', { pou, project: projectOf(args) });
-        const decls = (read.variables ?? []).map((v) => {
-          const bits = [`\t${v.name}\t:\t${v.type ?? '?'}`];
-          if (v.address) bits.push(` AT ${v.address}`);
-          if (v.initial_value) bits.push(` := ${v.initial_value}`);
-          bits.push(';');
-          if (v.description) bits.push(` (*${v.description}*)`);
-          return bits.join('');
-        });
-        const text_ = [
-          `(* POU: ${pou}  language: ${read.language ?? 'ST'} *)`,
-          read.source_path ? `(* source: ${read.source_path} *)` : null,
-          '(* --- declarations --- *)',
-          ...decls,
-          '',
-          '(* --- body --- *)',
-          (read.body ?? '').replace(/\s+$/, ''),
-          '',
-        ].filter((l) => l !== null).join('\r\n');
+        const decls = read.variables ?? [];
+
+        let text_;
+        if (wantExport) {
+          // The IEC 61131-3 EXPORT format, which is what MotionWorks' own
+          // `iec_61131-3_file_import` provider reads. Verified against the Extended
+          // IEC 61131-2 Export that ships with the IDE: properties banner, description,
+          // PROGRAM, group, declaration blocks, then the worksheet between its markers.
+          //
+          // This matters because it is the one supported route to a NEW DECLARATION.
+          // Writing the `.VGR` grid directly is refused - a record MotionWorks disagrees
+          // with makes it silently rewrite the POU - but an imported export file lets the
+          // IDE build that grid itself. So: export, edit the declarations, import.
+          const bySection = new Map();
+          for (const v of decls) {
+            const key = v.section || 'VAR';
+            if (!bySection.has(key)) bySection.set(key, []);
+            bySection.get(key).push(v);
+          }
+          const blocks = [];
+          for (const [section, items] of bySection) {
+            blocks.push(section);
+            for (const v of items) {
+              const addr = v.address ? `\tAT ${v.address} ` : '\t';
+              const init = v.initial_value ? ` := ${v.initial_value}` : '';
+              const desc = v.description ? `(*${v.description}*)` : '';
+              blocks.push(`\t${v.name}${addr} :\t${v.type ?? '?'}${init};${desc}`);
+            }
+            blocks.push('END_VAR');
+            blocks.push('');
+            blocks.push('');
+          }
+          text_ = [
+            '(*@PROPERTIES_EX@',
+            'TYPE: POU',
+            'LOCALE: 0',
+            `IEC_LANGUAGE: ${read.language === 'ST' ? 'ST' : (read.language ?? 'ST')}`,
+            'PLC_TYPE: independent',
+            'PROC_TYPE: independent',
+            '*)',
+            '(*@KEY@:DESCRIPTION*)',
+            '',
+            '(*@KEY@:END_DESCRIPTION*)',
+            `PROGRAM ${pou}`,
+            '',
+            '(*Group:Default*)',
+            '',
+            '',
+            ...blocks,
+            '(*@KEY@: WORKSHEET',
+            `NAME: ${pou}`,
+            `IEC_LANGUAGE: ${read.language === 'ST' ? 'ST' : (read.language ?? 'ST')}`,
+            '*)',
+            (read.body ?? '').replace(/\s+$/, ''),
+            '',
+            '(*@KEY@: END_WORKSHEET *)',
+            'END_PROGRAM',
+            '',
+          ].join('\r\n');
+        } else {
+          // A plain readable listing: header, declarations with types and descriptions,
+          // then the body. Easier for a person to read than the export format.
+          text_ = [
+            `(* POU: ${pou}  language: ${read.language ?? 'ST'} *)`,
+            read.source_path ? `(* source: ${read.source_path} *)` : null,
+            '(* --- declarations --- *)',
+            ...decls.map((v) => {
+              const bits = [`\t${v.name}\t:\t${v.type ?? '?'}`];
+              if (v.address) bits.push(` AT ${v.address}`);
+              if (v.initial_value) bits.push(` := ${v.initial_value}`);
+              bits.push(';');
+              if (v.description) bits.push(` (*${v.description}*)`);
+              return bits.join('');
+            }),
+            '',
+            '(* --- body --- *)',
+            (read.body ?? '').replace(/\s+$/, ''),
+            '',
+          ].filter((l) => l !== null).join('\r\n');
+        }
+
+        const ext = wantExport ? '.ST' : '.st';
         const out = args?.path
           ? String(args.path)
-          : join(HERE, 'exports', `${pou.replace(/[^\w.-]+/g, '_')}.st`);
+          : join(HERE, 'exports', `${pou.replace(/[^\w.-]+/g, '_')}${ext}`);
         mkdirSync(dirname(out), { recursive: true });
         writeFileSync(out, text_, 'utf8');
         return {
