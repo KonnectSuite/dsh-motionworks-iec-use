@@ -589,3 +589,53 @@ OpenProject fails. This cost time twice before it was written down.
 
 ``mw_code_pou_assign`` and ``mw_code_pou_unassign`` both stay refused, now on evidence for each
 direction rather than by analogy from one.
+
+
+### PLCopen XML export / import exists, and is LIVE
+
+Round 5 recorded import/export as a dead end. That was measured on `ExternalImportExportProviders`,
+which is EMPTY - the probe never reached the collection that matters.
+
+`Ade.Application.ImportExports` holds SIX operations, and enumerating them (1-BASED - index 0 is
+out of range) gives:
+
+    item  Direction  ImportExportType               Execute()
+    1     2 import   file_exchange_format_import    Not implemented
+    2     2 import   iec_61131-3_file_import        returns
+    3     1 export   iec_61131-3_file_export        returns
+    4     1 export   cross_references_export        Not implemented
+    5     1 export   plc_open_xml_export            One or more arguments are invalid
+    6     2 import   plc_open_xml_import            One or more arguments are invalid
+
+**"Arguments are invalid" is not "not implemented".** Items 5 and 6 are implemented code waiting
+for parameters, and item 6 matters more than anything else found in this project so far, because
+the PLCopen help states Task is exportable and importable, and the schema on disk
+(`TC6_XML_V10.xsd`) defines `<pouInstance name type>` INSIDE `<task>` - which is precisely the
+program assignment this plugin cannot otherwise write.
+
+The argument shape is still unknown: 0, 1 and 2 arguments all report "Number of parameters
+specified does not match the expected number", so the arity is fixed and hidden behind IDispatch
+late binding. `SetAttribute` and `GetAttribute` are stubs.
+
+### The route to an object: GetObjectByLogicalName
+
+    ActiveProject.GetObjectByLogicalName : IDispatch GetObjectByLogicalName (string, AdeObjectType)
+    ActiveProject.GetInstancePathForPou  : string   GetInstancePathForPou (string)      STUB
+    Application.ExportEvcObject          : void     ExportEvcObject (AdeEvcObject)
+    Application.ImportEvcObject          : void     ImportEvcObject (AdeEvcObject)
+
+The two-argument signature is why a first attempt failed on arity rather than on the name. With a
+project genuinely open, `GetObjectByLogicalName` answers **"Cannot find BG in Project."** for every
+name tried and every type value 0..24 - so it SEARCHES, the project IS reachable over COM, and the
+only missing piece is the logical name format. `GetInstancePathForPou` is a stub, so the
+assignment question cannot be asked that way.
+
+### Two traps worth recording
+
+**A standalone `New-Object -ComObject Ade.Application.550` is not the plugin's IDE.** With no IDE
+running it LAUNCHES one, bare, so `ActiveProject.Name` is empty and every call reports "There is
+no project open" - which reads like a missing feature and is really a missing project. Start the
+IDE and open a project through the plugin FIRST, then probe.
+
+**`[void](Function ...)` discards the function's whole output stream**, not just its return value,
+so a probe written that way prints nothing and looks like it hung. Probes should use Write-Host.
