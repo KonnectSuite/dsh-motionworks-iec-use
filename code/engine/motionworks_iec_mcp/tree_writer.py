@@ -267,16 +267,50 @@ def _instance_block(
     ]
 
 
+def task_cycle(document: TreeDocument, task: TreeNode) -> str:
+    """The cycle a task carries, read from its OWN path line.
+
+    EVERY program instance carries its task's cycle - measured across all eight instances of a
+    real project: BG is DEFAULT and its two instances are DEFAULT, FastTsk and MedTsk and
+    SlowTsk are CYCLIC and their five instances are CYCLIC, and Start is SYSTEM and its
+    instance is SYSTEM. Eight of eight.
+
+    The path line is ``<name>\teCLR\t<controller>\t<cycle>\t<runtime>\t``, four lines below the
+    task's marker. Deriving it matters for the Start task in particular: SYSTEM is not a cycle
+    so much as a statement about who owns the task, and writing CYCLIC there would contradict
+    the IDE's own record of it.
+
+    Falls back to DEFAULT_CYCLE when the line cannot be read, so a tree that does not match
+    the measured layout still produces something rather than raising.
+    """
+    lines = document.lines
+    for offset in range(0, 6):
+        index = task.line - 1 + offset
+        if 0 <= index < len(lines):
+            fields = lines[index].split("\t")
+            if len(fields) > 3 and fields[1].strip() == "eCLR":
+                cycle = fields[3].strip()
+                if cycle:
+                    return cycle
+    return DEFAULT_CYCLE
+
+
 def plan_assign(
     document: TreeDocument,
     task_name: str,
     program_name: str,
     *,
-    cycle: str = DEFAULT_CYCLE,
+    cycle: str | None = None,
     controller: str = "MP2600iec",
 ) -> AssignmentPlan:
-    """Plan assigning ``program_name`` to ``task_name``."""
+    """Plan assigning ``program_name`` to ``task_name``.
+
+    ``cycle`` defaults to the TASK'S OWN cycle rather than a fixed string: every real instance
+    carries its task's, and the Start task's is SYSTEM.
+    """
     task = find_task(document, task_name)
+    if cycle is None:
+        cycle = task_cycle(document, task)
     if instance_of(task, program_name) is not None:
         raise TreeWriteRefused(
             f"{program_name!r} is already assigned to task {task.name!r}"
