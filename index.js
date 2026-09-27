@@ -711,6 +711,35 @@ function defineTools() {
       presentCall: () => ({ card: 'generic', title: 'Build in MotionWorks IEC', kind: 'execute' }),
       execute: () => verb('build', {}, 400000),
     },
+    {
+      name: 'mw_ide_compile_state',
+      description:
+        'Report whether the open project is COMPILED and whether it has MODIFIED since, without '
+        + 'building anything. Cheap and side-effect free, so it is the right check before deciding '
+        + 'whether a build is needed, and after a build whose verdict looks surprising. '
+        + 'is_modified=true with is_compiled=true means there are edits that have not been '
+        + 'compiled yet.',
+      parameters: { type: 'object', additionalProperties: false, properties: {} },
+      output: {
+        schema: {
+          type: 'object',
+          additionalProperties: false,
+          required: ['is_compiled', 'is_modified'],
+          properties: {
+            is_compiled: { oneOf: [{ type: 'boolean' }, { type: 'null' }] },
+            is_modified: { oneOf: [{ type: 'boolean' }, { type: 'null' }] },
+          },
+        },
+        render: (_a, v) => text(
+          `compiled=${v.is_compiled}  modified=${v.is_modified}`
+          + (v.is_compiled === true && v.is_modified === true
+            ? '  — there are edits that have not been compiled yet'
+            : ''),
+        ),
+      },
+      presentCall: () => ({ card: 'generic', title: 'Check compile state', kind: 'read' }),
+      execute: () => verb('compile_state', {}, 30000),
+    },
 
     {
       name: 'mw_ide_errors',

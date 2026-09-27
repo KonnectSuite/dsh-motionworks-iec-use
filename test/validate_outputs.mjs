@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Validate every tool's ACTUAL OUTPUT against its own declared schema.
  *
  * This is the test that was missing, and its absence is why mw_code_pous shipped
@@ -29,7 +29,7 @@ const PLUGIN = process.env.MW_PLUGIN
 const mod = await import(`file:///${PLUGIN.replace(/\\/g, '/')}/index.js`);
 console.log(`plugin: ${PLUGIN}`);
 
-// ── the real validator ──────────────────────────────────────────────────────
+// â”€â”€ the real validator â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 let validate = null;
 const runtimeEntry = join(dirname(dirname(process.execPath)), 'node_modules',
   '@deepseek-ai', 'dsh-tools', 'lib', 'index.js');
@@ -38,7 +38,7 @@ try {
   validate = dsh.validateJsonSchemaValue;
   console.log(`validator: REAL (${validate ? 'validateJsonSchemaValue' : 'not exported'})`);
 } catch (e) {
-  console.log(`validator: UNAVAILABLE (${e.message}) — cannot run this check`);
+  console.log(`validator: UNAVAILABLE (${e.message}) â€” cannot run this check`);
   process.exit(2);
 }
 if (typeof validate !== 'function') { console.log('validateJsonSchemaValue missing'); process.exit(2); }
@@ -55,7 +55,8 @@ const ARGS = {
   mw_ide_screenshot: null, mw_ide_pous: null, mw_ide_variables: {},
   mw_ide_make: null, mw_ide_build: null, mw_ide_errors: { pane: 'Errors' },
   mw_ide_open: { path: '(skipped)' }, mw_ide_dialog: { button: 'OK' },
-  mw_ide_state: {},
+  mw_ide_state: {}, mw_ide_compile_state: {},
+  mw_code_tasks: {},
   mw_code_pous: {}, mw_code_unsupported: {}, mw_code_read_st: { pou: 'AgentProof' },
   mw_code_write_st: { pou: 'AgentProof', body: '(* probe *)\r\n', dry_run: true },
   mw_code_var_add: { pou: 'AgentProof', name: 'ProbeX', type: 'BOOL', dry_run: true },
