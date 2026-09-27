@@ -1272,6 +1272,8 @@ function defineTools() {
     {
       name: 'mw_code_var_add',
       description:
+        'NOTE: a GLOBAL add (omit pou) is REFUSED by design, because a global lives in both the Global_Variables.VB text stream and the Global_Variables.VGR binary grid, and only the text can be rewritten safely - changing just the text makes the compiler reject the whole global table, so every POU stops compiling. Change globals in the MotionWorks worksheet, then read them with mw_code_globals. POU-scoped adds (pass pou) are unaffected.'
+        + 
         'Add a variable declaration to a POU (or project-global when `pou` is omitted). '
         + 'Touches only the textual declaration stream. **dry_run defaults to true.**',
       parameters: {

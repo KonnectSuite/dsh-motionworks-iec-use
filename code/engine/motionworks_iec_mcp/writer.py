@@ -326,6 +326,43 @@ def _strip_comment(prefix: str) -> str:
     return without.rstrip(" \t")
 
 
+def _refuse_global_write(pou_name: str | None, action: str) -> None:
+    """Refuse a GLOBAL declaration write, because it cannot be done safely.
+
+    ``_declaration_target`` writes a global into the resource's ``Global_Variables.VB``
+    text stream and nothing else, but the resource ALSO holds ``Global_Variables.VGR``,
+    a binary grid whose header carries the declaration count and whose records carry the
+    variables themselves.
+
+    Measured, and this is the whole problem: after a global add the .VB declares 162
+    while the grid header still says 161, and the compiler then rejects the ENTIRE
+    global table - not just the new variable. The build reports 125
+    "No matching global variable found" errors naming globals that were never touched,
+    including system tags like PLCMODE_RUN, and every POU in the project fails at once.
+    The failing build then drops a task assignment as well, so the project ends up both
+    uncompilable and missing a task, which reads exactly like corruption.
+
+    Bumping the grid header count is NOT sufficient either - tested - it takes 125
+    errors down to 29 but leaves the project broken, because the count and the records
+    have to agree and a new variable needs a real record.
+
+    So the honest behaviour is to refuse, and say why. POU-scoped declarations are
+    unaffected: their grid is not consulted the same way (which is what the original
+    "the compiler does not require the .VGR grid to be updated" note measured, on POU
+    declarations only).
+    """
+    if pou_name is None:
+        raise WriteRefused(
+            f"refusing to {action} a GLOBAL variable: the project keeps globals in TWO "
+            f"places - the Global_Variables.VB text stream and the Global_Variables.VGR "
+            f"binary grid - and only the text stream can be written safely. Changing just "
+            f"the text makes the compiler reject the whole global table, so EVERY POU "
+            f"stops compiling with 'No matching global variable found'. Add or change the "
+            f"global in the MotionWorks variable worksheet instead, then re-read it here "
+            f"with mw_code_globals. POU-scoped variables (pass `pou`) are unaffected."
+        )
+
+
 def _declaration_target(
     project_root: Path, pou_name: str | None
 ) -> tuple[Path, str, bytes, str]:
@@ -405,10 +442,12 @@ def plan_variable_add(
 ) -> WritePlan:
     """Plan adding a variable declaration.
 
-    Touches only the textual ``.VB`` stream.  Measured empirically, the compiler
-    does not require the binary ``.VGR`` grid to be updated for a declaration
-    change to take effect, so no grid edit is involved.
+    Touches only the textual ``.VB`` stream.  For a POU-scoped declaration that is
+    sufficient - measured, the compiler does not consult the POU's ``.VGR`` grid for a
+    declaration change.  For a GLOBAL it is NOT, which is why that case is refused
+    outright; see ``_refuse_global_write``.
     """
+    _refuse_global_write(pou_name, 'add')
     from .declarations import add_variable
 
     source, stream, before, text = _declaration_target(project_root, pou_name)
@@ -441,6 +480,7 @@ def plan_variable_edit(
     %IX21488.5`` as ``DINT`` failed the build, while the same change on an
     unaddressed variable compiled cleanly.  Pass ``force=True`` to override.
     """
+    _refuse_global_write(pou_name, 'edit')
     from . import project as P
     from .declarations import (
         _find_declaration_line,
@@ -515,6 +555,7 @@ def plan_variable_delete(
     an unreferenced global variable compiled cleanly.  Pass ``force=True`` to
     override.
     """
+    _refuse_global_write(pou_name, 'delete')
     from .declarations import delete_variable
 
     source, stream, before, text = _declaration_target(project_root, pou_name)

@@ -884,6 +884,8 @@ def apply_pou_creation(
 
         _rewrite_node_properties(target_dir, plan)
         _rename_pou_streams(target_dir, plan)
+        # Localize AFTER renaming, so the stream names are already the clone's own.
+        localization = _localize_pou_variables(target_dir)
 
         writes: list[tuple[Path, bytes, bytes]] = [
             (src, original, _edited_container_bytes(src, rendered))
@@ -912,6 +914,10 @@ def apply_pou_creation(
         "files_created": created,
         "files_written": [str(path) for path, _, _ in writes],
         "backups": backups,
+        # Reported so a caller can see that the clone's externals were localized. If
+        # grid_skipped is 1 the layout was unexpected and externals may remain, which
+        # is exactly the state that makes a later assign fail to compile.
+        "localization": localization,
     }
 
 
@@ -1018,6 +1024,67 @@ def _rewrite_node_properties(target_dir: Path, plan: PouCreationPlan) -> None:
     for old, new in zip(old_guids, plan.guids):
         text = text.replace(old, tree_form_to_guid(new), 1)
     path.write_bytes(text.encode("utf-16"))
+
+
+def _localize_pou_variables(target_dir: Path) -> dict[str, int]:
+    """Make a clone's declarations LOCAL instead of external.
+
+    A clone inherits the template's variable records verbatim, including any declared
+    ``VAR_EXTERNAL`` and their ``usage == 5`` binary grid records. Those expect a
+    matching ``VAR_GLOBAL`` belonging to the ORIGINAL project, which a clone has no
+    claim on.
+
+    Nothing compiles an unassigned POU, so this stays invisible - and then the assign
+    makes the compiler evaluate every one of them at once. Measured on a template that
+    carries externals: create, declare variables, write the body and add a global were
+    ALL clean (is_compiled=true), and the ASSIGN alone turned the project into 125
+    "No matching global variable found" errors. The failing build then drops a task
+    assignment, so the project ends up both uncompilable and missing a task - which is
+    what "the first attempt corrupted the project" actually was.
+
+    The transplanted-body path already does exactly this conversion (``plan_transplant``
+    renames ``VAR_EXTERNAL`` to ``VAR`` and localizes the grid); creation did not, and
+    that difference was the entire bug.
+
+    A grid whose layout is not the expected one is left untouched rather than guessed
+    at, and the counts are returned so the caller can report what happened.
+    """
+    from .cfb import CompoundFile
+
+    result = {"declarations_rewritten": 0, "grid_localized": 0, "fb_instances": 0, "grid_skipped": 0}
+    src = target_dir / "src.st1"
+    if not src.is_file():
+        return result
+
+    cfb = CompoundFile(src)
+    names = cfb.stream_names()
+    declaration_stream = next((n for n in names if n.endswith("V.VB")), None)
+    grid_stream = next((n for n in names if n.endswith("V.VGR")), None)
+
+    replacements: dict[str, bytes] = {}
+
+    if declaration_stream:
+        raw = cfb.read_stream(declaration_stream)
+        if b"VAR_EXTERNAL" in raw:
+            result["declarations_rewritten"] = raw.count(b"VAR_EXTERNAL")
+            replacements[declaration_stream] = raw.replace(b"VAR_EXTERNAL", b"VAR")
+
+    if grid_stream:
+        raw = cfb.read_stream(grid_stream)
+        try:
+            localized_bytes, localized, fb_instances = localize_variable_grid(raw)
+            result["grid_localized"] = localized
+            result["fb_instances"] = fb_instances
+            if localized:
+                replacements[grid_stream] = localized_bytes
+        except PouPlanError:
+            # Refusing to rewrite an unexpected layout is the safe choice; report it
+            # rather than silently leaving externals in place.
+            result["grid_skipped"] = 1
+
+    if replacements:
+        cfb.replace_streams(replacements)
+    return result
 
 
 def _rename_pou_streams(target_dir: Path, plan: PouCreationPlan) -> None:

@@ -55,6 +55,38 @@ mw_ide_errors  -> 24 message(s)
 
 `mw_ide_compile_state` reports `is_compiled` / `is_modified` without building, which
 is the cheap check before deciding whether a build is needed at all.
+## Global variables cannot be written, and that is deliberate
+
+`mw_code_var_add` / `_edit` / `_delete` with **`pou` omitted** (a global) are
+**refused**. They used to appear to work and silently wreck the project.
+
+A global lives in **two** places:
+
+| Where | What |
+|---|---|
+| `Global_Variables.VB` | the text declarations — writable |
+| `Global_Variables.VGR` | a binary grid: header count + one record per variable |
+
+Only the text stream could be written. Measured consequences of doing that:
+
+```
+after a global add : .VB declares 162, the .VGR header still says 161
+build              : 125 errors — "No matching global variable found for ..."
+                     naming globals that were NEVER touched, incl. PLCMODE_RUN
+```
+
+The compiler rejects the **entire** global table on that mismatch, so every POU in the
+project fails at once — and the failing build then drops a task assignment too, which
+is what made it look like corruption. Bumping the grid header count is not enough
+either: tested, it takes 125 errors down to 29 and still does not compile, because a
+new variable needs a real grid record.
+
+So:
+
+- **Read** globals freely with `mw_code_globals` — it reports the mismatch as a warning
+  if a project is already in this state, which is how to recognise it.
+- **Change** globals in the MotionWorks variable worksheet, then re-read them here.
+- **POU-scoped** declarations (pass `pou`) are unaffected and write normally.
 ## The one that actually bites: assigning a CLONED POU
 
 Isolated by bisection on one project, changing one step at a time:
