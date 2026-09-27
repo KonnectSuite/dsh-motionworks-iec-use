@@ -729,6 +729,134 @@ while ($true) {
             # runs against an inconsistent view and can report errors that are not in the
             # project - which would explain why adding a program to a task turns a clean
             # build into 125 unresolved-external errors while the files are provably fine.
+            'task_model' {
+                $app = Connect-App
+                if (-not $app.IsProjectOpen()) { throw 'no project is open in the IDE' }
+                $tasks = [ordered]@{}
+                $taskNames = @()
+                $resource = $app.ActiveProject.GetObjectByLogicalName(
+                    'Hardware/Configuration/Resource', 10)
+                if ($resource -ne $null) {
+                    $coll = $resource.Tasks
+                    for ($i = 1; $i -le $coll.Count; $i++) { $taskNames += $coll.Item($i).Name }
+                }
+                if ($taskNames.Count -eq 0) {
+                    foreach ($t in @('BG', 'FastTsk', 'MedTsk', 'SlowTsk', 'Start')) {
+                        $taskNames += $t
+                    }
+                }
+                foreach ($name in $taskNames) {
+                    $path = "Hardware/Configuration/Resource/Tasks/$name"
+                    try {
+                        $task = $app.ActiveProject.GetObjectByLogicalName($path, 11)
+                        if ($task -eq $null) { continue }
+                        $pi = $task.ProgramInstances
+                        $instances = @()
+                        for ($j = 1; $j -le $pi.Count; $j++) {
+                            $inst = $pi.Item($j)
+                            $instances += [ordered]@{
+                                name         = [string]$inst.Name
+                                type         = [string]$inst.Type
+                                logical_name = [string]$inst.LogicalName
+                            }
+                        }
+                        $tasks[$name] = [ordered]@{
+                            name         = [string]$task.Name
+                            cycle        = [string]$task.Type
+                            logical_name = [string]$task.LogicalName
+                            instances    = $instances
+                        }
+                    } catch {
+                        $tasks[$name] = [ordered]@{ error = $_.Exception.Message }
+                    }
+                }
+                $ok = $true
+                $data = [ordered]@{ tasks = $tasks; source = 'com' }
+            }
+
+            'assign_pou' {
+                $app = Connect-App
+                if (-not $app.IsProjectOpen()) { throw 'no project is open in the IDE' }
+                $taskName = [string]$req.task
+                $pouName = [string]$req.pou
+                $instName = $req.instance
+                if ([string]::IsNullOrWhiteSpace($instName)) { $instName = $pouName }
+                $progType = $req.type
+                if ([string]::IsNullOrWhiteSpace($progType)) { $progType = $pouName }
+                if ([string]::IsNullOrWhiteSpace($taskName)) { throw 'assign requires "task"' }
+                if ([string]::IsNullOrWhiteSpace($pouName)) { throw 'assign requires "pou"' }
+
+                $path = "Hardware/Configuration/Resource/Tasks/$taskName"
+                $task = $app.ActiveProject.GetObjectByLogicalName($path, 11)
+                if ($task -eq $null) { throw "no task named '$taskName' (looked for $path)" }
+
+                $pi = $task.ProgramInstances
+                $before = $pi.Count
+                $pi.GetType().InvokeMember('Create', 'InvokeMethod', $null, $pi,
+                    @([string]$instName, [string]$progType)) | Out-Null
+                $after = $pi.Count
+
+                $app.ActiveProject.Save()
+                Start-Sleep -Milliseconds 400
+
+                $instances = @()
+                for ($j = 1; $j -le $pi.Count; $j++) { $instances += [string]$pi.Item($j).Name }
+                $ok = $true
+                $data = [ordered]@{
+                    assigned    = $true
+                    task        = $taskName
+                    pou         = $pouName
+                    instance    = [string]$instName
+                    type        = [string]$progType
+                    before      = $before
+                    after       = $after
+                    instances   = $instances
+                    logical_name = [string]$pi.Item($after).LogicalName
+                }
+            }
+
+            'unassign_pou' {
+                $app = Connect-App
+                if (-not $app.IsProjectOpen()) { throw 'no project is open in the IDE' }
+                $taskName = [string]$req.task
+                $pouName = [string]$req.pou
+                if ([string]::IsNullOrWhiteSpace($taskName)) { throw 'unassign requires "task"' }
+                if ([string]::IsNullOrWhiteSpace($pouName)) { throw 'unassign requires "pou"' }
+
+                $path = "Hardware/Configuration/Resource/Tasks/$taskName"
+                $task = $app.ActiveProject.GetObjectByLogicalName($path, 11)
+                if ($task -eq $null) { throw "no task named '$taskName' (looked for $path)" }
+
+                $pi = $task.ProgramInstances
+                $before = $pi.Count
+                $hit = -1
+                for ($j = 1; $j -le $pi.Count; $j++) {
+                    if ([string]$pi.Item($j).Name -eq $pouName) { $hit = $j; break }
+                }
+                if ($hit -lt 0) {
+                    $names = @()
+                    for ($j = 1; $j -le $pi.Count; $j++) { $names += [string]$pi.Item($j).Name }
+                    throw "'$pouName' is not assigned to task '$taskName'. Assigned: $($names -join ', ')"
+                }
+                $pi.Item($hit).Delete()
+                $after = $pi.Count
+
+                $app.ActiveProject.Save()
+                Start-Sleep -Milliseconds 400
+
+                $instances = @()
+                for ($j = 1; $j -le $pi.Count; $j++) { $instances += [string]$pi.Item($j).Name }
+                $ok = $true
+                $data = [ordered]@{
+                    unassigned = $true
+                    task       = $taskName
+                    pou        = $pouName
+                    before     = $before
+                    after      = $after
+                    instances  = $instances
+                }
+            }
+
             'save' {
                 $app = Connect-App
                 if (-not $app.IsProjectOpen()) { throw 'no project is open in the IDE' }

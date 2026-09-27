@@ -398,6 +398,7 @@ function renderBuild(_a, v) {
 }
 
 /** Output of the code-engine write verbs (dry-run preview or a real apply). */
+const WRITE_SCHEMA_NULLABLE = { type: 'object', additionalProperties: true };
 const WRITE_SCHEMA = {
   type: 'object',
   additionalProperties: true,
@@ -1355,57 +1356,6 @@ function defineTools() {
       }),
     },
     {
-      name: 'mw_code_manual',
-      description:
-        'Search the MotionWorks documentation the IDE installs, or list it. The IDE ships '
-        + 'three PDF manuals and 259 .chm help files, and the Toolbox Manual documents every '
-        + 'function block and data type the toolboxes provide - so this is how to find out '
-        + 'what CamGenerator actually does, or what a CamSegmentStruct contains, in the '
-        + "vendor's own words rather than by guessing. Call with no term to list the manuals "
-        + 'and the help topics; pass a term - a function block, a data type, a concept - to '
-        + 'get matching passages with surrounding context. The PDFs are read directly; the '
-        + '.chm files cannot be, because they are LZX-compressed, but their filenames name '
-        + 'their subjects so a caller learns which help file to open. Read-only and offline.',
-      parameters: {
-        type: 'object',
-        additionalProperties: false,
-        properties: {
-          term: { type: 'string', description: 'Word or phrase to search for; omit to list what is available.' },
-          name: { type: 'string', description: 'Restrict the search to one manual by name fragment.' },
-          limit: { type: 'integer', description: 'Passages per manual; defaults to 5.' },
-        },
-      },
-      output: {
-        schema: {
-          type: 'object',
-          additionalProperties: true,
-          properties: {
-            term: { type: 'string' },
-            found: { type: 'integer' },
-            results: { type: 'array', items: { type: 'object', additionalProperties: true } },
-            manuals: { type: 'array', items: { type: 'object', additionalProperties: true } },
-            help_topics: { type: 'array', items: { type: 'string' } },
-            note: { type: 'string' },
-          },
-        },
-        render: (r) => {
-          if (Array.isArray(r.manuals)) {
-            return `${r.manuals.length} manuals, ${(r.help_topics ?? []).length} help topics: `
-              + r.manuals.map((m) => `${m.name}${m.readable ? '' : ' (compiled)'}`).join(' | ');
-          }
-          if (!r.found) return `no manual mentions ${r.term}`;
-          const total = (r.results ?? []).reduce((n, x) => n + (x.hits ?? 0), 0);
-          return `${total} hits for ${r.term} across ${r.found} manual(s): `
-            + (r.results ?? []).map((x) => `${x.manual} (${x.hits})`).join(', ');
-        },
-      },
-      execute: async (args) => runCode('manual', {
-        ...(args?.term ? { term: String(args.term) } : {}),
-        ...(args?.name ? { name: String(args.name) } : {}),
-        ...(args?.limit !== undefined ? { limit: Number(args.limit) } : {}),
-      }),
-    },
-    {
       name: 'mw_code_globals',
       description:
         'List the project VAR_GLOBAL declarations - the tags every POU can see, with type, '
@@ -1809,6 +1759,37 @@ function defineTools() {
     },
 
     {
+      name: 'mw_code_task_model',
+      description:
+        'Read every task and its assigned programs through the IDE\'s own COM object model - a '
+        + 'SECOND SOURCE OF TRUTH beside mw_code_tasks, which reads PROJECT.TRE. The tree is what '
+        + 'the IDE wrote at the last save; this is what the IDE holds in memory now, so when the '
+        + 'two agree the assignment is both made and saved. Each task reports its name, its cycle '
+        + '(DEFAULT, CYCLIC, SYSTEM) and every program instance with its instance name, program '
+        + 'type and logical name. Use it to confirm an assignment made by mw_code_pou_assign. '
+        + 'Read-only.',
+      parameters: { type: 'object', additionalProperties: false, properties: {} },
+      output: {
+        schema: {
+          type: 'object',
+          additionalProperties: true,
+          properties: {
+            tasks: { type: 'object', additionalProperties: true },
+            source: { type: 'string' },
+          },
+        },
+        render: (_a, v) => {
+          const rows = Object.entries(v.tasks ?? {});
+          if (!rows.length) return 'no tasks';
+          return rows.map(([k, t]) => `${k} [${t.cycle ?? '?'}] `
+            + ((t.instances ?? []).map((i) => i.name).join(', ') || '(none)')).join('\n');
+        },
+      },
+      presentCall: () => ({ card: 'generic', title: 'Read tasks through COM', kind: 'read' }),
+      execute: () => verb('task_model', {}, 60000),
+    },
+
+    {
       name: 'mw_code_tasks',
       description:
         'List the project\'s tasks and which POU is assigned to each, plus the POUs that are '
@@ -1856,53 +1837,96 @@ function defineTools() {
     {
       name: 'mw_code_pou_assign',
       description:
-        'Assign a POU to a task so it actually RUNS and is compile-checked. A POU created by '
+        'Assign a program to a task so it actually RUNS and is compile-checked. A POU created by '
         + 'mw_code_pou_create is not assigned to anything, so without this it is inert: nothing '
-        + 'calls it and a clean build says nothing about whether it is correct. Task names come '
-        + 'from mw_code_tasks (for example Start, FastTsk, MedTsk, SlowTsk, BG). '
-        + '**dry_run defaults to true.**'
-        + 'REFUSED - and here is what to do instead, because the agent still needs to get this done. In the MotionWorks Project Tree: right-click the task and add the program. Then call mw_code_tasks to confirm it landed; that tool reads assignments from the tree, so a successful one appears there. WHY IT IS REFUSED: writing the instance node into PROJECT.TRE makes the IDE rewrite the tree at open - Start, Global_Variables and IO_Configuration each lose a line, and the build then reports 125 No-matching-global-variable errors because the Globals node is gone. NODES.LST alone avoids the damage but the IDE discards the assignment, so the tool would report success for an effect that does not persist. RULED OUT by test, so not worth retrying: the node content, its length (9 and 10 lines), its position (before and after the children), the program compiled state, and the cycle field. The IDE keeps the marker and GUID and rebuilds the layout, so it parses the node and cannot read its fields.',
+        + 'calls it and a clean build says nothing about whether it is correct. '
+        + 'This goes through the IDE\'s own object model - task.ProgramInstances.Create then '
+        + 'Save() - so the IDE writes the project tree itself and nothing here edits a file. The '
+        + 'IDE also VALIDATES: an instance that already exists reports "ProgramInstance already '
+        + 'exists" and an unknown program type reports "Unknown Program type" rather than '
+        + 'producing something broken. Task names come from mw_code_tasks (Start, FastTsk, '
+        + 'MedTsk, SlowTsk, BG). Confirm from the tree side with mw_code_tasks and from the COM '
+        + 'side with mw_code_task_model. **dry_run defaults to true.**',
       parameters: {
         type: 'object',
         additionalProperties: false,
         required: ['task', 'pou'],
         properties: {
-          task: { type: 'string', description: 'Task to assign to, e.g. "SlowTsk".' },
-          pou: { type: 'string', description: 'POU to assign.' },
-          cycle: { type: 'string', description: 'Task cycle; defaults to the task\'s own style (CYCLIC).' },
-          controller: { type: 'string', description: 'Controller name; defaults to MP2600iec.' },
-          project: { type: 'string' },
-          dry_run: { type: 'boolean', description: 'Defaults to true.' },
+          task: { type: 'string', description: 'Task to assign to, e.g. "SlowTsk" or "BG".' },
+          pou: { type: 'string', description: 'Program to assign; also the instance name.' },
+          instance: { type: 'string', description: 'Instance name; defaults to the POU name.' },
+          type: { type: 'string', description: 'Program type; defaults to the POU name.' },
+          dry_run: { type: 'boolean', description: 'Report what would happen without doing it. Defaults to true.' },
         },
       },
-      output: { schema: WRITE_SCHEMA, render: renderWrite },
+      output: { schema: WRITE_SCHEMA_NULLABLE, render: renderWrite },
       presentCall: (a) => ({ card: 'generic', title: `Assign ${a.pou} to ${a.task}`, kind: 'edit' }),
-      execute: (args) => runCode('assign', {
-        ...(args ?? {}), project: projectOf(args), dry_run: args?.dry_run !== false,
-      }),
+      execute: async (args) => {
+        const task = args?.task;
+        const pou = args?.pou;
+        if (args?.dry_run !== false) {
+          let current = null;
+          try {
+            const m = await verb('task_model', {}, 60000);
+            current = m?.tasks?.[task]?.instances?.map((i) => i.name) ?? null;
+          } catch { /* report what we have */ }
+          return {
+            dry_run: true,
+            would_assign: { task, pou, instance: args?.instance ?? pou, type: args?.type ?? pou },
+            currently_assigned: current,
+            note: current?.includes(pou)
+              ? `${pou} is ALREADY assigned to ${task}; assigning again would report "ProgramInstance already exists".`
+              : `This would call ProgramInstances.Create on task ${task}, then save. Pass dry_run:false to do it.`,
+          };
+        }
+        return verb('assign_pou', {
+          task: String(task), pou: String(pou),
+          ...(args?.instance ? { instance: String(args.instance) } : {}),
+          ...(args?.type ? { type: String(args.type) } : {}),
+        }, 120000);
+      },
     },
 
     {
       name: 'mw_code_pou_unassign',
       description:
-        'Remove a POU\'s task assignment, so it stops being called. The POU itself stays in the '
-        + 'project. **dry_run defaults to true.**',
+        'Remove a program\'s assignment from a task, through the IDE\'s own object model - '
+        + 'ProgramInstances.Delete() then Save() - so the IDE writes the project tree itself and '
+        + 'nothing here edits a file. The program itself is NOT deleted; it stays in Logical POUs '
+        + 'and simply stops running. Compare with mw_code_pou_delete, which removes the POU. '
+        + '**dry_run defaults to true.**',
       parameters: {
         type: 'object',
         additionalProperties: false,
         required: ['task', 'pou'],
         properties: {
-          task: { type: 'string', description: 'Task the POU is currently assigned to.' },
-          pou: { type: 'string' },
-          project: { type: 'string' },
+          task: { type: 'string', description: 'Task the program is assigned to.' },
+          pou: { type: 'string', description: 'Instance name to remove, as mw_code_tasks shows it.' },
           dry_run: { type: 'boolean', description: 'Defaults to true.' },
         },
       },
-      output: { schema: WRITE_SCHEMA, render: renderWrite },
-      presentCall: (a) => ({ card: 'generic', title: `Unassign ${a.pou}`, kind: 'delete' }),
-      execute: (args) => runCode('unassign', {
-        ...(args ?? {}), project: projectOf(args), dry_run: args?.dry_run !== false,
-      }),
+      output: { schema: WRITE_SCHEMA_NULLABLE, render: renderWrite },
+      presentCall: (a) => ({ card: 'generic', title: `Unassign ${a.pou} from ${a.task}`, kind: 'edit' }),
+      execute: async (args) => {
+        const task = args?.task;
+        const pou = args?.pou;
+        if (args?.dry_run !== false) {
+          let current = null;
+          try {
+            const m = await verb('task_model', {}, 60000);
+            current = m?.tasks?.[task]?.instances?.map((i) => i.name) ?? null;
+          } catch { /* report what we have */ }
+          return {
+            dry_run: true,
+            would_unassign: { task, pou },
+            currently_assigned: current,
+            note: current && !current.includes(pou)
+              ? `${pou} is not assigned to ${task}; there is nothing to remove.`
+              : `This would delete the ${pou} instance from task ${task}, then save. Pass dry_run:false to do it.`,
+          };
+        }
+        return verb('unassign_pou', { task: String(task), pou: String(pou) }, 120000);
+      },
     },
 
     {
