@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Validate every tool's ACTUAL OUTPUT against its own declared schema.
  *
  * This is the test that was missing, and its absence is why mw_code_pous shipped
@@ -57,7 +57,7 @@ const ARGS = {
   mw_ide_open: { path: '(skipped)' }, mw_ide_dialog: { button: 'OK' },
   mw_ide_state: {}, mw_ide_compile_state: {},
   mw_code_tasks: {},
-  mw_code_pous: {}, mw_code_unsupported: {}, mw_code_read_st: { pou: 'AgentProof' },
+  mw_code_pous: {}, mw_code_globals: {}, mw_code_unsupported: {}, mw_code_read_st: { pou: 'AgentProof' },
   mw_code_write_st: { pou: 'AgentProof', body: '(* probe *)\r\n', dry_run: true },
   mw_code_var_add: { pou: 'AgentProof', name: 'ProbeX', type: 'BOOL', dry_run: true },
   mw_code_var_edit: { pou: 'AgentProof', name: 'Running', description: 'probe', dry_run: true },

@@ -1,4 +1,4 @@
-﻿/**
+/**
  * MotionWorks Use â€” a Cordis plugin for DeepSeek Harness.
  *
  * Gives the agent the ability to *operate* a running Yaskawa MotionWorks IEC 3 Pro
@@ -1144,6 +1144,65 @@ function defineTools() {
       },
       presentCall: () => ({ card: 'generic', title: 'List POUs from files', kind: 'read' }),
       execute: (args) => runCode('pous', { project: projectOf(args), ...(args ?? {}) }),
+    },
+    {
+      name: 'mw_code_globals',
+      description:
+        'List the project VAR_GLOBAL declarations - the tags every POU can see, with type, '
+        + 'group, IEC address, initial value and description. Read this BEFORE writing code that '
+        + 'references a shared tag, and after mw_code_var_add without a `pou` to confirm the '
+        + 'global landed. The automation API exposes NO project-level variable collection '
+        + '(project.Variables, project.Globals and project.VariableGroups are all absent or '
+        + 'empty), so the live variable model cannot show globals at all - this reads them from '
+        + 'the resource declaration stream instead.',
+      parameters: {
+        type: 'object',
+        additionalProperties: false,
+        properties: {
+          project: { type: 'string', description: 'Project directory; defaults to the staged project.' },
+        },
+      },
+      output: {
+        schema: {
+          type: 'object',
+          additionalProperties: false,
+          required: ['count', 'variables'],
+          properties: {
+            project: { type: 'string' },
+            count: { type: 'integer' },
+            source_stream: { oneOf: [{ type: 'string' }, { type: 'null' }] },
+            warnings: { type: 'array', items: { type: 'string' } },
+            variables: {
+              type: 'array',
+              items: {
+                type: 'object',
+                additionalProperties: true,
+                required: ['name'],
+                properties: {
+                  name: { type: 'string' },
+                  type: { oneOf: [{ type: 'string' }, { type: 'null' }] },
+                  section: { oneOf: [{ type: 'string' }, { type: 'null' }] },
+                  group: { oneOf: [{ type: 'string' }, { type: 'null' }] },
+                  address: { oneOf: [{ type: 'string' }, { type: 'null' }] },
+                  initial_value: { oneOf: [{ type: 'string' }, { type: 'null' }] },
+                  description: { oneOf: [{ type: 'string' }, { type: 'null' }] },
+                },
+              },
+            },
+          },
+        },
+        render: (_a, v) => text(
+          `${v.count} global declaration(s)`
+          + (v.source_stream ? ` from ${v.source_stream}` : '')
+          + ':\n'
+          + v.variables.slice(0, 40).map((x) => `  ${x.name} : ${x.type ?? '?'}`
+            + (x.address ? `  ${x.address}` : '')
+            + (x.group ? `  [${x.group}]` : '')).join('\n')
+          + (v.variables.length > 40 ? `\n  … and ${v.variables.length - 40} more` : ''),
+        ),
+      },
+      presentCall: () => ({ card: 'generic', title: 'List global variables', kind: 'read' }),
+      execute: (args) => runCode('globals', { project: projectOf(args) }),
     },
 
     {

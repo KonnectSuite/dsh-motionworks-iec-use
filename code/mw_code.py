@@ -64,7 +64,7 @@ def _project(root: str):
     return P.Project(root=Path(root))
 
 
-# ── read ─────────────────────────────────────────────────────────────────────
+# â”€â”€ read â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 def verb_pous(req):
     """List the POUs of a project directory, straight from its files."""
@@ -107,7 +107,7 @@ def verb_read_st(req):
     variables = []
     try:
         # DeclarationTable exposes `.variables` (a flat list of Variable), plus
-        # `warnings` and `source_stream`. It has NO `.blocks` — iterating that
+        # `warnings` and `source_stream`. It has NO `.blocks` â€” iterating that
         # silently produced an empty list, so callers could read a POU's body but
         # never its declarations.
         table = info.declarations()
@@ -157,7 +157,7 @@ def verb_unsupported(req):
     return _ok(blocked=blocked, count=len(blocked))
 
 
-# ── write ────────────────────────────────────────────────────────────────────
+# â”€â”€ write â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 def verb_write_st(req):
     """Replace a POU's Structured Text body. dry_run defaults to True."""
@@ -366,6 +366,38 @@ def verb_unassign(req):
     return _ok(dry_run=False, result=_jsonable(result))
 
 
+def verb_globals(req):
+    """List the project's VAR_GLOBAL declarations.
+
+    The automation API exposes NO project-level variable collection - measured:
+    project.Variables, project.Globals and project.VariableGroups are all absent or
+    empty - so the live variable model cannot show globals even though it reads
+    POU-scoped declarations well. Without this an agent can ADD a global and never see
+    it again, and cannot discover the tags several POUs share.
+    """
+    proj = _project(req["project"])
+    table = proj.global_variables()
+    out = []
+    for v in getattr(table, "variables", []) or []:
+        out.append({
+            "name": getattr(v, "name", None),
+            "type": getattr(v, "type_name", None),
+            "section": getattr(v, "section", None),
+            "group": getattr(v, "group", None),
+            "address": getattr(v, "address", None),
+            "initial_value": getattr(v, "initial_value", None),
+            "description": getattr(v, "description", None),
+        })
+    warnings = list(getattr(table, "warnings", []) or [])
+    return _ok(
+        project=str(req["project"]),
+        count=len(out),
+        variables=out,
+        source_stream=getattr(table, "source_stream", None),
+        warnings=warnings,
+    )
+
+
 def verb_ide_closed(req):
     """Report whether the IDE gate would let a write through."""
     from motionworks_iec_mcp import ide as I
@@ -392,6 +424,7 @@ VERBS = {
     "var_delete": verb_var_delete,
     "pou_create": verb_pou_create,
     "pou_delete": verb_pou_delete,
+    "globals": verb_globals,
     "tasks": verb_tasks,
     "assign": verb_assign,
     "unassign": verb_unassign,
