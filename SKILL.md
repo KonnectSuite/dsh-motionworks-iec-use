@@ -639,3 +639,38 @@ IDE and open a project through the plugin FIRST, then probe.
 
 **`[void](Function ...)` discards the function's whole output stream**, not just its return value,
 so a probe written that way prints nothing and looks like it hung. Probes should use Write-Host.
+
+
+### Never kill node or powershell by name on this machine
+
+The COM bridge needed restarting, so:
+
+    Get-Process node | Stop-Process -Force
+
+killed the harness running the command. The shell died mid-sentence, the call returned
+``[exit code: 4294967295]`` with no output, and every long test afterwards failed the same way
+until the environment recovered. **The DSH harness runs on node and spawns powershell**, so a blunt
+kill by process NAME takes out the thing doing the killing.
+
+The same mistake in miniature: stopping powershell from a child shell whose ``$PID`` was the
+CHILD's, which killed the parent and produced no output at all.
+
+The bridge has its own ``stop`` verb. Use it. Never match a process by name alone - filter on
+CommandLine, or let the tool that owns the process end it.
+
+### Open: does the stale-App fix also cure create-then-declare?
+
+Round 45 found that ``Connect-App`` cached ``$script:App`` and served the project it FIRST saw,
+making mutation verbs fail with errors that name the operation instead of the cause. Dropping that
+cache whenever a project is opened or the IDE is closed fixed it.
+
+That may be more than plumbing. **Every create-then-declare test in rounds 40 to 44 ran through a
+long-lived bridge across many restages**, and the failure was the IDE REWRITING files during a
+build. If a stale Application reference reaches the IDE's own writes, the "landmine" documented in
+round 44 - and the tool description currently telling agents NOT to add declarations to a created
+POU - may describe a bug that no longer exists.
+
+**The test, not yet run:** create, add a declaration, reopen, assign, build, with the bridge
+restarted between every step so no cached COM object survives. If it passes, the warning comes out
+of ``mw_code_pou_create`` and a feature is restored. If it fails, the warning stays and it is known
+to be a real format problem rather than a stale handle.
