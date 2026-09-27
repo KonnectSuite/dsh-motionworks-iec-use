@@ -648,6 +648,34 @@ def main(argv):
         _write(res, _fail(f"unknown verb {verb!r}", allowed=sorted(VERBS)))
         return 1
 
+    # THE STAGING GUARD, at the one point every verb passes through.
+    #
+    # index.js refuses a project outside the staging root, but that only covers the plugin's TOOLS.
+    # Measured: the workspace holds 25-odd scripts the agent wrote for itself, and they call this
+    # engine directly - Tools/_mw_call.py, Tools/_mw_call2.py, Tools/_real_state.py and the rest -
+    # so the agent routed around the tool-level guard by not using the tools, and the owner reported
+    # a third time that a project outside the workspace had been opened.
+    #
+    # Guarding here catches all of them, because every one of them comes through this dispatch. It
+    # is also the honest place for it: this engine is what writes the files.
+    #
+    # A request with no `project` is not refused. That is not a hole - the verbs without one do not
+    # touch a project tree - and refusing them would mean a caller could not ask a question like
+    # "which POUs exist" without first proving where it stands.
+    try:
+        from engine.motionworks_iec_mcp.staging import StagingRefused, assert_staged
+    except ImportError:  # running from a checkout where the engine is a sibling package
+        try:
+            from motionworks_iec_mcp.staging import StagingRefused, assert_staged
+        except ImportError:
+            assert_staged = None
+    if assert_staged is not None and req.get("project"):
+        try:
+            assert_staged(req["project"], what=f"{verb} project")
+        except StagingRefused as exc:
+            _write(res, _fail(str(exc), refused_by="staging guard", verb=verb))
+            return 1
+
     try:
         _write(res, handler(req))
         return 0
