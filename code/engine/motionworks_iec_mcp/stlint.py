@@ -553,3 +553,126 @@ def lint_pou(pou: object, known_symbols: set[str] | None = None,
         local_vars=locals_only,
         project_globals=project_globals,
     )
+
+
+# ── assignment type checking ─────────────────────────────────────────────────────
+#
+# Measured: a body that assigns a UINT to a BOOL makes the builder destroy the POU - .VB to 0 bytes
+# and the grid to 79 MB - where a type-correct body merely stalls and leaves the POU intact. A type
+# error is therefore worth refusing here, before it can reach the compiler.
+#
+# Deliberately narrow. Anything whose type cannot be established confidently is ignored, because a
+# false refusal blocks correct code and costs more than the check saves.
+
+_INTEGER_TYPES = frozenset({
+    "SINT", "USINT", "INT", "UINT", "DINT", "UDINT", "LINT", "ULINT",
+    "BYTE", "WORD", "DWORD", "LWORD",
+})
+_REAL_TYPES = frozenset({"REAL", "LREAL"})
+_BOOL_TYPES = frozenset({"BOOL"})
+_STRING_TYPES = frozenset({"STRING", "WSTRING", "CHAR", "WCHAR"})
+
+_ASSIGN_LINE = re.compile(
+    r"^\s*([A-Za-z_][A-Za-z0-9_]*)\s*:=\s*(.+?)\s*;\s*$"
+)
+_COMPARISON = re.compile(r"<=|>=|<>|=|<|>")
+_LIT_REAL = re.compile(r"^[+-]?\d+\.\d*([eE][+-]?\d+)?$|^[+-]?\d+[eE][+-]?\d+$")
+_LIT_INT = re.compile(r"^[+-]?\d+$")
+_LIT_BOOL = re.compile(r"^(TRUE|FALSE)$", re.IGNORECASE)
+_LIT_STRING = re.compile(r"^'[^']*'$")
+_KEYWORDS = frozenset({"TRUE", "FALSE", "NOT", "AND", "OR", "XOR", "MOD", "DIV", "AND_THEN",
+                       "OR_ELSE"})
+
+
+def elementary_family(type_name):
+    """'integer', 'real', 'bool', 'string' - or None when the type is not an elementary one."""
+    t = (type_name or "").strip().upper()
+    if t in _INTEGER_TYPES:
+        return "integer"
+    if t in _REAL_TYPES:
+        return "real"
+    if t in _BOOL_TYPES:
+        return "bool"
+    if t in _STRING_TYPES:
+        return "string"
+    return None
+
+
+def _strip_comments(text):
+    return re.sub(r"\(\*.*?\*\)", " ", text)
+
+
+def _rhs_family(expr, types):
+    """The family of a right-hand side, or None when it cannot be told confidently."""
+    e = _strip_comments(expr).strip()
+    while e.startswith("(") and e.endswith(")"):
+        e = e[1:-1].strip()
+    if not e:
+        return None
+
+    if _LIT_STRING.match(e):
+        return "string"
+    if _LIT_BOOL.match(e):
+        return "bool"
+    if _LIT_REAL.match(e):
+        return "real"
+    if _LIT_INT.match(e):
+        return "integer"
+
+    if re.match(r"^NOT\b", e, re.IGNORECASE):
+        return "bool"
+    if _COMPARISON.search(e):
+        head = _COMPARISON.split(e)[0].strip()
+        if head and not _LIT_INT.match(head) and not _LIT_REAL.match(head):
+            return "bool"
+
+    tokens = re.findall(r"[A-Za-z_][A-Za-z0-9_]*", e)
+    if not tokens:
+        return None
+    families = set()
+    for tok in tokens:
+        if tok.upper() in _KEYWORDS:
+            continue
+        declared = types.get(tok)
+        if declared is None:
+            return None                 # unknown to us - say nothing
+        fam = elementary_family(declared)
+        if fam is None:
+            return None                 # struct, FB instance, array - not our business
+        families.add(fam)
+
+    if len(families) == 1:
+        return families.pop()
+    if families == {"integer", "real"}:
+        return "real"                   # INTEGER widens to REAL; never the reverse
+    return None
+
+
+def check_assignment_types(code, types):
+    """Assignments whose right-hand side cannot fit the left.
+
+    ``types`` maps a declared name to its type name. Returns a list of
+    ``(line_number, target, declared_type, rhs_family)``.
+    """
+    findings = []
+    if not types:
+        return findings
+    for number, line in enumerate(code.split("\n"), start=1):
+        clean = _strip_comments(line)
+        if ":=" not in clean:
+            continue
+        m = _ASSIGN_LINE.match(clean)
+        if not m:
+            continue
+        target, rhs = m.group(1), m.group(2)
+        declared = types.get(target)
+        if declared is None:
+            continue
+        want = elementary_family(declared)
+        got = _rhs_family(rhs, types)
+        if want is None or got is None or want == got:
+            continue
+        if want == "real" and got == "integer":
+            continue                    # a widening the compiler accepts
+        findings.append((number, target, declared, got))
+    return findings

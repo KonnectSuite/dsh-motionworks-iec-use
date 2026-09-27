@@ -829,7 +829,7 @@ def plan_st_body(
     variables would be undeclared.
     """
     from . import project as P
-    from .stlint import lint
+    from .stlint import Finding, lint, check_assignment_types
 
     proj = P.Project(root=project_root)
     pou = proj.pou(pou_name)
@@ -892,6 +892,34 @@ def plan_st_body(
             project_globals=P.global_names(proj),
         )
         errors = [f for f in result.findings if f.severity == "error"]
+
+        # A type error does not merely fail a build. Measured: assigning a UINT to a BOOL makes
+        # the builder DESTROY the POU - .VB to 0 bytes and the grid to 79,432,063 bytes - while
+        # a type-correct body with a different fault stalls harmlessly and leaves it intact. So
+        # a type error is refused here, alongside the undeclared-symbol errors above, and the
+        # body never reaches the compiler. Built as its own list and extended, so it cannot
+        # depend on the order these lines run in.
+        _types = {}
+        for _v in table.variables:
+            _n = getattr(_v, 'name', None)
+            _t = getattr(_v, 'type_name', None)
+            if _n and _t:
+                _types[_n] = _t
+        errors.extend(
+            Finding(
+                severity='error',
+                code='type-mismatch',
+                message=(
+                    f"line {_line}: assigning a {_got.upper()} to '{_target}', which is "
+                    f"{_want} - a type error makes the build DESTROY this POU rather than "
+                    f"report it, so the body is refused"
+                ),
+                line=_line,
+                hint='Convert the value explicitly, or declare a variable of the right type.',
+            )
+            for _line, _target, _want, _got in check_assignment_types(normalised, _types)
+        )
+
         if errors:
             detail = "\n  ".join(f.message for f in errors[:8])
             raise WriteRefused(
