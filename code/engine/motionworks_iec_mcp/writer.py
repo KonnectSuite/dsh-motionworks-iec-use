@@ -920,6 +920,31 @@ def plan_st_body(
             for _line, _target, _want, _got in check_assignment_types(normalised, _types)
         )
 
+        # ── a real compiler, when the machine has one ────────────────────────────────
+        #
+        # The checks above are hand-written and catch what they were written for. This asks an actual
+        # IEC 61131-3 compiler, which knows considerably more - and it fails soft, because a missing
+        # tool must never stop a write that would otherwise be fine.
+        if run_lint:
+            try:
+                from . import iec as _iec
+
+                _diagnostics = _iec.validate_pou(pou_name, table, normalised)
+                if _diagnostics is None:
+                    notes.append("not checked by an IEC compiler (none available)")
+                else:
+                    notes.append(_iec.summary(_diagnostics))
+                    for _d in _diagnostics:
+                        errors.append(Finding(
+                            severity="error",
+                            code=_d.code,
+                            message=f"IEC compiler: {_d.as_text()}",
+                            line=_d.line,
+                            hint="Fix the statement; a real compiler rejected it before it was written.",
+                        ))
+            except Exception as _exc:  # a broken compiler must never block a write
+                notes.append(f"IEC compiler check skipped: {type(_exc).__name__}")
+
         if errors:
             detail = "\n  ".join(f.message for f in errors[:8])
             raise WriteRefused(
