@@ -48,6 +48,41 @@ function Log([string]$m) {
     Add-Content -Path $logPath -Value $line -Encoding UTF8
 }
 
+# --- single instance --------------------------------------------------------
+#
+# TWO bridges polling one req.json is a race, and it bit hard: the plugin spawns a
+# bridge when it believes none is running, but a bridge stuck inside a slow verb
+# looks dead, so a second one starts. Both then poll the same file, one consumes a
+# request and (being slow) never answers it, and the caller times out with its work
+# already taken from the queue. Symptom: "timed out waiting for the bridge" with no
+# matching request in the log at all.
+#
+# The lock records the owning pid. A live owner means this process must exit rather
+# than compete; a dead owner leaves a stale lock that is simply taken over.
+$lockPath = Join-Path $BridgeDir 'bridge.lock'
+$lockOwner = 0
+if (Test-Path $lockPath) {
+    try { $lockOwner = [int]((Get-Content -Path $lockPath -Raw -ErrorAction Stop).Trim()) } catch { $lockOwner = 0 }
+}
+if ($lockOwner -gt 0) {
+    $alive = $null -ne (Get-Process -Id $lockOwner -ErrorAction SilentlyContinue)
+    if ($alive) {
+        Log "another bridge is already running (pid $lockOwner); exiting instead of competing for the queue"
+        exit 0
+    }
+    Log "stale bridge lock from pid $lockOwner; taking over"
+}
+Set-Content -Path $lockPath -Value $PID -Encoding ASCII
+
+function Remove-BridgeLock {
+    try {
+        if (Test-Path $lockPath) {
+            $cur = (Get-Content -Path $lockPath -Raw -ErrorAction SilentlyContinue)
+            if ($null -ne $cur -and $cur.Trim() -eq "$PID") { Remove-Item -Path $lockPath -Force -ErrorAction SilentlyContinue }
+        }
+    } catch { }
+}
+
 function Write-Result($id, [string]$verb, $ok, $data, [string]$err) {
     $payload = [ordered]@{
         id    = $id
@@ -106,6 +141,62 @@ public class MWW {
   // window to render itself instead.
   [DllImport("user32.dll")] public static extern bool PrintWindow(IntPtr hwnd, IntPtr hdcBlt, uint nFlags);
   [DllImport("user32.dll")] public static extern bool IsIconic(IntPtr h);
+
+  // Modal-dialog inspection. MotionWorks asks questions in standard Win32 #32770
+  // dialogs, whose text and buttons are readable through WM_GETTEXT/GetDlgCtrlID.
+  // While one is up the frame window is DISABLED, and the COM API simply reports
+  // nothing - which is how an agent concludes "no project" or "IDE closed" when
+  // the IDE is really waiting for a button press.
+  [DllImport("user32.dll")] public static extern bool IsWindowEnabled(IntPtr h);
+  [DllImport("user32.dll")] public static extern int GetDlgCtrlID(IntPtr h);
+  [DllImport("user32.dll")] public static extern IntPtr GetParent(IntPtr h);
+  [DllImport("user32.dll")] public static extern IntPtr GetWindow(IntPtr h, uint cmd);
+  [DllImport("user32.dll", EntryPoint="SendMessageW", CharSet=CharSet.Unicode)]
+  public static extern IntPtr SendStr(IntPtr h, uint msg, IntPtr wp, StringBuilder lp);
+  [DllImport("user32.dll", EntryPoint="SendMessageW", CharSet=CharSet.Unicode)]
+  public static extern IntPtr SendInt(IntPtr h, uint msg, IntPtr wp, IntPtr lp);
+
+  // Read a control's text across process boundaries. GetWindowTextW returns
+  // nothing for another process's controls; WM_GETTEXT does not have that limit.
+  //
+  // SendMessageTimeout, NOT SendMessage: SendMessage is synchronous and blocks
+  // FOREVER if the target is not pumping messages - which is exactly the state a
+  // modal MotionWorks dialog leaves it in. That hung the whole bridge for five
+  // minutes on a start_ide call, because the failure path inspects dialogs.
+  // SMTO_ABORTIFHUNG (0x2) plus a short timeout makes inspection always safe.
+  [DllImport("user32.dll", SetLastError=true, EntryPoint="SendMessageTimeoutW", CharSet=CharSet.Unicode)]
+  public static extern IntPtr SendTimeoutStr(IntPtr h, uint msg, IntPtr wp, StringBuilder lp, uint flags, uint ms, out IntPtr result);
+  [DllImport("user32.dll", SetLastError=true, EntryPoint="SendMessageTimeoutW", CharSet=CharSet.Unicode)]
+  public static extern IntPtr SendTimeoutInt(IntPtr h, uint msg, IntPtr wp, IntPtr lp, uint flags, uint ms, out IntPtr result);
+
+  const uint SMTO_ABORTIFHUNG = 0x0002;
+  const uint TEXT_TIMEOUT_MS = 200;
+
+  public static string ReadText(IntPtr h) {
+    IntPtr result;
+    IntPtr sent = SendTimeoutInt(h, 0x000E, IntPtr.Zero, IntPtr.Zero, SMTO_ABORTIFHUNG, TEXT_TIMEOUT_MS, out result);  // WM_GETTEXTLENGTH
+    if (sent == IntPtr.Zero) return "";                       // hung or gone: no text
+    int n = result.ToInt32();
+    if (n <= 0) return "";
+    if (n > 65536) n = 65536;
+    StringBuilder sb = new StringBuilder(n + 2);
+    sent = SendTimeoutStr(h, 0x000D, (IntPtr)(n + 1), sb, SMTO_ABORTIFHUNG, TEXT_TIMEOUT_MS, out result);              // WM_GETTEXT
+    if (sent == IntPtr.Zero) return "";
+    return sb.ToString();
+  }
+
+  // Press a button without risking a permanent block. BM_CLICK is synchronous
+  // like any SendMessage, so it is sent with a timeout and allowed to fail.
+  public static bool ClickButton(IntPtr h) {
+    IntPtr result;
+    IntPtr sent = SendTimeoutInt(h, 0x00F5, IntPtr.Zero, IntPtr.Zero, SMTO_ABORTIFHUNG, CLICK_TIMEOUT_MS, out result);
+    if (sent != IntPtr.Zero) return true;
+    // A hung dialog will not take BM_CLICK; posting is asynchronous and at least
+    // queues the click for whenever the dialog next pumps.
+    return PostMessage(h, 0x00F5, IntPtr.Zero, IntPtr.Zero);
+  }
+
+  const uint CLICK_TIMEOUT_MS = 2500;
 }
 '@
 
@@ -216,6 +307,183 @@ function Test-TrialGone([IntPtr]$dialog, [int]$seconds = 20) {
     return 0
 }
 
+# --- modal dialogs: the state the COM API cannot see ------------------------
+#
+# MotionWorks asks its questions in standard Win32 #32770 dialogs. While one is
+# up the frame window is DISABLED and the automation API simply goes quiet:
+# IsProjectOpen() reports false or throws, OpenProject fails, and an agent that
+# trusts COM alone concludes "no project open" or "the IDE has closed" while the
+# IDE is really sitting there waiting for a button press.
+#
+# These are plain Win32 dialogs, so their text and buttons are EXACTLY readable
+# through WM_GETTEXT + GetDlgCtrlID - no OCR approximation needed. The screenshot
+# remains the backstop for owner-drawn or foreign dialogs (the .NET licence
+# dialog), where text extraction returns nothing.
+$script:dialogHwnds = @{}
+
+function Get-IdePid {
+    $w = Get-IdeWindow
+    if (-not $w) { return 0 }
+    $p = [uint32]0
+    [void][MWW]::GetWindowThreadProcessId([IntPtr]$w, [ref]$p)
+    return [int]$p
+}
+
+function Get-IdeDialogs {
+    $idePid = Get-IdePid
+    $script:dialogHwnds = @{}
+    $found = New-Object System.Collections.ArrayList
+    if ($idePid -eq 0) { return $found }
+
+    $cb = [MWW+EnumWindowsProc]{
+        param($h, $l)
+        if (-not [MWW]::IsWindowVisible($h)) { return $true }
+        $p = [uint32]0; [void][MWW]::GetWindowThreadProcessId($h, [ref]$p)
+        if ([int]$p -ne $script:wantPid) { return $true }
+        $cls = New-Object System.Text.StringBuilder 64
+        [void][MWW]::GetClassNameW($h, $cls, 64)
+        if ($cls.ToString() -ne '#32770') { return $true }
+
+        $buttons = New-Object System.Collections.ArrayList
+        $texts = New-Object System.Collections.ArrayList
+        $t = New-Object System.Text.StringBuilder 512
+        [void][MWW]::GetWindowTextW($h, $t, 512)
+        $hex = "0x{0:X}" -f ([int64]$h)
+        $script:dialogHwnds[$hex] = $h
+        $script:curDlgHex = $hex
+
+        $cb2 = [MWW+EnumWindowsProc]{
+            param($k, $l2)
+            if (-not [MWW]::IsWindowVisible($k)) { return $true }
+            $c = New-Object System.Text.StringBuilder 64
+            [void][MWW]::GetClassNameW($k, $c, 64)
+            $cn = $c.ToString()
+            # Only these two classes carry the question and its answers, and the class
+            # is checked BEFORE reading text on purpose: every cross-process read can
+            # wait out its full timeout while the IDE is busy loading a project, so
+            # reading text for controls we do not care about made one inspection pass
+            # take seconds and hung the whole open call.
+            if ($cn -ne 'Button' -and $cn -ne 'Static') { return $true }
+            $txt = [MWW]::ReadText($k)
+            if (-not $txt) { return $true }
+            if ($cn -eq 'Button') {
+                $bid = [MWW]::GetDlgCtrlID($k)
+                # The handle is needed to press it, and an IntPtr is not JSON, so it
+                # travels in a side map keyed by dialog|id rather than in the result.
+                $script:dialogButtons["$script:curDlgHex|$bid"] = $k
+                [void]$buttons.Add([ordered]@{
+                    id    = $bid
+                    label = ($txt -replace '&', '').Trim()
+                })
+            } elseif ($cn -eq 'Static' -and $txt.Trim()) {
+                [void]$texts.Add($txt.Trim())
+            }
+            return $true
+        }
+        [void][MWW]::EnumChildWindows($h, $cb2, [IntPtr]::Zero)
+
+        [void]$found.Add([ordered]@{
+            handle  = $hex
+            title   = $t.ToString()
+            message = (($texts | Select-Object -Unique) -join "`n")
+            buttons = $buttons
+            enabled = [MWW]::IsWindowEnabled($h)
+        })
+        return $true
+    }
+    $script:wantPid = $idePid
+    $script:dialogButtons = @{}
+    [void][MWW]::EnumWindows($cb, [IntPtr]::Zero)
+    return $found
+}
+
+# One screen of truth about the IDE, suitable for a tool result.
+function Get-IdeState {
+    $w = Get-IdeWindow
+    $dialogs = Get-IdeDialogs
+    $blocked = $false
+    $enabled = $null
+    if ($w) {
+        $enabled = [MWW]::IsWindowEnabled([IntPtr]$w)
+        $blocked = (-not $enabled) -or ($dialogs.Count -gt 0)
+    }
+    $t = ''
+    if ($w) {
+        $sb = New-Object System.Text.StringBuilder 512
+        [void][MWW]::GetWindowTextW([IntPtr]$w, $sb, 512)
+        $t = $sb.ToString()
+    }
+    return [ordered]@{
+        ide_running  = [bool]$w
+        ide_window   = $(if ($w) { "0x{0:X}" -f ([int64]$w) } else { $null })
+        window_title = $t
+        ide_enabled  = $enabled
+        blocked      = $blocked
+        dialog_count = $dialogs.Count
+        dialogs      = @($dialogs)
+        hint         = $(if ($blocked) {
+            'A modal dialog is blocking the IDE. The automation API returns nothing while it is up, so "no project" / "IDE closed" MUST NOT be concluded. Answer it with answer_dialog.'
+        } else { $null })
+    }
+}
+
+# Prompts MotionWorks raises on open that have one obviously-safe answer. Each is
+# a recoverable question about loading a COPY in the staging area, so stopping to
+# ask a human for every one of them is what made opening a project look broken.
+# Anything not in this table is left strictly alone and reported, so the agent
+# decides rather than the bridge guessing.
+$script:knownAnswers = @(
+    @{ match = 'defragment';                        button = 'No'  }
+    @{ match = 'would you like to load the project anyway'; button = 'Yes' }
+    @{ match = 'currently loaded by';               button = 'Yes' }
+    @{ match = 'abnormal termination';              button = 'Yes' }
+    @{ match = 'disabled/enabled by software key';  button = 'OK'  }
+)
+
+function Resolve-KnownDialogs {
+    # ONE enumeration, answering everything that matches. An earlier version looped
+    # up to six passes internally, and each pass re-enumerated and re-read every
+    # dialog - so a single call could cost tens of seconds while the IDE was busy
+    # loading (every cross-process read waits out its timeout), which is what made
+    # an open call run for minutes. Callers repeat, so one pass is enough.
+    #
+    # Inspection is also globally budgeted: past $script:dialogBudget the IDE is
+    # plainly too busy to interrogate, and spending more of the call's deadline on
+    # it guarantees a timeout instead of an answer.
+    if ($null -eq $script:dialogSpent) { $script:dialogSpent = 0.0 }
+    if ($script:dialogSpent -gt 25.0) { return @() }
+    $swD = [Diagnostics.Stopwatch]::StartNew()
+    try {
+        $answered = New-Object System.Collections.ArrayList
+        $dialogs = @(Get-IdeDialogs)
+        if ($dialogs.Count -eq 0) { return $answered }
+        foreach ($d in $dialogs) {
+            $hay = ("$($d.title)`n$($d.message)").ToLower()
+            foreach ($k in $script:knownAnswers) {
+                if ($hay -notlike "*$($k.match)*") { continue }
+                $btn = $d.buttons | Where-Object { $_.label -ieq $k.button } | Select-Object -First 1
+                if ($btn) {
+                    $bh = $script:dialogButtons["$($d.handle)|$($btn.id)"]
+                    if ($bh -and [MWW]::ClickButton([IntPtr]$bh)) {
+                        [void]$answered.Add([ordered]@{
+                            dialog  = $d.handle
+                            matched = $k.match
+                            pressed = $btn.label
+                            message = $d.message
+                        })
+                    }
+                }
+                break
+            }
+        }
+        if ($answered.Count -gt 0) { Start-Sleep -Milliseconds 700 }
+        return $answered
+    } finally {
+        $swD.Stop()
+        $script:dialogSpent += $swD.Elapsed.TotalSeconds
+    }
+}
+
 # --- COM connection, held open across requests ---
 $script:App = $null
 
@@ -276,6 +544,7 @@ while ($true) {
                 Remove-Item -Force $reqPath -ErrorAction SilentlyContinue
                 Write-Result $id $verb $true ([ordered]@{ stopping = $true }) $null
                 Log "stop requested; exiting"
+                Remove-BridgeLock
                 if ($script:App -ne $null) { try { [void][Runtime.InteropServices.Marshal]::ReleaseComObject($script:App) } catch { } }
                 exit 0
             }
@@ -298,6 +567,10 @@ while ($true) {
             'open' {
                 $path = [string]$req.path
                 if ([string]::IsNullOrWhiteSpace($path)) { throw 'open requires "path"' }
+                # Fresh dialog budget for this call, so a long session of opens cannot
+                # inherit a spent budget and silently stop answering prompts.
+                $script:dialogSpent = 0.0
+                $swOpen = [Diagnostics.Stopwatch]::StartNew()
                 $full = [IO.Path]::GetFullPath($path)
                 $stageFull = [IO.Path]::GetFullPath($StageRoot)
                 if (-not $full.StartsWith($stageFull, [StringComparison]::OrdinalIgnoreCase)) {
@@ -314,8 +587,48 @@ while ($true) {
                 # "Internal error in 'OpenProject'" until it has. Reporting that as a
                 # failure made start->open look broken when it only needed time.
                 $opened = $false; $lastErr = $null
-                $deadline = (Get-Date).AddSeconds(90)
-                while ((Get-Date) -lt $deadline) {
+                # A PARALLEL WATCHER, because this thread is about to be blocked.
+                #
+                # OpenProject is a synchronous out-of-process COM call. When
+                # MotionWorks raises a prompt DURING the load ("this project was not
+                # closed cleanly, load anyway?"), the server enters a modal loop and
+                # the call does not return until that prompt is answered. So the retry
+                # loop below cannot help - no catch ever fires, no timeout applies.
+                # Measured: the request was logged and then sat for minutes unanswered.
+                # Only another process can press that button, so start one.
+                $watcher = $null
+                try {
+                    $watchCmd = Join-Path $BridgeDir 'watch_dialogs.cmd'
+                    if (Test-Path $watchCmd) {
+                        $watcher = Start-Process -FilePath 'cmd.exe' `
+                            -ArgumentList '/c', "`"$watchCmd`" 200" `
+                            -WindowStyle Hidden -PassThru
+                        Log "dialog watcher started pid=$($watcher.Id)"
+                    }
+                } catch { Log "dialog watcher failed to start: $($_.Exception.Message)" }
+
+                # 60s, not 90s: the retry window, the post-load dialog answers and the
+                # verification loop all share the caller's timeout, and the client
+                # gives up at 150s. Sizing each part as if it had the budget alone is
+                # what produced "timed out waiting for the bridge".
+                #
+                # The attempt cap matters as much as the deadline. A blocked
+                # OpenProject takes ~30s to fail, and the deadline is only consulted
+                # BETWEEN attempts, so an unbounded loop overshoots wildly: measured
+                # a "90s" loop running 443 seconds and a "60s" loop running 233.
+                # Three attempts is enough to cover IDE warm-up and still return
+                # inside the caller's budget.
+                $deadline = (Get-Date).AddSeconds(60)
+                $pass = 0
+                while ((Get-Date) -lt $deadline -and $pass -lt 3) {
+                    $pass++
+                    # Answer any prompt the IDE is waiting on BEFORE calling again.
+                    # While a modal dialog is up the frame is disabled and
+                    # OpenProject cannot succeed, so retrying blindly just burns
+                    # the deadline - which is what made start->open look broken.
+                    # Checked on a stride, because inspection is not free while the
+                    # IDE's UI thread is busy.
+                    if ($pass % 3 -eq 1) { [void](Resolve-KnownDialogs) }
                     try { $app.OpenProject($full, $false); $opened = $true; break }
                     catch {
                         $lastErr = $_.Exception.Message
@@ -323,16 +636,40 @@ while ($true) {
                         Start-Sleep -Seconds 2
                     }
                 }
-                if (-not $opened) { throw "OpenProject never succeeded within 90s; last error: $lastErr" }
+                Log "open attempt(s)=$pass opened=$opened elapsed=$([Math]::Round(((Get-Date) - $swOpen).TotalSeconds,1))s"
+                if (-not $opened) {
+                    if ($watcher) { try { Stop-Process -Id $watcher.Id -Force -ErrorAction SilentlyContinue } catch { } }
+                    throw "OpenProject never succeeded within 60s; last error: $lastErr"
+                }
                 # Verify what actually happened rather than trusting the call.
+                # MotionWorks asks "defragment?" / "load anyway?" DURING and AFTER
+                # the load, so keep answering while we wait for services to appear.
+                #
+                # Dialogs are inspected every 4th pass, not every pass: while the IDE
+                # is loading, its UI thread is busy and each cross-process text read
+                # waits out its timeout, so inspecting on all 40 passes cost more than
+                # the whole budget and the open call never returned.
                 $verified = $null; $activeName = $null
                 for ($i = 0; $i -lt 40; $i++) {
                     Start-Sleep -Milliseconds 500
+                    if ($i % 4 -eq 0) { [void](Resolve-KnownDialogs) }
                     try { $verified = $app.IsProjectOpen(); if ($verified) { $activeName = $app.ActiveProject.FullName; break } } catch { }
+                }
+                # The load is over - either way the watcher has nothing left to do, and
+                # leaving it running would let it answer a prompt raised by some later,
+                # unrelated step.
+                if ($watcher) {
+                    try { Stop-Process -Id $watcher.Id -Force -ErrorAction SilentlyContinue; Log "dialog watcher stopped" } catch { }
                 }
                 $ok = [bool]$verified
                 $data = [ordered]@{ requested = $full; is_project_open = $verified; active_project = $activeName }
-                if (-not $verified) { $err = 'OpenProject was called but IsProjectOpen never became true' }
+                if (-not $verified) {
+                    $blocking = @(Get-IdeDialogs)
+                    if ($blocking.Count -gt 0) {
+                        throw "OpenProject did not complete: the IDE is blocked by an unanswered dialog - '$($blocking[0].message)' (buttons: $(($blocking[0].buttons | ForEach-Object { $_.label }) -join ', ')). The IDE is NOT closed. Answer it, then re-check."
+                    }
+                    $err = 'OpenProject was called but IsProjectOpen never became true'
+                }
             }
 
             'pous' {
@@ -516,7 +853,79 @@ while ($true) {
                 }
             }
 
-            # Report whether the licence/trial dialog is up. Read-only and cheap:
+            # What the IDE is ACTUALLY doing, including modal dialogs the COM API
+            # cannot see. Call this after every IDE step.
+            #
+            # While a dialog is up, the automation API reports nothing useful:
+            # IsProjectOpen() is false or throws and OpenProject fails. An agent
+            # reading only COM concludes "no project open" or "the IDE has closed"
+            # when the IDE is in fact waiting for a button. This is the antidote.
+            'ide_state' {
+                $ok = $true
+                $data = Get-IdeState
+            }
+
+            # Answer a modal dialog the IDE is waiting on.
+            #
+            # These are standard Win32 dialogs, so a BM_CLICK to the button handle
+            # is enough - no synthetic input, no focus games.
+            'answer_dialog' {
+                $dialogs = Get-IdeDialogs
+                if ($dialogs.Count -eq 0) {
+                    $ok = $true
+                    $data = [ordered]@{ answered = $false; reason = 'no modal dialog is up' }
+                } else {
+                    $target = $null
+                    if ($req.handle) {
+                        $target = $dialogs | Where-Object { $_.handle -eq [string]$req.handle } | Select-Object -First 1
+                    }
+                    if (-not $target) { $target = $dialogs | Where-Object { $_.enabled } | Select-Object -First 1 }
+                    if (-not $target) { $target = $dialogs | Select-Object -First 1 }
+
+                    $wantLabel = if ($req.button) { ([string]$req.button) -replace '&', '' } else { $null }
+                    $wantId = $req.button_id
+
+                    $btn = $null
+                    if ($null -ne $wantId) {
+                        $btn = $target.buttons | Where-Object { $_.id -eq [int]$wantId } | Select-Object -First 1
+                    }
+                    if (-not $btn -and $wantLabel) {
+                        $btn = $target.buttons | Where-Object {
+                            $_.label -ieq $wantLabel -or $_.label -ilike "$wantLabel*"
+                        } | Select-Object -First 1
+                    }
+                    if (-not $btn -and $wantLabel -eq 'Yes') {
+                        # Win32 message boxes use IDYES=6 / IDNO=7 / IDOK=1 / IDCANCEL=2.
+                        $wellKnown = @{ Yes = 6; No = 7; OK = 1; Cancel = 2; Retry = 4; Ignore = 5; Abort = 3 }
+                        if ($wellKnown.ContainsKey($wantLabel)) {
+                            $btn = $target.buttons | Where-Object { $_.id -eq $wellKnown[$wantLabel] } | Select-Object -First 1
+                        }
+                    }
+
+                    if (-not $btn) {
+                        $labels = ($target.buttons | ForEach-Object { $_.label }) -join ', '
+                        throw "no button matching '$wantLabel' on dialog $($target.handle); it offers: $labels"
+                    }
+
+                    $bh = $script:dialogButtons["$($target.handle)|$($btn.id)"]
+                    if (-not $bh) { throw "button handle for '$($btn.label)' was not captured" }
+
+                    [void][MWW]::SendMessage([IntPtr]$bh, 0x00F5, [IntPtr]::Zero, [IntPtr]::Zero)  # BM_CLICK
+                    Start-Sleep -Milliseconds 600
+
+                    $stayed = [MWW]::IsWindow([IntPtr]$script:dialogHwnds[$target.handle])
+                    $ok = $true
+                    $data = [ordered]@{
+                        answered       = (-not $stayed)
+                        dialog         = $target.handle
+                        pressed        = $btn.label
+                        pressed_id     = $btn.id
+                        dialog_closed  = (-not $stayed)
+                        message        = $target.message
+                    }
+                }
+            }
+
             # this is how you tell "no IDE yet" apart from "the IDE is waiting for
             # a human to answer the licence dialog".
             'trial_state' {
@@ -735,7 +1144,7 @@ public class KILLW {
             }
 
             default {
-                throw "unknown verb '$verb' (allowed: ping, status, start_ide, open, close_ide, trial_state, dismiss_trial, pous, variables, compile_state, make, build, patch, worksheet, datatypes, output_windows, activate_output, command_id, command, feature_state, screenshot, stop)"
+                throw "unknown verb '$verb' (allowed: ping, status, start_ide, open, close_ide, trial_state, dismiss_trial, ide_state, answer_dialog, pous, variables, compile_state, make, build, patch, worksheet, datatypes, output_windows, activate_output, command_id, command, feature_state, screenshot, stop)"
             }
         }
 
@@ -780,6 +1189,22 @@ public class KILLW {
     catch {
         $ok = $false
         $err = $_.Exception.Message
+        # Before reporting a failure, find out whether the IDE is simply waiting for
+        # a button press. The automation API goes quiet while a modal dialog is up,
+        # so a bare failure reads as "the IDE has closed" - and the agent then
+        # abandons a perfectly healthy IDE, or worse, relaunches it. Naming the
+        # dialog here means EVERY failing tool call explains itself, with no
+        # discipline required from the agent.
+        try {
+            $dlgs = @(Get-IdeDialogs)
+            if ($dlgs.Count -gt 0) {
+                $desc = ($dlgs | ForEach-Object {
+                    $lbl = ($_.buttons | ForEach-Object { $_.label }) -join ', '
+                    "dialog $($_.handle) says: `"$($_.message)`" [buttons: $lbl]"
+                }) -join ' || '
+                $err = "$err`n`nNOTE: the IDE is NOT closed. It is blocked by a modal dialog. $desc`nCall mw_ide_state to see it (if available), or mw_ide_dialog to answer it; otherwise answer it by hand and retry."
+            }
+        } catch { }
     }
 
     Write-Result $id $verb $ok $data $err

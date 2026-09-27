@@ -35,6 +35,41 @@ an **activation** form (`Activate Online` / `Activate by Phone` / `Retry`, no
 `Use Trial`), no trial remains and no automation can proceed — that is licensing,
 not a defect.
 
+## NEVER conclude "the IDE closed" without checking
+
+This is the single easiest way to get lost here. An `mw_ide_*` call fails, or
+reports no project, and it gets read as *"the IDE has closed"*. Almost always the
+IDE is running fine and is simply **waiting for a button on a modal dialog**.
+
+The automation API is silent while a dialog is up: `IsProjectOpen()` returns false
+or throws, `OpenProject` fails with `Internal error`, and the frame window is
+disabled. COM alone therefore *cannot* distinguish "no project" from "waiting for
+an answer".
+
+**Rule: after every `mw_ide_*` step, call `mw_ide_state`.**
+
+- `blocked: false` → carry on.
+- `blocked: true` → the IDE is waiting for a button. The result carries each
+  dialog's **exact message text and button labels** (read with `WM_GETTEXT` from
+  the standard Win32 dialog — exact, not an OCR guess). Answer it with
+  `mw_ide_dialog`, then call `mw_ide_state` again to confirm.
+- Pass `screenshot: true` when a dialog has no readable text — the .NET licence
+  dialog is owner-drawn, and then the image is the only source. Read the returned
+  PNG with the image tool; do not guess at what it says.
+
+MotionWorks only ever asks about the **staged copy** ("defragment this project?",
+"this project was not closed cleanly — load anyway?", licence notices), and the
+plugin never opens your original project — so answering "Yes, load anyway" is
+safe by construction.
+
+Two safety nets mean you rarely hit this cold:
+
+- `mw_ide_open` answers the recurring safe prompts (defragment → No, load anyway →
+  Yes, software-key notice → OK) itself, while it waits.
+- **Every failing bridge call already names any blocking dialog**, quoting its text
+  and buttons, and says explicitly that the IDE is *not* closed. If a tool errors,
+  read the error before concluding anything — the answer is usually in it.
+
 ## The one thing to understand: there are two effectors
 
 **Code is not edited through the IDE's automation API, because that API cannot

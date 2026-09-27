@@ -560,8 +560,10 @@ function defineTools() {
         card: 'generic', title: 'Open project in IDE', kind: 'other', rawInput: a.path,
       }),
       // The bridge retries OpenProject for up to 90s while a freshly started IDE
-      // initialises its project services, so allow more than that here.
-      execute: (args) => verb('open', { path: assertStaged(String(args.path)) }, 150000),
+      // initialises its project services, answers any modal prompt it raises on the
+      // way, and then waits for the project to appear — so the budget here has to
+      // cover all three, not just the first retry window.
+      execute: (args) => verb('open', { path: assertStaged(String(args.path)) }, 300000),
     },
 
     {
@@ -837,6 +839,168 @@ function defineTools() {
         kind: 'read',
       }),
       execute: (args) => verb(args?.attempt ? 'dismiss_trial' : 'trial_state', {}, 240000),
+    },
+
+    {
+      name: 'mw_ide_state',
+      description:
+        'Report what the IDE is ACTUALLY doing right now, including modal dialogs the '
+        + 'automation API cannot see. **Call this after every mw_ide_* step.** While a '
+        + 'dialog is up, the COM API returns nothing useful: IsProjectOpen reports false '
+        + 'or throws, so "no project open" or a bare failure must NOT be read as "the IDE '
+        + 'closed". Returns whether the IDE is blocked, and for each dialog its exact '
+        + 'message text and button labels — read with WM_GETTEXT from the standard Win32 '
+        + 'dialog, so it is exact rather than an OCR guess. Set screenshot:true to also '
+        + 'capture the IDE when a dialog is owner-drawn and has no readable text (the .NET '
+        + 'licence dialog is one such case).',
+      parameters: {
+        type: 'object',
+        additionalProperties: false,
+        properties: {
+          screenshot: {
+            type: 'boolean',
+            description: 'Also capture the IDE to a PNG and return its path. Defaults to false.',
+          },
+        },
+      },
+      output: {
+        schema: {
+          type: 'object',
+          additionalProperties: false,
+          required: ['ide_running', 'blocked', 'dialog_count', 'dialogs'],
+          properties: {
+            ide_running: { type: 'boolean' },
+            ide_window: { oneOf: [{ type: 'string' }, { type: 'null' }] },
+            window_title: { type: 'string' },
+            ide_enabled: { oneOf: [{ type: 'boolean' }, { type: 'null' }] },
+            blocked: { type: 'boolean' },
+            dialog_count: { type: 'integer' },
+            dialogs: {
+              type: 'array',
+              items: {
+                type: 'object',
+                additionalProperties: false,
+                required: ['handle', 'title', 'message', 'buttons'],
+                properties: {
+                  handle: { type: 'string' },
+                  title: { type: 'string' },
+                  message: { type: 'string' },
+                  enabled: { type: 'boolean' },
+                  buttons: {
+                    type: 'array',
+                    items: {
+                      type: 'object',
+                      additionalProperties: false,
+                      required: ['id', 'label'],
+                      properties: {
+                        id: { type: 'integer' },
+                        label: { type: 'string' },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+            hint: { oneOf: [{ type: 'string' }, { type: 'null' }] },
+            screenshot: { oneOf: [{ type: 'string' }, { type: 'null' }] },
+          },
+        },
+        render: (_a, v) => {
+          if (!v.ide_running) return text('No MotionWorks IDE is running.');
+          const lines = [
+            `MotionWorks is running (${v.ide_window}), ${v.blocked ? 'BLOCKED' : 'not blocked'}.`,
+          ];
+          for (const d of v.dialogs) {
+            const btns = d.buttons.map((b) => b.label).join(' / ');
+            lines.push(`Dialog ${d.handle}${d.enabled ? '' : ' (behind)'}: ${d.message} [${btns}]`);
+          }
+          if (v.blocked && v.dialogs.length) {
+            lines.push('The IDE is waiting for a button. The COM API cannot proceed until it is '
+              + 'answered — use mw_ide_dialog.');
+          }
+          if (v.screenshot) lines.push(`Screenshot: ${v.screenshot}`);
+          return text(lines.join('\n'));
+        },
+      },
+      presentCall: (a) => ({
+        card: 'generic',
+        title: a?.screenshot ? 'Check IDE state + screenshot' : 'Check IDE state',
+        kind: 'read',
+      }),
+      execute: async (args) => {
+        const state = await verb('ide_state', {}, 30000);
+        if (args?.screenshot) {
+          const out = join(HERE, 'shots', `state-${Date.now()}.png`);
+          mkdirSync(dirname(out), { recursive: true });
+          try {
+            const shot = await verb('screenshot', { path: out }, 30000);
+            return { ...state, screenshot: shot.path };
+          } catch {
+            return { ...state, screenshot: null };
+          }
+        }
+        return { ...state, screenshot: null };
+      },
+    },
+
+    {
+      name: 'mw_ide_dialog',
+      description:
+        'Answer a modal dialog that MotionWorks is waiting on. The IDE asks questions '
+        + '(defragment this project?, load a project that was not closed cleanly?, licence '
+        + 'notices) in standard Win32 dialogs, and while one is up the automation API is '
+        + 'silent — which is what makes a healthy IDE look closed. Name the button to press '
+        + '("Yes", "No", "OK", ...) and it is clicked with BM_CLICK, no synthetic input. '
+        + 'mw_ide_open already answers the safe, recurring ones by itself; this is for '
+        + 'anything else. Only ever relevant to a STAGED COPY: the plugin never opens your '
+        + 'original project, so answering "Yes, load anyway" cannot endanger real work.',
+      parameters: {
+        type: 'object',
+        additionalProperties: false,
+        required: ['button'],
+        properties: {
+          button: {
+            type: 'string',
+            description: 'Button label to press, e.g. "Yes", "No", "OK". Case-insensitive.',
+          },
+          handle: {
+            type: 'string',
+            description: 'Dialog handle from mw_ide_state; omit to use the front-most dialog.',
+          },
+          button_id: {
+            type: 'integer',
+            description: 'Win32 control id, when the label alone is ambiguous.',
+          },
+        },
+      },
+      output: {
+        schema: {
+          type: 'object',
+          additionalProperties: false,
+          required: ['answered'],
+          properties: {
+            answered: { type: 'boolean' },
+            dialog: { oneOf: [{ type: 'string' }, { type: 'null' }] },
+            pressed: { oneOf: [{ type: 'string' }, { type: 'null' }] },
+            pressed_id: { oneOf: [{ type: 'integer' }, { type: 'null' }] },
+            dialog_closed: { oneOf: [{ type: 'boolean' }, { type: 'null' }] },
+            message: { oneOf: [{ type: 'string' }, { type: 'null' }] },
+            reason: { oneOf: [{ type: 'string' }, { type: 'null' }] },
+          },
+        },
+        render: (_a, v) => text(
+          v.answered
+            ? `Pressed "${v.pressed}" on dialog ${v.dialog}${v.dialog_closed ? ' — it closed.' : ' — the dialog is still open.'}`
+              + (v.message ? `\nIt said: ${v.message}` : '')
+            : `Nothing to answer: ${v.reason ?? 'no dialog is up'}`,
+        ),
+      },
+      presentCall: () => ({ card: 'generic', title: 'Answer MotionWorks dialog', kind: 'other' }),
+      execute: (args) => verb('answer_dialog', {
+        button: String(args.button),
+        ...(args.handle ? { handle: String(args.handle) } : {}),
+        ...(Number.isInteger(args.button_id) ? { button_id: args.button_id } : {}),
+      }, 60000),
     },
 
     {
