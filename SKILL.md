@@ -102,6 +102,34 @@ including the initial value. Measured across the project: **239 records, 239 cle
 and the name, produced garbage for every local record because 12 is only correct when
 strings 2 AND 3 are both empty.
 
+### What a POU's state actually consists of
+
+Worth writing down, because two rounds were spent looking in the wrong place. A POU is not
+just a text file and a grid:
+
+| Where | What | Input or output? |
+|---|---|---|
+| `POE/<pou>/src.st1` `.VB` stream | the declaration text | **input** |
+| `POE/<pou>/src.st1` `.VGR` stream | the variable grid | **input** |
+| `<pou>V.VB` inside the project | duplicate of the above text | input |
+| `Resource/ICI<NNNNN>.DIT` | a text interface: `T: PROGRAM <pou>`, `QVE: 13`, then per variable `@V 1 6 0 / <name> / VAR_EXTERNAL / @TYP:7` | **OUTPUT** |
+| `Resource/ICI<NNNNN>V.DBD` | every variable name in order, 3 x uint32 header, a uint32 count, then per entry two uint32 and a one-byte length with an ASCII name (`0x13` = 19 for `TopCutterCamTableID`) | **OUTPUT** |
+| `Resource/ICI<NNNNN>.{CIC,SP,DBD,DIW,CIW}` | code, source paths, debug info | OUTPUT |
+| `Resource/IR.{LCI,LDI,TDI}`, `IR_FULL.TDI` | project-wide indexes; `NUPG`/`NFBI` tallies, and the `.vb` path per unit | OUTPUT |
+| `Resource/eCLRPouDependencies.dat` | the POU/library dependency map | OUTPUT |
+
+The output rows are the ones that matter here, and they are distinguishable by experiment
+rather than by guessing: **remove them and a successful build recreates them.** With a
+declaration added and NOT used, deleted ICI files came back (7 of them) and the build passed.
+With a declaration added and USED, the build stalled and they did **not** come back - because
+the stall is the thing that stops them being written.
+
+So they are a symptom, not a cause, and a stale one cannot be the reason a declaration stalls.
+That was worth testing because they are ordinary files rather than streams inside a
+container, so rewriting them would have needed no binary surgery at all. It does not work.
+
+The `.VGR` grid remains the governing input, and the two limit rows below are unchanged.
+
 ### Declaring is safe; USING needs the grid
 
 Isolated, each case on a freshly staged copy and each judged by a build:
