@@ -1,4 +1,4 @@
-﻿/**
+/**
  * VET mw_code_pou_assign on a PRISTINE project.
  *
  * The first attempt at this ran on a project that had already been through several

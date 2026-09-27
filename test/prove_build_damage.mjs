@@ -1,4 +1,4 @@
-﻿/**
+/**
  * DOES A FAILING BUILD DAMAGE THE PROJECT?
  *
  * Observed twice: after a build returned is_compiled=false, the `Start` task and its

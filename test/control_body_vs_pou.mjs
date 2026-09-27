@@ -1,4 +1,4 @@
-﻿const P = process.env.MW_PLUGIN;
+const P = process.env.MW_PLUGIN;
 const m = await import(`file:///${P.replace(/\\/g, "/")}/index.js`);
 const tools = new Map(m.__internals.defineTools().map(t => [t.name, t]));
 const run = (n, a = {}) => tools.get(n).execute(a, {});
