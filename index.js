@@ -826,8 +826,8 @@ function defineTools() {
             ? (v.dismissed
               ? `Licence dialog was present and is now answered (via ${v.method}).`
               : 'LICENCE DIALOG IS UP and could not be dismissed automatically. Click '
-                + '"Use Trial" once by hand (or activate a licence); the IDE has no project '
-                + 'services until then, and every OpenProject will fail with "Internal error".')
+                + '"Use Trial" once by hand, or activate a licence. This affects only the '
+                + 'mw_ide_* tools — the mw_code_* tools work without the IDE and without a licence.')
             : 'No licence dialog is present.',
         ),
       },

@@ -5,7 +5,7 @@
 ![license](https://img.shields.io/badge/license-MIT-blue)
 ![platform](https://img.shields.io/badge/platform-Windows-lightgrey)
 ![node](https://img.shields.io/badge/node-%E2%89%A520-brightgreen)
-![tools](https://img.shields.io/badge/tools-16-informational)
+![tools](https://img.shields.io/badge/tools-21-informational)
 
 An agent working on a PLC project normally has two bad options: read the project
 files offline (and risk corrupting an undocumented binary format), or click
@@ -21,6 +21,7 @@ verdict** back.
 ## Contents
 
 - [What it does](#what-it-does)
+- [Working without a licence](#working-without-a-licence)
 - [Requirements](#requirements)
 - [Install](#install)
 - [Quick start](#quick-start)
@@ -60,6 +61,51 @@ Ask your agent to work on a MotionWorks project and it can:
 | Not a general Windows automation tool | It only ever attaches to `MotionWorks IEC 3 Pro` |
 | Not a graphical-logic editor | Ladder/FBD bodies are proprietary binary — see [limits](#known-limits) |
 | Not a clicker | It drives the IDE through its automation API, not synthetic input |
+
+## Working without a licence
+
+**You do not need a MotionWorks licence to edit code with this plugin.** That is
+deliberate, because most people evaluating it will not have one.
+
+The plugin has two halves, and only one of them needs the IDE:
+
+| Half | Needs a licensed IDE? | Tools |
+|---|---|---|
+| **Code** — read, write, create, delete, variables | **No** | `mw_ide_stage`, `mw_code_*` (10 tools) |
+| **IDE** — compile, live model, screenshots, errors | Yes | `mw_ide_*` (11 tools) |
+
+The code half is pure file I/O on the project container. It works with
+MotionWorks closed, never installed, or unlicensed:
+
+```
+$ mw_ide_stage   { source: "C:\Projects\MyMachine" }
+$ mw_code_pous                 # what is in it, and what is editable
+$ mw_code_read_st { pou: "Main" }
+$ mw_code_write_st { pou: "Main", body: "…", dry_run: false }
+$ mw_code_pou_create { name: "Helper", template: "Main" }
+$ mw_code_var_add { pou: "Helper", name: "Enable", type: "BOOL" }
+```
+
+What a licence adds is **compile verification** — the IDE's compiler and its
+verdict — plus the live object model, the error list and screenshots. If you get
+a licence later, nothing changes: the same project, the same tools, plus
+`mw_ide_build`.
+
+### The unlicensed build's dialog
+
+An unlicensed MotionWorks shows a modal dialog **before** it creates any window,
+and until it is answered the IDE has no project services — so `OpenProject`
+fails with `Internal error in 'OpenProject'`, which looks exactly like a broken
+install. The plugin handles this:
+
+- `mw_ide_start` **detects the dialog and clicks "Use Trial" for you** while it
+  waits for the window, instead of timing out blindly.
+- `mw_ide_trial` reports the dialog's state, and can retry answering it.
+
+If the dialog is an **activation** form — `Activate Online` / `Activate by
+Phone` / `Retry`, with no `Use Trial` — then no trial remains and no automation
+can proceed. That is a licensing matter, not a plugin defect; use the code half
+until a licence is available.
 
 ---
 
@@ -161,14 +207,14 @@ mw_ide_errors         // → a PNG path; read it with your image tool
 
 ## Tool reference
 
-### IDE tools (COM)
+### IDE tools (COM) — need a running, licensed IDE
 
 | Tool | Arguments | What it does |
 |---|---|---|
 | `mw_ide_status` | — | Which IDE is live, its version, and whether a project is open. **Call this first.** |
-| `mw_ide_start` | `exe?` | Launch `Mwt.exe`. Needed after a close. |
+| `mw_ide_start` | `exe?` | Launch `Mwt.exe`, detecting and answering the licence dialog. Needed after a close. |
+| `mw_ide_trial` | `attempt?` | Report the licence/trial dialog, or try to answer it. |
 | `mw_ide_close` | — | Close and wait until it is really gone. Required before any write. |
-| `mw_ide_stage` | `source` | Copy a project into the plugin's own `stage/`. Copy only — never moves or deletes. |
 | `mw_ide_open` | `path` | Open a **staged** project in the real IDE. |
 | `mw_ide_pous` | — | Live POU list with language codes. |
 | `mw_ide_variables` | `pou?` | The IDE's live variable model: type, initial value, IEC address, group. |
@@ -177,14 +223,19 @@ mw_ide_errors         // → a PNG path; read it with your image tool
 | `mw_ide_errors` | `pane?` | Activate an output pane (`Errors`, `Warnings`, …) and capture it. |
 | `mw_ide_screenshot` | — | Capture the IDE window. |
 
-### Code tools (project container)
+### Code tools — **no IDE, no licence required**
 
 | Tool | Arguments | What it does |
 |---|---|---|
+| `mw_ide_stage` | `source` | Copy a project into the plugin's own `stage/`. Copy only — never moves or deletes. |
 | `mw_code_pous` | `project?` | POUs from the files, with `has_st_body` — the **editability test**. |
 | `mw_code_read_st` | `pou`, `project?` | A POU's ST body and its declarations. |
 | `mw_code_write_st` | `pou`, `body`, `project?`, `dry_run?`, `run_lint?` | Rewrite an ST body. **`dry_run` defaults to `true`.** |
+| `mw_code_pou_create` | `name`, `template`, `project?`, `dry_run?` | Create a POU by cloning an existing one. |
+| `mw_code_pou_delete` | `name`, `force?`, `project?`, `dry_run?` | Delete a POU, its task assignments and registry entries (archived). |
 | `mw_code_var_add` | `name`, `type`, `pou?`, `section?`, `address?`, `initial_value?`, `description?`, `project?`, `dry_run?` | Add a variable declaration. |
+| `mw_code_var_edit` | `name`, `pou?`, `new_name?`, `type?`, `address?`, `initial_value?`, `description?`, `dry_run?` | Edit a declaration in place. |
+| `mw_code_var_delete` | `name`, `pou?`, `force?`, `dry_run?` | Delete a declaration (refuses while still referenced). |
 | `mw_code_unsupported` | `project?` | Name the POUs that cannot be edited safely. |
 
 `project` defaults to the newest staged project, and every code tool refuses a
@@ -317,22 +368,30 @@ These are invariants, enforced in code — not aspirations.
 | Write safety (backup + sibling verification) | **Verified** |
 | Compile and read the verdict | **Verified** — the verdict is read; see the caveat below |
 | Capture compiler errors | **Verified** (image only) |
+| **The whole coding workflow with NO IDE and NO licence** | **Verified** — stage, read, write ST, create/delete POUs, add/edit/delete variables, round-trip |
 | Self-contained | **Verified** — passes from a fresh clone with no external paths |
 | **A successful compile** | ❌ **never observed** |
 
 **The honest caveat, stated first because it matters most:** every build run so
-far has failed, and the cause is **not the code**. The Errors pane reports, 48
-times:
+far has failed, and the cause is **not the code**.
 
-```
-Data type declaration or function block code body missing!
-```
+Two separate environment problems, both outside the plugin:
 
-That is a **library / type-resolution failure in a copied project** — the copy
-cannot resolve the libraries the project references. So `is_compiled` has only
-ever been observed as `false`. The build verbs report `accepted`, `settled` and
-`is_compiled` separately precisely so that "compiled and failed" can never be
-confused with "never ran".
+1. **The sample needs libraries this machine does not have.** It references
+   `RotaryKnife_ASP_v350` (plus `DataTypes`/`Math`/`Yaskawa`/`PLCopen_Toolbox_v350`
+   and `Cam_Toolbox_v340`), and only v374/v375 are installed. Every unresolved
+   type traces to the missing ASP: `RotaryKnifeStruct`, `BlendStruct`,
+   `CamSyncStruct`, `ProductBufferStruct`, `RotaryKnife`, `RotaryKnifeCamGen`,
+   `RotaryKnife_Registration`. Editing `@LIBRARY.LST` to repoint them does not
+   help — the IDE rewrites that file on open.
+2. **The IDE on this machine has no usable licence.** It demands activation, so
+   it never initialises its project services and `OpenProject` fails with
+   `0x80044000 Internal error in 'OpenProject'` (confirmed in the IDE's own
+   `error.rpt`).
+
+So `is_compiled` has only ever been observed as `false`. The build verbs report
+`accepted`, `settled` and `is_compiled` separately precisely so that "compiled and
+failed" can never be confused with "never ran".
 
 **If you get a clean build, that is new information — please open an issue.**
 

@@ -6,9 +6,34 @@ whenToUse: The user has MotionWorks IEC 3 Pro open or asks for work in it — a 
 
 # MotionWorks Use
 
-Sixteen tools that drive a live MotionWorks IEC 3 Pro IDE and edit its code.
+Twenty-one tools that drive a live MotionWorks IEC 3 Pro IDE and edit its code.
 They come from the `motionworks-iec-use` Cordis plugin; nothing here needs to be
 launched by hand, and no path needs to be configured.
+
+## Most users have no licence — and that is fine
+
+**Editing code does NOT need a MotionWorks licence.** The code half is pure file
+I/O on the project container, so it works with the IDE closed, unlicensed, or
+never installed:
+
+`mw_ide_stage`, `mw_code_pous`, `mw_code_read_st`, `mw_code_write_st`,
+`mw_code_pou_create`, `mw_code_pou_delete`, `mw_code_var_add`,
+`mw_code_var_edit`, `mw_code_var_delete`, `mw_code_unsupported`.
+
+Only the `mw_ide_*` tools need a running, licensed IDE — they add **compile
+verification**, the live object model, the error list and screenshots.
+
+So when someone has no licence: **carry on and edit the code.** Do not report the
+task as blocked. Say what a licence would add (a compile verdict) and let them
+decide.
+
+If the IDE is unlicensed it shows a modal dialog **before** creating any window;
+until it is answered the IDE has no project services and `OpenProject` fails with
+`Internal error in 'OpenProject'`, which looks exactly like a broken install.
+`mw_ide_start` detects that dialog and clicks "Use Trial" itself. If the dialog is
+an **activation** form (`Activate Online` / `Activate by Phone` / `Retry`, no
+`Use Trial`), no trial remains and no automation can proceed — that is licensing,
+not a defect.
 
 ## The one thing to understand: there are two effectors
 
@@ -49,9 +74,9 @@ Never guess at graphical bytes.
 
 ```
 mw_ide_stage   { source }          copy a project into the plugin's own stage/
-mw_code_pous                       see what is there
+mw_code_pous                       see what is there, and what is editable
 mw_code_read_st { pou }            read the current code
-mw_ide_close                       REQUIRED before any write
+mw_ide_close                       REQUIRED before any write (skip if no IDE is running)
 mw_code_write_st { pou, body, dry_run: true }    preview — changes nothing
 mw_code_write_st { pou, body, dry_run: false }   apply (backs up first)
 mw_code_read_st { pou }            confirm what actually landed
@@ -60,6 +85,21 @@ mw_ide_open    { path: <stage>\X.mwt }
 mw_ide_build                       compile
 mw_ide_errors                      capture the Errors pane — the only error text
 ```
+
+Structural edits use the same rhythm:
+
+```
+mw_code_pou_create { name, template, dry_run: false }   clone an existing POU
+mw_code_pou_delete { name, force?, dry_run: false }     archived, not destroyed
+mw_code_var_add    { name, type, pou?, section?, dry_run: false }
+mw_code_var_edit   { name, pou?, type?/new_name?/description?, dry_run: false }
+mw_code_var_delete { name, pou?, force?, dry_run: false }
+```
+
+`mw_code_pou_create` needs a `template`: creation clones an existing POU's
+directory and renames its streams, so a POU cannot be authored from nothing. Use
+an ST POU as the template when you want an ST POU. The new POU starts with the
+template's body — replace it with `mw_code_write_st`.
 
 `dry_run` defaults to **true** on every write, so the first call is always a
 preview. Read the `result` block: `applied`, `before_bytes`/`after_bytes`,

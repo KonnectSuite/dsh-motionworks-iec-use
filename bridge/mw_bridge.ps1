@@ -490,7 +490,7 @@ while ($true) {
                 if (-not $w) {
                     $pair = Get-TrialDialog
                     if ($pair[0]) {
-                        throw 'the IDE never showed its window because the LICENCE dialog is up and could not be answered automatically. Click "Use Trial" once by hand (or activate a licence), then retry. Until then the IDE has no project services.'
+                        throw 'the IDE never showed its window because the LICENCE dialog is up and could not be answered automatically. Click "Use Trial" by hand, or activate a licence. This affects only the mw_ide_* tools: the mw_code_* tools work without the IDE and without a licence.'
                     }
                     throw 'the IDE window did not appear within 300s'
                 }
@@ -575,7 +575,7 @@ while ($true) {
                         strategies_tried = $tried
                     }
                     if ($still) {
-                        $err = 'the licence dialog is still up and could not be answered from this process. Click "Use Trial" once by hand (or activate a licence); until then the IDE has no project services and every OpenProject fails with "Internal error".'
+                        $err = 'the licence dialog is still up and could not be answered from this process. Click "Use Trial" once by hand, or activate a licence. NOTE: this only affects the mw_ide_* tools - the mw_code_* tools (read code, write ST, create/delete POUs, edit variables) do NOT need the IDE or a licence and work right now.'
                     }
                 }
             }
