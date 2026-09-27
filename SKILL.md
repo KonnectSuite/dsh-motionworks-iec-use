@@ -682,86 +682,81 @@ truncates the .VB on open"; **the reopen above disproves that directly.** The de
 property of the FAILED BUILD, which matches the round 24 finding that a failed build rewrites
 project files - it truncated ``NODES.LST`` from 802 to 499 bytes.
 
+**WHETHER THE POU SURVIVES IS NOT CONSISTENT, and both measurements are real.** Round 47, above, got
+``.VB=0B`` — destroyed. Round 57, five identical runs, got ``.VB=170`` every time — intact, with the
+stall and the survival both reproducible. So the destruction is not a reliable consequence of this
+stall, and an agent should not assume either outcome. What IS reliable is the stall itself: 28 of 29
+runs across every variation tried.
+
+Do not read the survival in round 57 as reassurance. The stall is the constant; whether the artefact
+comes through it is not, and a build that silently fails is worth avoiding on its own terms.
+
 An agent following the documented working path is safe. An agent adding a declaration gets a POU
 that looks perfect - reads back, reopens, shows every declaration - right up to the moment it is
-compiled and the project loses it.
+compiled, and ``mw_code_var_add`` now refuses to create that situation at all.
 
 
-### A POU with no declarations cannot be given any
+### Adding a declaration to a POU this plugin created stalls its build
 
-``mw_code_var_add`` refuses to append to a grid that holds no records:
+**This is the one rule to know, and the tool now enforces it.**
 
-    clone of TopCutterInitialize     .VB=23B  VAR_EXTERNAL=0  .VGR=63B  declares=0
-    mw_code_var_add                  UnsupportedFormat: no variable records found in the
-                                     grid; refusing to guess
+    add a declaration to a CREATED POU                 the build stalls. 28 of 29 runs, every body.
+    add the identical declaration to an EXISTING POU   works, and builds.
 
-The refusal is correct - guessing at a layout this plugin has not seen is what destroyed a POU
-once - but it is a boundary worth knowing. ``TopCutterInitialize`` declares nothing, so a POU cloned
-from it can never gain a declaration through this tool. **Pick a template that already declares
-something.** Note that this error is immediate and legible, unlike the create-then-declare failure
-below, which reports success and destroys the POU later.
+**The declaration is not used by anything in the failing case.** Control H - an added declaration the
+body never mentions - stalled three times out of three, so this is not about how the body refers to
+it, and there is no way to write the body that avoids it. An earlier attempt to document it as "only
+reading stalls" was wrong and has been removed.
 
-### The localization hypothesis is untested, not disproved
+**The failure is silent and delayed**, which is why it matters so much: the add reports success, the
+declaration reads back correctly, and the stall appears only at the NEXT BUILD with an **empty Errors
+pane**. Nothing connects the two. So `mw_code_var_add` **refuses outright** on a POU created by
+`mw_code_pou_create`, naming the three things that do work:
 
-A clone differs from its template in exactly two ways: the text has ``VAR_EXTERNAL`` renamed to
-``VAR``, and the grid has records moved from usage 5 to usage 1 with their markers zeroed. A normal
-POU is not localized at all and accepts an append, so the localization is a plausible trigger for
-the compiler crash.
+1. choose a template that **already declares** what the POU needs - the supported path
+2. add the declaration to an **existing** POU
+3. add it once in the MotionWorks editor, then edit the POU from here
 
-A first attempt to revert it was **too crude to be evidence**: it replaced every ``VAR`` line in the
-declaration text with ``VAR_EXTERNAL``, including the legitimate VAR blocks, and the writer
-correctly rejected the result. **The hypothesis remains untested.**
+**The POU survives.** `.VB=170` after a stalled build, not 0. Removing the offending declaration from
+an existing POU clears the stall. Nothing is destroyed by this.
 
-The next attempt should revert **record by record**, using the same per-record tail offset
-``localize_variable_grid`` uses, and restore ``VAR_EXTERNAL`` only for the declarations the template
-actually declares that way - **never by replacing text.**
+### A type error destroys the POU - and is now refused
 
+A **separate** failure with a separate remedy, and the one that earns the word "destroyed":
 
-### Create-then-declare: the complete elimination list
+    TopCutterCamReady := TopCutterCamTableID;      BOOL := UINT
+      -> the build stalls AND .VB goes to 0 bytes, the grid to 79,432,063 bytes
 
-Thirteen rounds have gone into this one defect. Every candidate below looked plausible, was
-tested by **removing the supposed cause**, and failed. Written down so the next attempt starts
-here rather than repeating it.
+    the same POU with a type-correct body
+      -> the build stalls, and the POU is INTACT at 1094 bytes
 
-**The failure, measured identically every time:**
+The compiler does not report a type error, it takes the POU with it. `mw_code_write_st` now refuses
+one, through `check_assignment_types` in `stlint.py`:
 
-    create a POU from a template      works        .VB=1094B  .VGR=1565B
-    add one declaration               applied=true, reads back, reopens, 13 declarations
-    assign it to a task               assigned=true
-    BUILD                             is_compiled=false  stalled=true
-      on disk afterwards              .VB=0B   .VGR=79,432,063B
+    REFUSED: line 1: assigning a INTEGER to 'TopCutterCamReady', which is BOOL - a type error
+             makes the build DESTROY this POU rather than report it, so the body is refused
 
-    the identical add on an EXISTING POU survives and compiles.
+The check is deliberately narrow - only assignments whose right-hand side type can be established
+confidently, and only across family boundaries - because a false refusal blocks correct code.
+`INTEGER` to `REAL` is allowed; the reverse is caught; an unknown right-hand side is left alone.
 
-The **Build pane** names every POU including the created one and then **stops** during
-'Compiling variables', with Errors, Warnings and Infos all empty. **A compiler dying mid-walk**,
-not a rejected declaration.
+### Reading a VAR_EXTERNAL global stalls the build
 
-**Eliminated by removing the cause and re-running:**
+    xSelect := TopCutterCamReady;      a READ of a global        STALLED
+    TopCutterCamReady := TRUE;         a WRITE to a global       CLEAN
+    xSelect := TRUE; iState := iState + 1;   locals only         CLEAN
 
-| candidate | result |
-|---|---|
-| tree nodes | the IDE's own markers 7, 42, 8, 23; only id, name, path and GUID differ |
-| sidecar files | NodeProperties.xml checked **by content** - only the GUID, and it matches the tree node |
-| NODES.LST, .mwt | an assignment registry that correctly omits an unassigned POU; a 4 KB container |
-| **the grid localizer** | a **real bug** - usage moved without the marker - fixed in round 40; the fix did not cure this |
-| function-block instances | the clone builds **clean** with them duplicated; they are warnings |
-| the body | emptying it changes nothing |
-| **the stale COM cache** | a **real bug**, fixed in round 45; retested in 47 with a fresh bridge at every step |
-| the appended record's row | validated with the IDE closed, so the numbers are the writer's own |
-| record handles | last_handle=1059 >= 1058 and declares=13; handles are shared across POUs here anyway |
-| block placement | lands inside the existing block, growing it from three lines to four |
-| the declaration text | exactly **two** differing lines - the VAR_EXTERNAL -> VAR renames |
-| **the localization** | all four globals' records reverted to usage 5 **and** their markers **and** their block headers - the build failed **identically** |
+Correctly declared, correctly typed, and it stalls. This is the third face of one rule: a global
+referenced without `VAR_EXTERNAL` stalls, a global ADDED by this plugin stalls until the resource
+grid carries it, and a global that is READ stalls even when it is declared properly.
 
-**What remains.** The clone and its template differ, after all of that, in **nothing that can be
-read out of the files**. One accepts a declaration and compiles; the other destroys itself when
-compiled. The remaining suspects cannot be diffed this way: **state the IDE holds about a POU
-that is not in its directory, or a compiler assumption about a POU it created versus one that
-appeared.**
+### The supported path for authoring a program
 
-**The one experiment that would settle it needs a person.** Create a POU in the MotionWorks
-Project Tree by hand, add a declaration in the editor, and build. **If that works**, the IDE
-writes something on creation this plugin does not, and the two directories can be diffed to find
-it. **If it fails too**, it is a vendor defect and no amount of file archaeology will locate it.
-Every other avenue is exhausted; that one is one right-click and one dialog.
+    create from a template that ALREADY declares what the program needs
+    write the body over those INHERITED declarations
+    assign it to a task
+    build
+
+This is verified end to end on every run by the capability matrix, which adds and uses declarations
+on an existing POU and rebuilds after each of its 13 cases. **A created POU's inherited declarations
+are fully usable** - that has always worked.
