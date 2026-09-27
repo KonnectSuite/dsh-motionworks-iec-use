@@ -34,3 +34,13 @@ node_modules/
 Thumbs.db
 .vscode/
 .idea/
+
+# Bridge runtime state - never source.
+bridge/bridge.lock
+bridge/req.json
+bridge/res.json
+bridge/bridge.log
+code/req.json
+code/res.json
+**/__pycache__/
+*.pyc
