@@ -55,73 +55,31 @@ mw_ide_errors  -> 24 message(s)
 
 `mw_ide_compile_state` reports `is_compiled` / `is_modified` without building, which
 is the cheap check before deciding whether a build is needed at all.
-## Global variables cannot be written, and that is deliberate
+## Global variables ARE writable - with one harmless quirk
 
-`mw_code_var_add` / `_edit` / `_delete` with **`pou` omitted** (a global) are
-**refused**. They used to appear to work and silently wreck the project.
-
-A global lives in **two** places:
-
-| Where | What |
-|---|---|
-| `Global_Variables.VB` | the text declarations — writable |
-| `Global_Variables.VGR` | a binary grid: header count + one record per variable |
-
-Only the text stream could be written. Measured consequences of doing that:
+Add a global by calling `mw_code_var_add` **without** `pou`:
 
 ```
-after a global add : .VB declares 162, the .VGR header still says 161
-build              : 125 errors — "No matching global variable found for ..."
-                     naming globals that were NEVER touched, incl. PLCMODE_RUN
+mw_code_var_add { name: "MyTag", type: "BOOL", section: "VAR_GLOBAL", initial_value: "TRUE", dry_run: false }
+mw_code_globals            # read them back
 ```
 
-The compiler rejects the **entire** global table on that mismatch, so every POU in the
-project fails at once — and the failing build then drops a task assignment too, which
-is what made it look like corruption. Bumping the grid header count is not enough
-either: tested, it takes 125 errors down to 29 and still does not compile, because a
-new variable needs a real grid record.
-
-So:
-
-- **Read** globals freely with `mw_code_globals` — it reports the mismatch as a warning
-  if a project is already in this state, which is how to recognise it.
-- **Change** globals in the MotionWorks variable worksheet, then re-read them here.
-- **POU-scoped** declarations (pass `pou`) are unaffected and write normally.
-## The one that actually bites: assigning a CLONED POU
-
-Isolated by bisection on one project, changing one step at a time:
+A global is stored in two places — `Global_Variables.VB` (text) and
+`Global_Variables.VGR` (a binary grid with a header count). The write updates only the
+text, so `mw_code_globals` reports:
 
 ```
-create + declare variables        -> is_compiled=true    clean
-+ write the body                  -> is_compiled=true    clean
-+ add a global variable           -> is_compiled=true    clean
-+ ASSIGN it to a task             -> is_compiled=false   125 reference errors
+warnings: ['declaration count mismatch: .VB declares 162 variables but the .VGR grid
+            header records 161']
 ```
 
-`mw_code_pou_create` clones a template, and a clone inherits the template's
-**external variable records** — declarations that expect a matching VAR_GLOBAL. While
-the POU is unassigned nothing compiles it, so nothing notices. Assign it and the
-compiler evaluates those records:
+**That mismatch is expected and harmless.** Verified end to end: a `.VB`-only global add
+builds cleanly with 0 reference problems, and the grid count never catches up, and it does
+not matter — the compiler takes its declarations from the text.
 
-```
-No matching global variable found for 'TopCutterCamSetup:TopCutterCamTableID' in resource 'Resource'!
-... 125 of them
-```
-
-**This is the root of the whole chain.** The failing build then drops the `Start`
-task (see below), so the project ends up both uncompilable AND missing an assignment
-— which reads exactly like corruption caused by whatever was written last.
-
-What to do:
-
-1. After `mw_code_pou_assign`, **always** run `mw_ide_build` and then `mw_ide_errors`.
-   Never treat a successful assign as done.
-2. If the messages say `No matching global variable found for '<POU>:<name>'`, the
-   clone carried externals that do not resolve. `mw_code_pou_unassign` puts it back,
-   or declare the missing globals with `mw_code_var_add`.
-3. Prefer a template whose variables are plain locals. Check first with
-   `mw_code_read_st` — its `variables` list shows a `group` on any declaration that is
-   an external reference.
+An earlier version of this plugin REFUSED global writes, on the belief that this mismatch
+was breaking the build. That was wrong. The 125 "No matching global variable found" errors
+seen in the same run came from the **task assignment**, not the global; see below.
 ## Two traps that make a green build lie
 
 Both were measured on a real project, not inferred.

@@ -183,11 +183,42 @@ def _count_line_edit(node: TreeNode, new_count: int) -> tuple[tuple[int, int], l
     return ((node.line, node.line + 1), [" ".join(str(value) for value in params)])
 
 
+def _instance_marker(document: TreeDocument) -> str:
+    """The value that precedes a program-instance node's header line.
+
+    A tree node is a 10-line block whose FIRST line is a small integer, then the params
+    line ``id level childcount flags``, then the name, the path and so on. Measured on a
+    real project, that first value depends on the node's TYPE and not on its id: all
+    seven level-6 program instances carry ``19`` and all five level-5 tasks carry ``20``,
+    while their ids run 3..57. It is a constant per node type.
+
+    The original code wrote ``node_id - 1`` here, which is a value that appears nowhere
+    in the tree - every instance says 19. That matters: the IDE rewrites PROJECT.TRE when
+    it opens a project, and a tree containing such a block comes back damaged, with the
+    header line of the nodes that FOLLOW it losing its level field. Measured, opening a
+    project whose tree contained a generated instance block turned three later nodes
+    into ``13 0 0 0`` with a file path where the name belongs, and destroyed the
+    Global_Variables node - which is why the compiler then reported "No matching global
+    variable found" for every POU.
+
+    Copying the value from an existing instance is better than hard-coding 19: it stays
+    correct if the meaning differs in another project, and it needs no instance to exist
+    for the common case of a project that already has an assignment.
+    """
+    for node, _ in document.walk_with_ancestors():
+        if node.params[1] == LEVEL_INSTANCE and node.line > 0:
+            value = document.lines[node.line - 1].strip()
+            if value.isdigit():
+                return value
+    return "19"
+
+
 def _instance_block(
     program_name: str,
     node_id: int,
     cycle: str,
     controller: str,
+    marker: str = "19",
 ) -> list[str]:
     """Build the 9-line program-instance record.
 
@@ -195,9 +226,12 @@ def _instance_block(
     ``name\\teCLR\\t<controller>\\t<cycle>\\t-1``, a blank, a state line, a blank,
     a fresh GUID and a trailing state line.  The blank that separates it from the
     next record is not part of the block.
+
+    ``marker`` is the value an existing instance carries on its first line; see
+    :func:`_instance_marker`.
     """
     return [
-        str(node_id - 1),
+        marker,
         f"{node_id} {LEVEL_INSTANCE} 0 0",
         f"{program_name}\t0\t0\t",
         f"{program_name}\teCLR\t{controller}\t{cycle}\t-1\t",
@@ -231,7 +265,10 @@ def plan_assign(
         task_name=task.name,
         program_name=program_name,
         assign=True,
-        instance_lines=_instance_block(program_name, new_node_id, cycle, controller),
+        instance_lines=_instance_block(
+            program_name, new_node_id, cycle, controller,
+            marker=_instance_marker(document),
+        ),
         insert_at=task.end_line,
         total_before=total_before,
         total_after=total_before + 1,

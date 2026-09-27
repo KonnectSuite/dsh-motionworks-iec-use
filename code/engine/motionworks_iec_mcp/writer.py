@@ -351,16 +351,28 @@ def _refuse_global_write(pou_name: str | None, action: str) -> None:
     "the compiler does not require the .VGR grid to be updated" note measured, on POU
     declarations only).
     """
-    if pou_name is None:
-        raise WriteRefused(
-            f"refusing to {action} a GLOBAL variable: the project keeps globals in TWO "
-            f"places - the Global_Variables.VB text stream and the Global_Variables.VGR "
-            f"binary grid - and only the text stream can be written safely. Changing just "
-            f"the text makes the compiler reject the whole global table, so EVERY POU "
-            f"stops compiling with 'No matching global variable found'. Add or change the "
-            f"global in the MotionWorks variable worksheet instead, then re-read it here "
-            f"with mw_code_globals. POU-scoped variables (pass `pou`) are unaffected."
-        )
+    # Globals ARE writable after all. This function used to refuse them outright, on the
+    # reasoning that a global lives in two stores - the Global_Variables.VB text and the
+    # Global_Variables.VGR binary grid - and that writing only the text breaks the build.
+    #
+    # That reasoning was WRONG, and the measurement that disproved it is worth recording
+    # because the evidence for it looked strong: a run that added a global AND assigned a
+    # POU to a task produced 125 "No matching global variable found" errors, and the same
+    # run showed the .VB declaring 162 variables while the grid header still said 161. The
+    # mismatch was blamed for the errors.
+    #
+    # Isolated, a .VB-only global add is FINE:
+    #
+    #     add a global (text only)   text=162  grid=161  MISMATCH
+    #     open the project           text=162  grid=161  MISMATCH
+    #     save through the IDE       text=162  grid=161  MISMATCH
+    #     BUILD                      is_compiled=true   0 reference problems
+    #
+    # The grid count never catches up and it does not matter - the compiler takes the
+    # declarations from the text. The 125 errors were caused by the TASK ASSIGNMENT, not
+    # by the global. So globals are written normally, and the mismatch is reported as a
+    # diagnostic by the read path rather than treated as a reason to refuse.
+    return None
 
 
 def _declaration_target(
