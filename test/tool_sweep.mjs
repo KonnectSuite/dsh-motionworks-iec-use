@@ -112,18 +112,36 @@ for (const pane of ['Errors', 'Warnings', 'Infos', 'Build']) {
   } catch (err) { record(`mw_ide_errors(${pane})`, false, String(err.message).slice(0, 80)); }
 }
 
-console.log('\n  ══ E. unassign, which has never been run at all ══');
+console.log('\n  ══ E. unassign, and put it back ══');
+// This section was written when mw_code_pou_unassign REFUSED - it was a tree write, and writing
+// PROJECT.TRE by hand damaged the project in both directions. It goes through the IDE's own object
+// model now, so it succeeds, and the assertion below had to change with it: the verb returns
+// {unassigned: true}, not {applied}, which is a field name left over from the tree writer. The
+// old assertion therefore reported a failure for an operation that worked.
+//
+// It also now RESTORES the assignment, because a test that removes a program from a task and
+// leaves it removed pollutes the stage for every test after it.
 const tasks = await run('mw_code_tasks');
 const assigned = Object.entries(tasks.tasks ?? {}).find(([, ps]) => ps.length > 0);
-console.log(`     a real assignment exists: ${assigned ? `${assigned[0]} <- ${assigned[1][0]}` : 'none'}`);
-try {
-  const u = await run('mw_code_pou_unassign', {
-    task: assigned?.[0], pou: assigned?.[1]?.[0], dry_run: false,
-  });
-  record('mw_code_pou_unassign', u?.result?.applied === true || u?.applied === true,
-    JSON.stringify(u).slice(0, 90));
-} catch (e) {
-  record('mw_code_pou_unassign', false, String(e.message).replace(/\s+/g, ' ').slice(0, 110));
+const taskName = assigned?.[0];
+const pouName = assigned?.[1]?.[0];
+console.log(`     a real assignment exists: ${assigned ? `${taskName} <- ${pouName}` : 'none'}`);
+if (assigned) {
+  try {
+    const u = await run('mw_code_pou_unassign', { task: taskName, pou: pouName, dry_run: false });
+    const gone = (await run('mw_code_tasks')).tasks?.[taskName] ?? [];
+    record('mw_code_pou_unassign', u?.unassigned === true && !gone.includes(pouName),
+      `unassigned=true, now ${JSON.stringify(gone)}`);
+    // put it back through the object model, and confirm both readers agree again
+    const back = await run('mw_code_pou_assign', { task: taskName, pou: pouName, dry_run: false });
+    const again = (await run('mw_code_tasks')).tasks?.[taskName] ?? [];
+    record('the assignment can be restored', back?.assigned === true && again.includes(pouName),
+      JSON.stringify(again));
+  } catch (e) {
+    record('mw_code_pou_unassign', false, String(e.message).replace(/\s+/g, ' ').slice(0, 110));
+  }
+} else {
+  record('mw_code_pou_unassign', false, 'no assignment to test with');
 }
 
 await run('mw_ide_close').catch(() => {});
