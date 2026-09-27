@@ -290,10 +290,24 @@ def plan_pou_deletion(
         )
 
     total_before = int(document.lines[1])
+
+    # Extend the removal over the blank line that TERMINATES the POU's records.
+    #
+    # TreeNode.span stops one line short of that blank - the same off-by-one that
+    # made creation drop the separators between records. Removing exactly the span
+    # therefore leaves a stray blank behind, and the tree no longer round-trips:
+    # measured, create-then-delete left PROJECT.TRE one line longer than the
+    # original and the project then refused to open with
+    # "Internal error in 'OpenProject'". Create and delete have to consume the same
+    # lines or the pair is not an inverse.
+    delete_span = target.span
+    if delete_span[1] < len(document.lines) and document.lines[delete_span[1]].strip() == "":
+        delete_span = (delete_span[0], delete_span[1] + 1)
+
     plan = PouDeletionPlan(
         pou_name=pou_name,
         project_root=project_root,
-        span=target.span,
+        span=delete_span,
         total_before=total_before,
         total_after=total_before - POU_NODE_COUNT,
     )

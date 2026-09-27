@@ -294,7 +294,14 @@ function runCode(codeVerb, request, timeoutMs = 180000) {
         reject(new Error(res.error || `code engine failed '${codeVerb}'`));
         return;
       }
-      resolve(res);
+      // Drop the engine's envelope. A failure has already become a rejection, so
+      // `ok` is always true here, and carrying it into the tool result forced every
+      // output schema to declare a field that carries no information. That mismatch
+      // is invisible to a Node test and fatal through the harness, which validates
+      // tool output against the schema: mw_code_pous passed every test I ran and
+      // failed the moment it was called for real.
+      const { ok: _ok, error: _err, traceback: _tb, ...payload } = res;
+      resolve(payload);
     });
   });
 }
@@ -1052,6 +1059,10 @@ function defineTools() {
           required: ['count', 'pous'],
           properties: {
             count: { type: 'integer' },
+            // The engine reports which project it read. Declared because these
+            // schemas are additionalProperties:false and the harness validates tool
+            // output against them, so an undeclared field is a hard tool failure.
+            project: { type: 'string' },
             pous: {
               type: 'array',
               items: {
@@ -1102,6 +1113,10 @@ function defineTools() {
             body: { oneOf: [{ type: 'string' }, { type: 'null' }] },
             body_error: { oneOf: [{ type: 'string' }, { type: 'null' }] },
             variables: { type: 'array', items: { type: 'object', additionalProperties: true } },
+            // Informational blob straight from the engine's summary(); left
+            // unconstrained on purpose so a new field there cannot make this tool
+            // fail again. An empty schema node is a valid member of the subset.
+            summary: {},
           },
         },
         render: (_a, v) => text(`POU ${v.pou} (${v.language ?? '?'}):\n${v.body ?? '(no ST body)'}`),
