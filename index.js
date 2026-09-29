@@ -711,9 +711,16 @@ function renderBuild(_a, v) {
   }
   return text(
     v.is_compiled
-      ? `${v.mode}: compiled cleanly (is_compiled=true, ${v.elapsed_s}s).`
+      // Compiled is not the same as nothing to read. This verdict comes from IsCompiled, and
+      // the API never returns the messages, so a project can compile with warnings the agent
+      // would otherwise never look for. Measured on one real project: 0 errors, 9 warnings -
+      // four duplicate instances of one function block, three unused variables and an empty
+      // worksheet.
+      ? `${v.mode}: compiled cleanly (is_compiled=true, ${v.elapsed_s}s). `
+        + 'That is the IDE\'s verdict only, and it counts errors rather than warnings — call '
+        + 'mw_ide_errors with pane "Warnings" to read what the compiler also reported.'
       : `${v.mode}: COMPILE FAILED (is_compiled=false, ${v.elapsed_s}s). `
-        + 'The automation API returns the verdict but never the messages Ã¢â‚¬â€ call mw_ide_errors to '
+        + 'The automation API returns the verdict but never the messages — call mw_ide_errors to '
         + 'bring the IDE Errors pane up and capture it.',
   );
 }
@@ -1679,14 +1686,17 @@ function defineTools() {
           },
         },
         render: (r) => {
+          // text() is required, not decoration: a render that returns a bare string hands the
+          // harness a primitive where it expects content blocks, and the spill policy's
+          // `content.some(...)` then fails with "content.some is not a function".
           if (r.name) {
             const ms = (r.members ?? []).map((m) => `${m.name}${m.array_size ? `[${m.array_size}]` : ''} : ${m.type}`).join(', ');
-            return `${r.name} [${r.kind}] ${(r.members ?? []).length} members: ${ms}`;
+            return text(`${r.name} [${r.kind}] ${(r.members ?? []).length} members: ${ms}`);
           }
           const kinds = {};
           for (const t of r.types ?? []) kinds[t.kind] = (kinds[t.kind] ?? 0) + 1;
           const summary = Object.entries(kinds).map(([k, v]) => `${v} ${k || 'other'}`).join(', ');
-          return `${r.defined} data types defined in this project (${summary})`;
+          return text(`${r.defined} data types defined in this project (${summary})`);
         },
       },
       execute: async (args) => runCode('types', {
@@ -1734,13 +1744,14 @@ function defineTools() {
           },
         },
         render: (r) => {
+          // text() is required, not decoration: see the note on mw_code_types.
           if (Array.isArray(r.blocks)) {
             const libs = r.blocks.filter((b) => b.library).length;
-            return `${r.count} blocks (${libs} library): `
-              + r.blocks.map((b) => `${b.name}${b.depends_on?.length ? ` <- ${b.depends_on.join(', ')}` : ''}`).join(' | ');
+            return text(`${r.count} blocks (${libs} library): `
+              + r.blocks.map((b) => `${b.name}${b.depends_on?.length ? ` <- ${b.depends_on.join(', ')}` : ''}`).join(' | '));
           }
-          return `${r.name} (${r.assembly}) ${(r.identifiers ?? []).length} identifiers: `
-            + (r.identifiers ?? []).join(', ');
+          return text(`${r.name} (${r.assembly}) ${(r.identifiers ?? []).length} identifiers: `
+            + (r.identifiers ?? []).join(', '));
         },
       },
       execute: async (args) => runCode('library', {
@@ -1783,14 +1794,15 @@ function defineTools() {
           },
         },
         render: (r) => {
+          // text() is required, not decoration: see the note on mw_code_types.
           if (Array.isArray(r.manuals)) {
-            return `${r.manuals.length} manuals, ${(r.help_topics ?? []).length} help topics: `
-              + r.manuals.map((m) => `${m.name}${m.readable ? '' : ' (compiled)'}`).join(' | ');
+            return text(`${r.manuals.length} manuals, ${(r.help_topics ?? []).length} help topics: `
+              + r.manuals.map((m) => `${m.name}${m.readable ? '' : ' (compiled)'}`).join(' | '));
           }
-          if (!r.found) return `no manual mentions ${r.term}`;
+          if (!r.found) return text(`no manual mentions ${r.term}`);
           const total = (r.results ?? []).reduce((n, x) => n + (x.hits ?? 0), 0);
-          return `${total} hits for ${r.term} across ${r.found} manual(s): `
-            + (r.results ?? []).map((x) => `${x.manual} (${x.hits})`).join(', ');
+          return text(`${total} hits for ${r.term} across ${r.found} manual(s): `
+            + (r.results ?? []).map((x) => `${x.manual} (${x.hits})`).join(', '));
         },
       },
       execute: async (args) => runCode('manual', {
@@ -2390,9 +2402,15 @@ function defineTools() {
         },
         render: (_a, v) => {
           const rows = Object.entries(v.tasks ?? {});
-          if (!rows.length) return 'no tasks';
-          return rows.map(([k, t]) => `${k} [${t.cycle ?? '?'}] `
-            + ((t.instances ?? []).map((i) => i.name).join(', ') || '(none)')).join('\n');
+          // `text` is not decoration. A render that returns a bare string hands the harness a
+          // primitive where it expects content blocks, and the spill policy's
+          // `content.some(block => block.type === 'image')` then fails with
+          // "content.some is not a function" before this output is ever shown. The bridge
+          // answered this verb correctly the whole time (bridge.log records ok=True), so the
+          // failure named neither the verb nor this file.
+          if (!rows.length) return text('no tasks');
+          return text(rows.map(([k, t]) => `${k} [${t.cycle ?? '?'}] `
+            + ((t.instances ?? []).map((i) => i.name).join(', ') || '(none)')).join('\n'));
         },
       },
       presentCall: () => ({ card: 'generic', title: 'Read tasks through COM', kind: 'read' }),

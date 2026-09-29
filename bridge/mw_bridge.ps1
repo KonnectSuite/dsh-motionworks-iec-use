@@ -737,11 +737,26 @@ while ($true) {
                 if (-not $app.IsProjectOpen()) { throw 'no project is open in the IDE' }
                 $tasks = [ordered]@{}
                 $taskNames = @()
-                $resource = $app.ActiveProject.GetObjectByLogicalName(
-                    'Hardware/Configuration/Resource', 10)
+                # The resource lookup is the one call here that can fail outright, and it used to
+                # take the whole verb down with it: an object model that does not answer for this
+                # path returned a response the caller could not read, so `mw_code_task_model`
+                # failed with a type error rather than reporting anything about the tasks. The
+                # fallback below already lists the task names this project uses.
+                try {
+                    $resource = $app.ActiveProject.GetObjectByLogicalName(
+                        'Hardware/Configuration/Resource', 10)
+                } catch {
+                    Log "task_model: resource lookup failed ($($_.Exception.Message)); using the known task names"
+                    $resource = $null
+                }
                 if ($resource -ne $null) {
-                    $coll = $resource.Tasks
-                    for ($i = 1; $i -le $coll.Count; $i++) { $taskNames += $coll.Item($i).Name }
+                    try {
+                        $coll = $resource.Tasks
+                        for ($i = 1; $i -le $coll.Count; $i++) { $taskNames += $coll.Item($i).Name }
+                    } catch {
+                        Log "task_model: reading the task collection failed ($($_.Exception.Message))"
+                        $taskNames = @()
+                    }
                 }
                 if ($taskNames.Count -eq 0) {
                     foreach ($t in @('BG', 'FastTsk', 'MedTsk', 'SlowTsk', 'Start')) {
