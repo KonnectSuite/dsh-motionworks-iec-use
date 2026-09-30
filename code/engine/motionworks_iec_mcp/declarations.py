@@ -228,6 +228,7 @@ def add_variable(
     address: str | None = None,
     initial_value: str | None = None,
     description: str | None = None,
+    group: str | None = None,
 ) -> tuple[str, list[str]]:
     """Add a declaration, returning ``(new_text, notes)``.
 
@@ -260,7 +261,16 @@ def add_variable(
         name, type_name, address, initial_value, description
     )
     blocks = find_blocks(lines)
-    target = next((b for b in reversed(blocks) if b.keyword == section), None)
+    def block_group(block):
+        current = None
+        for line in lines[:block.start]:
+            match = re.match(r"^\s*\(\*Group:\s*(.*?)\*\)", line)
+            if match: current = match.group(1)
+        return current
+    target = next((b for b in reversed(blocks) if b.keyword == section
+                   and (group is None or block_group(b) == group)), None)
+    if group is not None and target is None:
+        raise DeclarationError(f"No native {section} block for group {group!r}")
 
     if target is not None:
         lines.insert(target.end, declaration)

@@ -347,7 +347,7 @@ def lint(
             elsewhere and may legitimately be unused here.
         project_globals: Names of the project's VAR_GLOBAL declarations.  A
             global is reachable ONLY if this POU declares it as VAR_EXTERNAL,
-            and MotionWorks does not say so - it stalls the build silently.
+            with matching name and type. Compiler behavior depends on context.
     """
     result = LintResult()
     declared_u = {n.upper() for n in (declared or set())}
@@ -403,13 +403,12 @@ def lint(
                 "error",
                 "global-not-declared-external",
                 f"{name!r} is a project global but this POU does not declare it as "
-                f"VAR_EXTERNAL, so the compiler cannot resolve it and the build STALLS "
-                f"with an empty error list",
+                f"VAR_EXTERNAL with a matching resource-global name and type",
                 line,
                 hint=(
                     "Add it to this POU's VAR_EXTERNAL block, or use a variable this "
-                    "POU already declares - read them with mw_code_read_st. MotionWorks "
-                    "does not report this as an error; it simply never finishes."
+                    "POU already declares. Inspect mw_code_read_st and mw_code_globals; "
+                    "use mw_code_reference for VAR_EXTERNAL scope guidance."
                 ),
             )
             continue
@@ -425,9 +424,9 @@ def lint(
             f"project's globals, or as a known library name",
             line,
             hint=(
-                "Check the spelling, or declare it. If another POU owns it, that "
-                "POU must declare it in VAR and this POU must declare it as "
-                "VAR_EXTERNAL. Use the symbol index to confirm the real name."
+                "Check the spelling and intended scope. Shared resource data uses "
+                "VAR_GLOBAL plus a matching VAR_EXTERNAL in the consuming POU. "
+                "Another POU's plain VAR does not establish a resource global."
             ),
         )
 
@@ -452,13 +451,12 @@ def lint(
             "error",
             "global-not-declared-external",
             f"{name} is a project global but this POU does not declare it as "
-            f"VAR_EXTERNAL, so the compiler cannot resolve it and the build STALLS "
-            f"with an empty error list",
+            f"VAR_EXTERNAL with a matching resource-global name and type",
             line,
             hint=(
                 "Add it to this POU's VAR_EXTERNAL block, or use a variable this POU "
-                "already declares - read them with mw_code_read_st. MotionWorks does "
-                "not report this as an error; it simply never finishes."
+                "already declares. Compare resource globals and exact types; "
+                "use mw_code_reference for VAR_EXTERNAL scope guidance."
             ),
         )
 

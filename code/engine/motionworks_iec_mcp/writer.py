@@ -1,33 +1,8 @@
-"""Guarded write operations for MotionWorks IEC projects.
+"""Offline ST and synchronized declaration/grid writers.
 
-Every mutation in this module obeys the same contract, because the failure mode
-it guards against is silent corruption of a project that a user may not notice
-until a machine behaves wrongly:
-
-1. **Preflight** -- refuse while MotionWorks IEC is running.  The IDE caches
-   project state in memory and rewrites whole files on save, so an external edit
-   made underneath it is either discarded or produces an inconsistent project.
-2. **Backup** -- copy every file about to change, outside the project tree.
-3. **Mutate** -- write through ``cfb.py``, which is atomic (temp file then
-   replace) and verifies its own FAT bookkeeping.
-4. **Read back** -- re-open the file and confirm the new content is present and
-   every sibling stream is byte-identical.
-5. **Report** -- tell the caller the project is now dirty and must be rebuilt.
-
-Which stores each operation touches is a deliberate choice, driven by what has
-been *verified* rather than assumed:
-
-* **Descriptions** need only the textual ``<POU>V.VB`` stream.  Confirmed by
-  inspection: MotionWorks never stores description prose in ``.VGR``.
-* **Structured Text bodies** need only the ``<POU>.STB`` stream.  The body does
-  not reference the variable grid at all, so no binary grid edit is involved.
-
-Operations that would require rewriting the ``.VGR`` binary grid -- adding or
-deleting a variable, or creating and deleting POUs -- are **not implemented
-here**.  See docs/tier2-format-notes.md for what remains and why.
-
-Nothing here downloads to a controller or commands motion, and nothing here
-touches hardware configuration.
+Plans preserve native control markers, worksheet trailers and untouched streams.
+The request dispatcher wraps mutations in full-project snapshot transactions.
+Read-back validation is separate from IDE Rebuild/Make acceptance.
 """
 
 from __future__ import annotations
@@ -68,10 +43,11 @@ class WritePlan:
     # reads back but cannot be used. They are carried here so both are written and verified
     # in one operation rather than two.
     extra_streams: dict[str, bytes] = field(default_factory=dict)
+    sidecars: dict[Path, tuple[bytes | None, bytes]] = field(default_factory=dict)
 
     @property
     def changed(self) -> bool:
-        return self.before != self.after or bool(self.extra_streams)
+        return self.before != self.after or bool(self.extra_streams) or bool(self.sidecars)
 
     def describe(self) -> str:
         return (
@@ -96,7 +72,7 @@ def backup_files(paths: list[Path], project_root: Path) -> list[Path]:
     from .snapshot import default_backup_dir
 
     project_root = Path(project_root)
-    stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+    stamp = datetime.now().strftime("%Y%m%d-%H%M%S-%f")
     destination_root = default_backup_dir(project_root) / stamp
     created: list[Path] = []
     for path in paths:
@@ -120,6 +96,15 @@ def _apply(
     verify_siblings: bool = True,
 ) -> dict[str, object]:
     """Shared implementation: back up, write, read back, verify."""
+    from .staging import assert_proven, assert_staged
+    assert_proven(project_root)
+    assert_staged(plan.target)
+    for path, (before, after) in plan.sidecars.items():
+        assert_staged(path)
+        if path.parent.resolve() != plan.target.parent.resolve():
+            raise WriteRefused("Sidecar must belong to the edited container directory")
+        if (path.read_bytes() if path.exists() else None) != before:
+            raise WriteRefused("Sidecar changed after planning")
     if not plan.changed:
         return {
             "applied": False,
@@ -128,9 +113,12 @@ def _apply(
             "stream": plan.stream,
         }
 
-    require_ide_closed()
+    if not dry_run:
+        require_ide_closed()
 
     cfb = CompoundFile(plan.target)
+    if cfb.read_stream(plan.stream) != plan.before:
+        raise WriteRefused("The source changed after planning; read and plan again")
     siblings_before = {
         name: cfb.read_stream(name)
         for name in cfb.stream_names()
@@ -148,15 +136,15 @@ def _apply(
             "notes": plan.notes,
         }
 
-    backups = backup_files([plan.target], project_root)
+    backups = backup_files([plan.target, *plan.sidecars], project_root)
 
     # Record where each backup came from, explicitly.  Recovering the original
     # path by searching the backup path for the project name is fragile: a name
     # can appear more than once in the path, and the match then lands in the
     # wrong place, so a restore would write to the wrong location.
     backup_pairs = [
-        {"original": str(plan.target), "backup": str(created)}
-        for created in backups
+        {"original": str(original), "backup": str(created)}
+        for original, created in zip([p for p in [plan.target, *plan.sidecars] if p.is_file()], backups)
     ]
 
     # Build the new container beside the target and verify it there *before*
@@ -184,6 +172,9 @@ def _apply(
                 f"{len(written)} out). Nothing was written; this is a known defect in "
                 f"growth handling, not a problem with your edit."
             )
+        for extra_name, extra_payload in plan.extra_streams.items():
+            if staged.read_stream(extra_name) != extra_payload:
+                raise WriteRefused(f"Paired stream failed pre-commit verification: {extra_name}")
         # The other streams must survive untouched, checked here too so a sibling
         # cannot be damaged on disk either.
         damaged = [
@@ -207,8 +198,21 @@ def _apply(
     commit = {plan.stream: plan.after}
     commit.update(plan.extra_streams)
     cfb.replace_streams(commit)
+    for path, (_, after) in plan.sidecars.items():
+        with tempfile.NamedTemporaryFile(dir=path.parent, delete=False) as handle:
+            handle.write(after)
+            pending = Path(handle.name)
+        try:
+            pending.replace(path)
+        finally:
+            pending.unlink(missing_ok=True)
+        if path.read_bytes() != after:
+            raise WriteRefused(f"Sidecar read-back failed: {path}")
 
     check = CompoundFile(plan.target)
+    for name, payload in commit.items():
+        if check.read_stream(name) != payload:
+            raise WriteRefused(f"Read-back verification failed for {name}")
     written = check.read_stream(plan.stream)
     if written != plan.after:
         raise WriteRefused(
@@ -341,93 +345,6 @@ def _strip_comment(prefix: str) -> str:
     return without.rstrip(" \t")
 
 
-def _refuse_global_write(pou_name: str | None, action: str) -> None:
-    """Refuse a GLOBAL declaration write, because it cannot be done safely.
-
-    ``_declaration_target`` writes a global into the resource's ``Global_Variables.VB``
-    text stream and nothing else, but the resource ALSO holds ``Global_Variables.VGR``,
-    a binary grid whose header carries the declaration count and whose records carry the
-    variables themselves.
-
-    Measured, and this is the whole problem: after a global add the .VB declares 162
-    while the grid header still says 161, and the compiler then rejects the ENTIRE
-    global table - not just the new variable. The build reports 125
-    "No matching global variable found" errors naming globals that were never touched,
-    including system tags like PLCMODE_RUN, and every POU in the project fails at once.
-    The failing build then drops a task assignment as well, so the project ends up both
-    uncompilable and missing a task, which reads exactly like corruption.
-
-    Bumping the grid header count is NOT sufficient either - tested - it takes 125
-    errors down to 29 but leaves the project broken, because the count and the records
-    have to agree and a new variable needs a real record.
-
-    So the honest behaviour is to refuse, and say why. POU-scoped declarations are
-    unaffected: their grid is not consulted the same way (which is what the original
-    "the compiler does not require the .VGR grid to be updated" note measured, on POU
-    declarations only).
-    """
-    # Globals ARE writable after all. This function used to refuse them outright, on the
-    # reasoning that a global lives in two stores - the Global_Variables.VB text and the
-    # Global_Variables.VGR binary grid - and that writing only the text breaks the build.
-    #
-    # That reasoning was WRONG, and the measurement that disproved it is worth recording
-    # because the evidence for it looked strong: a run that added a global AND assigned a
-    # POU to a task produced 125 "No matching global variable found" errors, and the same
-    # run showed the .VB declaring 162 variables while the grid header still said 161. The
-    # mismatch was blamed for the errors.
-    #
-    # Isolated, a .VB-only global add is FINE:
-    #
-    #     add a global (text only)   text=162  grid=161  MISMATCH
-    #     open the project           text=162  grid=161  MISMATCH
-    #     save through the IDE       text=162  grid=161  MISMATCH
-    #     BUILD                      is_compiled=true   0 reference problems
-    #
-    # The grid count never catches up and it does not matter - the compiler takes the
-    # declarations from the text. The 125 errors were caused by the TASK ASSIGNMENT, not
-    # by the global. So globals are written normally, and the mismatch is reported as a
-    # diagnostic by the read path rather than treated as a reason to refuse.
-    return None
-
-
-def _pou_variable_note(pou_name: str | None, action: str) -> str | None:
-    """A note for a POU-scoped declaration write - no longer a refusal.
-
-    The refusal that used to stand here was wrong, and isolating the cases is what showed it.
-    Measured, each on a freshly staged copy and each judged by a build:
-
-        declaration only                        is_compiled=true
-        declaration AND a body write            is_compiled=true
-        declaration AND a body that USES it     is_compiled=false  (stalled)
-        body write only                         is_compiled=true
-
-    and in EVERY case the POU was intact afterwards - the .VB stayed at 1134 bytes and the
-    grid at 1565. So writing a declaration to the text is safe. What destroyed the POU in
-    earlier rounds was this module's own .VGR append: a grid record MotionWorks disagreed
-    with made it rewrite the POU (the .VB emptied from 1112 bytes to 0, the grid inflated
-    from 1565 bytes to 79 MB). Removing that append removed the damage.
-
-    The one real limitation is now precise: the compiler resolves a variable through the
-    GRID, so a declaration that exists only in the text cannot be USED - the build stalls,
-    silently. Declaring is fine; using needs the grid, and this module cannot write a grid
-    record MotionWorks accepts. So the note tells the caller to add it in the worksheet
-    before referring to it.
-
-    Returns a note when the caller should be told, else None.
-    """
-    if pou_name is None:
-        return None
-    return (
-        f"declaration {action}ed in the POU text. Declaring is safe and the project still "
-        f"compiles, but the variable CANNOT BE USED yet: the compiler resolves variables "
-        f"through the POU's binary .VGR grid, and a declaration that exists only in the "
-        f"text is not in it. Using it in the body makes the build STALL with an empty "
-        f"Errors pane. To use it, add the variable in the MotionWorks variable worksheet "
-        f"and re-read it with mw_code_read_st, or export the POU with "
-        f"mw_code_export_pou format:'export', edit the declarations there, and import the "
-        f"file so the IDE writes the grid itself."
-    )
-
 def _declaration_target(
     project_root: Path, pou_name: str | None
 ) -> tuple[Path, str, bytes, str]:
@@ -495,265 +412,7 @@ def _reference_check(
     return find_referencing_pous(variable, bodies)
 
 
-def plan_variable_add(
-    project_root: Path,
-    pou_name: str | None,
-    name: str,
-    type_name: str,
-    section: str = "VAR",
-    address: str | None = None,
-    initial_value: str | None = None,
-    description: str | None = None,
-) -> WritePlan:
-    """Plan adding a variable declaration.
-
-    Touches only the textual ``.VB`` stream.  For a POU-scoped declaration that is
-    sufficient - measured, the compiler does not consult the POU's ``.VGR`` grid for a
-    declaration change.  For a GLOBAL it is NOT, which is why that case is refused
-    outright; see ``_refuse_global_write``.
-    """
-    _refuse_global_write(pou_name, 'add')
-    _pou_note = None  # add writes both stores, so there is nothing to warn about
-    from .declarations import add_variable
-
-    source, stream, before, text = _declaration_target(project_root, pou_name)
-    updated, notes = add_variable(
-        text, name, type_name, section=section, address=address,
-        initial_value=initial_value, description=description,
-    )
-    # A POU declaration lives in TWO stores, and the compiler resolves variables from the
-    # GRID - which is why a text-only declaration reads back fine but cannot be USED. The
-    # record goes in at the position its ROW belongs; appending at the end is what used to
-    # destroy the POU, because the grid's rows must stay ascending.
-    extra: dict[str, bytes] = {}
-    if pou_name:
-        from . import variables as V
-
-        names = CompoundFile(source).stream_names()
-        grid_stream = next((n for n in names if n.upper().endswith("V.VGR")), None)
-        if grid_stream is not None:
-            grid = CompoundFile(source).read_stream(grid_stream)
-            # The row IS the declaration's 1-based line number, so read it out of the text
-            # that was just built rather than guessing a number.
-            line_number = None
-            for index, text_line in enumerate(updated.splitlines()):
-                stripped = text_line.lstrip()
-                if stripped.startswith(name) and ":" in stripped:
-                    line_number = index + 1
-                    break
-            if line_number is not None:
-                new_grid, handle = V.append_grid_variable(
-                    grid, name, type_name, row=line_number, initial_value=initial_value,
-                )
-                extra[grid_stream] = new_grid
-                notes = list(notes) + [
-                    f"wrote grid record handle={handle} at row={line_number}, in row order - "
-                    f"the compiler resolves variables from the grid, so without this the "
-                    f"declaration could be read back but never used"
-                ]
-
-    else:
-        # A GLOBAL is written to the resource's Global_Variables.VB and NOTHING ELSE, and
-        # the missing half is not harmless. The compiler resolves a global through the
-        # resource grid, Global_Variables.VGR, which has a third layout this plugin can
-        # read only in part, so the record is not written. Measured, the consequence is
-        # precise:
-        #
-        #     add a global, then use it from a POU          stall
-        #     add a global AND declare it VAR_EXTERNAL      stall, even UNUSED
-        #     add a global and leave it alone               clean
-        #
-        # Stalling while unused is what makes it the grid and not the use. So the
-        # declaration is real, it reads back, and the project still builds - but the
-        # variable cannot be referenced yet, and the tool has to say so rather than
-        # report success and let an agent discover a hang with no error to read. This is
-        # the same mistake the unassigned-POU note made, and it is worth not repeating.
-        notes = list(notes) + [
-            "GLOBAL declared in Global_Variables.VB. It reads back and the project still "
-            "builds, but it CANNOT BE USED YET: the compiler resolves globals through the "
-            "resource grid Global_Variables.VGR, which this tool does not write. Referring "
-            "to it - even from a POU that declares it VAR_EXTERNAL - makes the build STALL "
-            "with an EMPTY Errors pane. Add the global in the MotionWorks Global Variables "
-            "sheet to make it usable, then read it back with mw_code_globals."
-        ]
-    return WritePlan(
-        target=source, stream=stream, before=before,
-        after=updated.encode("latin1"), notes=notes, extra_streams=extra,
-    )
-
-
-def plan_variable_edit(
-    project_root: Path,
-    pou_name: str | None,
-    name: str,
-    new_name: str | None = None,
-    type_name: str | None = None,
-    address: str | None = None,
-    initial_value: str | None = None,
-    description: str | None = None,
-    clear_address: bool = False,
-    force: bool = False,
-) -> WritePlan:
-    """Plan editing an existing declaration in place.
-
-    Refuses a type change that contradicts an ``AT`` bit address, because that
-    cannot compile.  Observed directly: retyping an I/O-mapped ``BOOL AT
-    %IX21488.5`` as ``DINT`` failed the build, while the same change on an
-    unaddressed variable compiled cleanly.  Pass ``force=True`` to override.
-    """
-    _refuse_global_write(pou_name, 'edit')
-    _pou_note = _pou_variable_note(pou_name, 'edit')
-    from . import project as P
-    from .declarations import (
-        _find_declaration_line,
-        check_address_type,
-        edit_variable,
-        split_lines,
-    )
-
-    source, stream, before, text = _declaration_target(project_root, pou_name)
-
-    # Resolve the effective address so the type/address pairing can be checked.
-    lines, _ = split_lines(text)
-    index = _find_declaration_line(lines, name)
-    probe = "\r\nVAR\r\n" + lines[index] + "\r\nEND_VAR\r\n"
-    parsed = parse_declarations(probe)
-    current = parsed.variables[0] if parsed.variables else None
-    effective_address = (
-        None if clear_address else (address if address is not None
-                                    else (current.address if current else None))
-    )
-    effective_type = (
-        type_name if type_name is not None
-        else (current.type_name if current else "")
-    )
-    notes_extra: list[str] = []
-    warning = check_address_type(effective_address, effective_type)
-    if warning:
-        if not force:
-            raise WriteRefused(
-                f"{warning}. Changing the address or using a compatible type "
-                f"would work; pass force=True to write it anyway."
-            )
-        notes_extra.append(f"FORCED despite: {warning}")
-
-    updated, notes = edit_variable(
-        text, name, new_name=new_name, type_name=type_name, address=address,
-        initial_value=initial_value, description=description,
-        clear_address=clear_address,
-    )
-
-    # A rename leaves the old name dangling in any body that used it.
-    if new_name and new_name != name:
-        referencing = _reference_check(project_root, name, pou_name)
-        if referencing:
-            if not force:
-                raise WriteRefused(
-                    f"{name!r} is still referenced by {', '.join(referencing)}; "
-                    f"renaming it would break those references. Update the code "
-                    f"first, or pass force=True."
-                )
-            notes_extra.append(
-                f"FORCED rename while referenced by: {', '.join(referencing)}"
-            )
-
-    # A rename has to reach the GRID as well as the text, and that is not cosmetic: the
-    # compiler resolves a variable through the grid, so renaming only in the .VB leaves the
-    # old name in the grid and the new one unresolvable, and the build STALLS with an empty
-    # Errors pane rather than reporting anything. A type or initial-value change is carried
-    # there too, because the grid holds those as well. Measured: renaming without this
-    # updated the text correctly and the build still stalled.
-    extra: dict[str, bytes] = {}
-    if pou_name and (new_name is not None or type_name is not None or initial_value is not None):
-        from . import variables as V
-
-        names = CompoundFile(source).stream_names()
-        grid_stream = next((n for n in names if n.upper().endswith("V.VGR")), None)
-        if grid_stream is not None:
-            grid = CompoundFile(source).read_stream(grid_stream)
-            try:
-                new_grid, info = V.update_grid_variable(
-                    grid, name, new_name=new_name, type_name=type_name,
-                    initial_value=initial_value,
-                )
-            except (UnsupportedFormat, NotFound) as exc:
-                raise WriteRefused(
-                    f"the declaration text could be changed but its grid record could not, "
-                    f"so the build would stall with no error shown: {exc}"
-                ) from exc
-            extra[grid_stream] = new_grid
-            notes_extra = list(notes_extra) + [
-                f"grid record handle={info['handle']} row={info['row']} "
-                f"{info['from']!r} -> {info['to']!r}"
-            ]
-
-    return WritePlan(
-        target=source, stream=stream, before=before,
-        after=updated.encode("latin1"), notes=notes + notes_extra, extra_streams=extra,
-    )
-
-
-def plan_variable_delete(
-    project_root: Path,
-    pou_name: str | None,
-    name: str,
-    force: bool = False,
-) -> WritePlan:
-    """Plan removing a declaration.
-
-    Refuses while any POU body still references the variable, because that
-    produces a dangling reference and a failed build.  Observed directly:
-    deleting a referenced POU-local variable failed to compile, while deleting
-    an unreferenced global variable compiled cleanly.  Pass ``force=True`` to
-    override.
-    """
-    _refuse_global_write(pou_name, 'delete')
-    _pou_note = _pou_variable_note(pou_name, 'delete')
-    from .declarations import delete_variable
-
-    source, stream, before, text = _declaration_target(project_root, pou_name)
-
-    referencing = _reference_check(
-        project_root, name, excluding_pou=None, include_named_pou=pou_name
-    )
-    notes: list[str] = []
-    if referencing:
-        if not force:
-            raise WriteRefused(
-                f"{name!r} is still referenced by {', '.join(referencing)}. "
-                f"Deleting it would leave a dangling reference and the build "
-                f"would fail. Remove those uses first, or pass force=True."
-            )
-        notes.append(f"FORCED delete while referenced by: {', '.join(referencing)}")
-
-    updated, transform_notes = delete_variable(text, name)
-    # The grid record goes with the text. Leaving it behind gives the grid a name with no
-    # declaration behind it, which is the mirror of the rename problem.
-    extra: dict[str, bytes] = {}
-    if pou_name:
-        from . import variables as V
-
-        names = CompoundFile(source).stream_names()
-        grid_stream = next((n for n in names if n.upper().endswith("V.VGR")), None)
-        if grid_stream is not None:
-            grid = CompoundFile(source).read_stream(grid_stream)
-            try:
-                new_grid, info = V.remove_grid_variable(grid, name)
-            except (UnsupportedFormat, NotFound) as exc:
-                raise WriteRefused(
-                    f"the declaration could be removed but its grid record could not, so "
-                    f"the grid would keep a name with nothing behind it: {exc}"
-                ) from exc
-            extra[grid_stream] = new_grid
-            notes = notes + [
-                f"grid record handle={info['handle']} row={info['row']} removed "
-                f"({info['records_before']} -> {info['records_after']} records)"
-            ]
-
-    return WritePlan(
-        target=source, stream=stream, before=before,
-        after=updated.encode("latin1"), notes=notes + transform_notes, extra_streams=extra,
-    )
+from .variable_edit import add as plan_variable_add, edit as plan_variable_edit, delete as plan_variable_delete
 
 
 def apply_declaration(plan: WritePlan, project_root: Path, dry_run: bool = False) -> dict[str, object]:
@@ -878,6 +537,11 @@ def plan_st_body(
     ):
         normalised += "\r\n"
         notes.append("added a trailing CRLF to the body")
+
+    native_prefix = re.match(rb'^(?:\(\*[^*]*[\x00-\x08\x0b-\x1f][\s\S]*?\*\)(?:\r\n|\n)*)+', before)
+    if native_prefix and not normalised.encode("latin1").startswith(native_prefix.group(0)):
+        normalised = native_prefix.group(0).decode("latin1") + normalised
+        notes.append("Preserved native leading MotionWorks control markers")
 
     if run_lint:
         declared = {v.name for v in table.variables}

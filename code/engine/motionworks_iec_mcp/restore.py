@@ -110,6 +110,8 @@ def restore_pou(project_root: Path, pou: str, which: int = 0, dry_run: bool = Tr
     rather than raising for the ordinary refusals, because the caller is usually an agent that has
     just been told its POU is damaged and needs to know what happened.
     """
+    from .staging import assert_proven
+    assert_proven(project_root)
     if current_pou_file(project_root, pou) is None:
         raise NotFound(
             f"no POU named '{pou}' in {project_root}; snapshots cannot restore what is not there. "
@@ -157,6 +159,9 @@ def restore_pou(project_root: Path, pou: str, which: int = 0, dry_run: bool = Tr
         report["would_restore"] = True
         return report
 
+    from .ide import ensure_ide_closed
+    ensure_ide_closed()
+
     # Keep the current file, so a restore can itself be undone.
     keep = target.with_suffix(".before-restore")
     try:
@@ -164,7 +169,7 @@ def restore_pou(project_root: Path, pou: str, which: int = 0, dry_run: bool = Tr
         report["saved_current_to"] = str(keep)
     except OSError as e:
         report["saved_current_to"] = None
-        report["note"] = f"could not save the current file first: {e}"
+        raise MotionWorksError(f"REFUSED: could not back up current file: {e}") from e
 
     shutil.copy2(chosen.pou_file, target)
     after = describe(target)

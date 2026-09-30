@@ -1,0 +1,672 @@
+{
+  "schema_version": 1,
+  "reviewed_on": "2026-09-27",
+  "sources": [
+    {
+      "id": "basics",
+      "document_id": "TRM011-MotionWorksIEC-Basic",
+      "title": "IEC 61131-3 Basics with MotionWorks IEC",
+      "revision": "Rev 1.10, 2014-03-06",
+      "applicability": "Historical training; verify controller and installed IDE/library versions",
+      "url": "https://www.yaskawa.com/delegate/getAttachment?cmd=documents&documentId=TRM011-MotionWorksIEC-Basic&documentName=TRM011-MotionWorksIEC-Basic.pdf",
+      "sha256": "dd8f29b53c042b36457fe987cac09a911a50b1230b745d89389b0c64caf1bf27",
+      "pages": 197,
+      "reviewed_on": "2026-09-27",
+      "kind": "pdf"
+    },
+    {
+      "id": "plcopen",
+      "document_id": "YEA-SIA-IEC-3",
+      "title": "PLCopenPlus Function Blocks for Motion Control",
+      "revision": "2013-04-13 (cover 2013-04-12)",
+      "applicability": "MotionWorks IEC 2.5-era manual; not a claim of installed firmware compatibility",
+      "url": "https://www.yaskawa.com/delegate/getAttachment?cmd=documents&documentId=YEA-SIA-IEC-3&documentName=YEA-SIA-IEC-3_PLCopenPlus_2013-04-13.pdf",
+      "sha256": "6180a58b75f149f0460acfb392a8cb5879ea22cd44f9341fd42a8426b5d9b2dd",
+      "pages": 396,
+      "reviewed_on": "2026-09-27",
+      "kind": "pdf"
+    },
+    {
+      "id": "toolbox",
+      "document_id": "TM.MWIEC.01",
+      "title": "MotionWorks IEC Toolbox Manual",
+      "revision": "Help created 2023-11-14",
+      "applicability": "Toolbox-specific; compare installed toolbox version before applying signatures",
+      "url": "https://www.yaskawa.com/delegate/getAttachment?cmd=documents&documentId=TM.MWIEC.01&documentName=TM.MWIEC.01.pdf",
+      "sha256": "944ebc454d926828ba2aab4e979b6d9db9ce29bdf559d1724b444113234dbc85",
+      "pages": 913,
+      "reviewed_on": "2026-09-27",
+      "kind": "pdf"
+    },
+    {
+      "id": "quick",
+      "document_id": "QRG.MP2000iecSeries.01",
+      "title": "MPiec Series Quick Reference Guide",
+      "revision": "Rev 3.4, catalog date 2016-12-05",
+      "applicability": "MPiec series; procedures and screenshots are historical",
+      "url": "https://www.yaskawa.com/delegate/getAttachment?cmd=documents&documentId=QRG.MP2000iecSeries.01&documentName=QRG.MP2000iecSeries.01.pdf",
+      "sha256": "8455cc86092094d377bbcbfee59dfd222523be4b91748f784468e59c2ef1a481",
+      "pages": 24,
+      "reviewed_on": "2026-09-27",
+      "kind": "pdf"
+    },
+    {
+      "id": "native-code",
+      "document_id": "CNT-IWLS4T",
+      "title": "Error in Native Code Generation",
+      "revision": "FAQ retrieved 2026-09-27",
+      "applicability": "Diagnostic candidates, not a unique root cause",
+      "url": "https://www.yaskawa.com/about-us/contact-us?_com_yaskawa_contact_us_contactUsActionPortlet_safetyText=true&_com_yaskawa_contact_us_contactUsActionPortlet_selectedDocumentId=CNT-IWLS4T",
+      "kind": "web",
+      "reviewed_on": "2026-09-27"
+    },
+    {
+      "id": "io-range",
+      "document_id": "MTN-9GAU5W",
+      "title": "Operand not implemented or area exceeded",
+      "revision": "FAQ retrieved 2026-09-27",
+      "applicability": "Diagnostic candidates, not a unique root cause",
+      "url": "https://www.yaskawa.com/about-us/contact-us?_com_yaskawa_contact_us_contactUsActionPortlet_safetyText=true&_com_yaskawa_contact_us_contactUsActionPortlet_selectedDocumentId=MTN-9GAU5W",
+      "kind": "web",
+      "reviewed_on": "2026-09-27"
+    }
+  ],
+  "topics": [
+    {
+      "id": "scope",
+      "title": "Local and global scope",
+      "source_id": "basics",
+      "pdf_pages": [
+        134,
+        137,
+        144
+      ],
+      "section": "Variable usage / conventions",
+      "summary": "Share through resource globals and matching externals; locals remain POU-owned. Check accidental shadowing.",
+      "tags": [
+        "VAR_EXTERNAL",
+        "VAR_GLOBAL",
+        "scope",
+        "shadowing",
+        "missing",
+        "global"
+      ]
+    },
+    {
+      "id": "strict-types",
+      "title": "Explicit type conversions",
+      "source_id": "basics",
+      "pdf_pages": [
+        34,
+        35
+      ],
+      "section": "Data Type Invalid / Conversion",
+      "summary": "Check declared types and explicit conversions; avoid inferring compatibility from similar numeric values.",
+      "tags": [
+        "INT",
+        "LREAL",
+        "BOOL",
+        "conversion",
+        "type",
+        "mismatch"
+      ]
+    },
+    {
+      "id": "task-order",
+      "title": "Task assignment and program order",
+      "source_id": "basics",
+      "pdf_pages": [
+        53,
+        55,
+        87
+      ],
+      "section": "IO In Task List / Multi-Task Overview",
+      "summary": "Program instances need task bindings. Input mapping precedes logic; output mapping follows it.",
+      "tags": [
+        "task",
+        "program",
+        "instance",
+        "assignment",
+        "order",
+        "scan",
+        "IO"
+      ]
+    },
+    {
+      "id": "task-priority",
+      "title": "Cyclic task priority and watchdog",
+      "source_id": "basics",
+      "pdf_pages": [
+        87,
+        95,
+        96
+      ],
+      "section": "Multi-Task Priority / Watchdog",
+      "summary": "This training uses priorities 0–15, with zero highest. Check controller timing and watchdog limits.",
+      "tags": [
+        "cyclic",
+        "watchdog",
+        "priority",
+        "interval",
+        "scheduling"
+      ]
+    },
+    {
+      "id": "initialization",
+      "title": "Warm and cold initialization",
+      "source_id": "basics",
+      "pdf_pages": [
+        89,
+        90,
+        91,
+        122,
+        125
+      ],
+      "section": "System Tasks / Cold-Warm-Hot Start",
+      "summary": "Select startup tasks and retention deliberately; warm, cold and hot starts initialize different state.",
+      "tags": [
+        "initialization",
+        "startup",
+        "retain",
+        "cold",
+        "warm",
+        "hot"
+      ]
+    },
+    {
+      "id": "diagnostics",
+      "title": "Locate compiler diagnostics",
+      "source_id": "basics",
+      "pdf_pages": [
+        117
+      ],
+      "section": "Compile Errors",
+      "summary": "Navigate from the Errors pane to the reported source; correct the cause and rerun Make.",
+      "tags": [
+        "compile",
+        "errors",
+        "diagnostic",
+        "make",
+        "location"
+      ]
+    },
+    {
+      "id": "rename",
+      "title": "Consistent symbol renaming",
+      "source_id": "basics",
+      "pdf_pages": [
+        143
+      ],
+      "section": "Renaming Variables",
+      "summary": "Update declarations and uses together; whole-word matching helps avoid changing unrelated identifiers.",
+      "tags": [
+        "rename",
+        "declaration",
+        "usage",
+        "references"
+      ]
+    },
+    {
+      "id": "execute",
+      "title": "Execute-triggered function blocks",
+      "source_id": "plcopen",
+      "pdf_pages": [
+        16,
+        17,
+        18,
+        19
+      ],
+      "section": "Function block interface / General rules",
+      "summary": "Execute captures parameters on a rising edge; omitted inputs retain prior/default values. Keep calling busy instances.",
+      "tags": [
+        "execute",
+        "rising",
+        "edge",
+        "busy",
+        "cyclic",
+        "omitted",
+        "inputs",
+        "rearm"
+      ]
+    },
+    {
+      "id": "enable",
+      "title": "Enable/Valid function blocks",
+      "source_id": "plcopen",
+      "pdf_pages": [
+        19
+      ],
+      "section": "Enable and Valid Status",
+      "summary": "Enable is level-sensitive; consume results when Valid indicates usable output.",
+      "tags": [
+        "enable",
+        "valid",
+        "read",
+        "position",
+        "feedback"
+      ]
+    },
+    {
+      "id": "fb-results",
+      "title": "Completion and error handling",
+      "source_id": "plcopen",
+      "pdf_pages": [
+        16,
+        17,
+        18
+      ],
+      "section": "Output status / Error Handling",
+      "summary": "Handle completion, errors and interruption. Execute falling does not itself stop motion; latch diagnostics before reset.",
+      "tags": [
+        "Done",
+        "Error",
+        "ErrorID",
+        "CommandAborted",
+        "reset"
+      ]
+    },
+    {
+      "id": "power",
+      "title": "MC_Power ownership",
+      "source_id": "plcopen",
+      "pdf_pages": [
+        122,
+        123
+      ],
+      "section": "MC_Power / Notes",
+      "summary": "Use one MC_Power instance per axis; verify the installed interface and supported options.",
+      "tags": [
+        "MC_Power",
+        "Status",
+        "Enable",
+        "axis",
+        "ownership"
+      ]
+    },
+    {
+      "id": "stop",
+      "title": "MC_Stop state behavior",
+      "source_id": "plcopen",
+      "pdf_pages": [
+        168,
+        169
+      ],
+      "section": "MC_Stop",
+      "summary": "Stopping persists while Execute remains asserted; other motion commands can report 4370.",
+      "tags": [
+        "MC_Stop",
+        "4370",
+        "MotionProhibited",
+        "Stopping",
+        "Standstill"
+      ]
+    },
+    {
+      "id": "reset",
+      "title": "MC_Reset completion",
+      "source_id": "plcopen",
+      "pdf_pages": [
+        150,
+        151
+      ],
+      "section": "MC_Reset / Notes",
+      "summary": "Done confirms the reset attempt completed; read axis errors to establish whether alarms remain.",
+      "tags": [
+        "MC_Reset",
+        "Done",
+        "alarm",
+        "ErrorStop"
+      ]
+    },
+    {
+      "id": "axis-id",
+      "title": "Axis-reference diagnostic",
+      "source_id": "plcopen",
+      "pdf_pages": [
+        130
+      ],
+      "section": "MC_ReadActualPosition / Error Description",
+      "summary": "For 4625, compare AxisNum with configured logical axes and inspect AXIS_REF ownership.",
+      "tags": [
+        "4625",
+        "AXIS_REF",
+        "AxisNum",
+        "logical",
+        "axis"
+      ]
+    },
+    {
+      "id": "library",
+      "title": "Toolbox and library dependencies",
+      "source_id": "toolbox",
+      "pdf_pages": [
+        1
+      ],
+      "section": "Toolbox Introduction",
+      "summary": "Toolboxes are user-library projects. Record library identity and version; symbol presence alone does not establish pin direction.",
+      "tags": [
+        "library",
+        "toolbox",
+        "version",
+        "dependency",
+        "import"
+      ]
+    },
+    {
+      "id": "cam",
+      "title": "Cam profile reference",
+      "source_id": "toolbox",
+      "pdf_pages": [
+        25,
+        26,
+        27,
+        28,
+        29,
+        30
+      ],
+      "section": "Cam toolbox / CamGenerator",
+      "summary": "Inspect the matching CamGenerator interface, profile structures and installed toolbox before editing cam calculations.",
+      "tags": [
+        "CamGenerator",
+        "CamSegmentStruct",
+        "CamData",
+        "cam",
+        "profile"
+      ]
+    },
+    {
+      "id": "registration",
+      "title": "Registration and product buffer reference",
+      "source_id": "toolbox",
+      "pdf_pages": [
+        570,
+        572,
+        573,
+        574,
+        575,
+        576
+      ],
+      "section": "PLCopen toolbox / ProductBuffer references",
+      "summary": "Trace registration data and ProductBuffer behavior in the matching toolbox; do not infer structure layout from a variable name.",
+      "tags": [
+        "ProductBuffer",
+        "registration",
+        "RegistrationData",
+        "latch",
+        "fifo"
+      ]
+    },
+    {
+      "id": "axis-array",
+      "title": "Axis array indexing",
+      "source_id": "toolbox",
+      "pdf_pages": [
+        2,
+        3
+      ],
+      "section": "AXIS_ARRAY / AXES_GROUP_REF",
+      "summary": "AXIS_ARRAY uses indices 1 through 32 in this revision. Confirm group structures and hardware-generated mappings.",
+      "tags": [
+        "AXIS_ARRAY",
+        "AXES_GROUP_REF",
+        "array",
+        "bounds",
+        "group"
+      ]
+    },
+    {
+      "id": "project-files",
+      "title": "Project and archive handling",
+      "source_id": "quick",
+      "pdf_pages": [
+        16
+      ],
+      "section": "2.1 Open a saved project / 2.2 Open a zipped project",
+      "summary": "A working project includes its wrapper and companion directory. Native ZWT/ZWE archives are opened through MotionWorks; keep extraction in the workspace.",
+      "tags": [
+        "mwt",
+        "mwe",
+        "zwt",
+        "zwe",
+        "archive",
+        "open",
+        "workspace"
+      ]
+    },
+    {
+      "id": "backup",
+      "title": "Save and backup workflow",
+      "source_id": "quick",
+      "pdf_pages": [
+        16,
+        17,
+        22
+      ],
+      "section": "MotionWorks IEC Procedures / User Libraries",
+      "summary": "Preserve the complete project and its dependencies when backing up or moving it. Check library paths after relocation.",
+      "tags": [
+        "backup",
+        "save",
+        "library",
+        "path",
+        "relocation"
+      ]
+    },
+    {
+      "id": "native-code-error",
+      "title": "Native-code generation failure",
+      "source_id": "native-code",
+      "pdf_pages": [],
+      "section": "FAQ answer",
+      "summary": "Inspect variable allocation and software/library compatibility. Yaskawa identifies Cam Toolbox 2.4+ versus IEC 2.x as one mismatch example.",
+      "tags": [
+        "Error",
+        "in",
+        "Native",
+        "Code",
+        "Generation",
+        "native",
+        "compiler",
+        "compatibility"
+      ]
+    },
+    {
+      "id": "address-range",
+      "title": "Located variable outside configured I/O",
+      "source_id": "io-range",
+      "pdf_pages": [],
+      "section": "FAQ answer",
+      "summary": "Compare located variables with configured I/O-driver ranges; this can appear in debug even for an unused variable.",
+      "tags": [
+        "Operand",
+        "not",
+        "implemented",
+        "area",
+        "exceeded",
+        "I/O",
+        "address",
+        "range",
+        "%I",
+        "%Q",
+        "%M"
+      ]
+    }
+  ],
+  "signatures": {
+    "MC_MoveAbsolute": {
+      "source_id": "plcopen",
+      "pdf_pages": [
+        94,
+        95,
+        96
+      ],
+      "section": "MC_MoveAbsolute / Parameters",
+      "inputs": {
+        "Execute": "BOOL",
+        "Position": "LREAL",
+        "Velocity": "LREAL",
+        "Acceleration": "LREAL",
+        "Deceleration": "LREAL",
+        "Jerk": "LREAL",
+        "Direction": "MC_Direction",
+        "BufferMode": "MC_BufferMode"
+      },
+      "outputs": {
+        "Done": "BOOL",
+        "Busy": "BOOL",
+        "Active": "BOOL",
+        "CommandAborted": "BOOL",
+        "Error": "BOOL",
+        "ErrorID": "UINT"
+      },
+      "inouts": {
+        "Axis": "AXIS_REF"
+      },
+      "complete": true,
+      "authority": "historical_vendor_reference",
+      "unsupported_pins": {
+        "Jerk": "Reserved and unsupported in the reviewed 2013 edition."
+      }
+    },
+    "MC_MoveRelative": {
+      "source_id": "plcopen",
+      "pdf_pages": [
+        100,
+        101
+      ],
+      "section": "MC_MoveRelative / Parameters",
+      "inputs": {
+        "Execute": "BOOL",
+        "Distance": "LREAL",
+        "Velocity": "LREAL",
+        "Acceleration": "LREAL",
+        "Deceleration": "LREAL",
+        "Jerk": "LREAL",
+        "BufferMode": "MC_BufferMode"
+      },
+      "outputs": {
+        "Done": "BOOL",
+        "Busy": "BOOL",
+        "Active": "BOOL",
+        "CommandAborted": "BOOL",
+        "Error": "BOOL",
+        "ErrorID": "UINT"
+      },
+      "inouts": {
+        "Axis": "AXIS_REF"
+      },
+      "complete": true,
+      "authority": "historical_vendor_reference",
+      "unsupported_pins": {
+        "Jerk": "Reserved and unsupported in the reviewed 2013 edition."
+      }
+    },
+    "MC_Power": {
+      "source_id": "plcopen",
+      "pdf_pages": [
+        122,
+        123
+      ],
+      "section": "MC_Power / Parameters",
+      "inputs": {
+        "Enable": "BOOL",
+        "Enable_Positive": "BOOL",
+        "Enable_Negative": "BOOL",
+        "BufferMode": "MC_BufferMode"
+      },
+      "outputs": {
+        "Status": "BOOL",
+        "Busy": "BOOL",
+        "Active": "BOOL",
+        "Error": "BOOL",
+        "ErrorID": "UINT"
+      },
+      "inouts": {
+        "Axis": "AXIS_REF"
+      },
+      "complete": true,
+      "authority": "historical_vendor_reference",
+      "unsupported_pins": {
+        "Enable_Positive": "Unsupported in the reviewed 2013 edition.",
+        "Enable_Negative": "Unsupported in the reviewed 2013 edition.",
+        "BufferMode": "Unsupported in the reviewed 2013 edition."
+      }
+    },
+    "MC_ReadActualPosition": {
+      "source_id": "plcopen",
+      "pdf_pages": [
+        129,
+        130
+      ],
+      "section": "MC_ReadActualPosition / Parameters",
+      "inputs": {
+        "Enable": "BOOL"
+      },
+      "outputs": {
+        "Valid": "BOOL",
+        "Busy": "BOOL",
+        "Error": "BOOL",
+        "ErrorID": "UINT",
+        "Position": "LREAL"
+      },
+      "inouts": {
+        "Axis": "AXIS_REF"
+      },
+      "complete": true,
+      "authority": "historical_vendor_reference"
+    },
+    "MC_Reset": {
+      "source_id": "plcopen",
+      "pdf_pages": [
+        150,
+        151
+      ],
+      "section": "MC_Reset / Parameters",
+      "inputs": {
+        "Execute": "BOOL"
+      },
+      "outputs": {
+        "Done": "BOOL",
+        "Busy": "BOOL",
+        "Error": "BOOL",
+        "ErrorID": "UINT"
+      },
+      "inouts": {
+        "Axis": "AXIS_REF"
+      },
+      "complete": true,
+      "authority": "historical_vendor_reference"
+    },
+    "MC_Stop": {
+      "source_id": "plcopen",
+      "pdf_pages": [
+        168,
+        169
+      ],
+      "section": "MC_Stop / Parameters",
+      "inputs": {
+        "Execute": "BOOL",
+        "Deceleration": "LREAL",
+        "Jerk": "LREAL",
+        "BufferMode": "MC_BufferMode"
+      },
+      "outputs": {
+        "Done": "BOOL",
+        "Busy": "BOOL",
+        "Active": "BOOL",
+        "CommandAborted": "BOOL",
+        "Error": "BOOL",
+        "ErrorID": "UINT"
+      },
+      "inouts": {
+        "Axis": "AXIS_REF"
+      },
+      "complete": true,
+      "authority": "historical_vendor_reference",
+      "unsupported_pins": {
+        "Jerk": "Reserved and unsupported in the reviewed 2013 edition.",
+        "BufferMode": "Unsupported in the reviewed 2013 edition; documented behavior is Aborting."
+      }
+    }
+  }
+}

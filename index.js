@@ -36,7 +36,7 @@
  * SAFETY (non-negotiable, enforced in code below)
  * ----------------------------------------------
  *  - Never download to a controller. Never command motion. No tool exists for it.
- *  - `mw_ide_open` refuses any path outside this plugin's own `stage/` directory,
+ *  - `mw_ide_open` refuses any path outside this workspace's `.motionworks/stage/` directory,
  *    so a real project tree is never opened for editing.
  *  - `mw_ide_stage` only ever copies; it never moves or deletes a source project.
  *  - The bridge refuses to instantiate COM unless an IDE is already running,
@@ -45,11 +45,13 @@
  */
 
 import { spawn } from 'node:child_process';
+import { AsyncLocalStorage } from 'node:async_hooks';
+import { randomUUID } from 'node:crypto';
 import {
-  copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, renameSync,
+  copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, realpathSync, renameSync,
   rmSync, statSync, writeFileSync,
 } from 'node:fs';
-import { dirname, join, resolve, sep } from 'node:path';
+import { dirname, isAbsolute, join, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 export const name = 'motionworks-iec-use';
@@ -62,7 +64,12 @@ const LAUNCHER_CMD = join(BRIDGE_DIR, 'start_bridge.cmd');
 const REQ = join(BRIDGE_DIR, 'req.json');
 const RES = join(BRIDGE_DIR, 'res.json');
 const LOG = join(BRIDGE_DIR, 'bridge.log');
-const STAGE_ROOT = join(HERE, 'stage');
+function stageRoot() {
+  const workspace = workspaceRoot();
+  const root = join(workspace, '.motionworks', 'stage');
+  if (!isInside(root, workspace)) throw new Error('REFUSED: workspace stage points outside the workspace.');
+  return root;
+}
 // ── where this plugin is allowed to work ─────────────────────────────────────────
 //
 // MotionWorks projects belong in the workspace. Reaching outside it should be a decision the caller
@@ -72,55 +79,125 @@ const STAGE_ROOT = join(HERE, 'stage');
 //: The host context, kept so a tool can ask which SESSION is calling. Set once in apply().
 let hostCtx = null;
 
+//: The tool call in progress. Its agent is the session this call belongs to. Set by the
+//: register wrapper and cleared when the call returns. Reading it here is how a helper
+//: called deep inside a tool still knows which session asked.
+const toolContext = new AsyncLocalStorage();
+
 //: How the workspace was found, for reporting. An agent that is told "the workspace is X" can tell
 //: whether X looks like its session, which is what would have caught the wrong-root bug immediately.
 let workspaceSource = 'process cwd (no host lookup attempted)';
 
+function hostGet(name) {
+  // Property access on the sandbox ctx throws for any service the plugin did not
+  // declare in inject. get() is the lookup that is allowed. A throw here used to
+  // abort the whole search and leave the profile directory as the workspace.
+  try {
+    return hostCtx?.get?.(name);
+  } catch {
+    return undefined;
+  }
+}
+
+function attachedAgent() {
+  if (toolContext.getStore()?.agent) return toolContext.getStore().agent;
+  try {
+    return hostGet('agents')?.currentInitiator?.() ?? null;
+  } catch {
+    return null;
+  }
+}
+
+function headerCwd(session) {
+  const cwd = session?.header?.cwd ?? session?.meta?.cwd;
+  return typeof cwd === 'string' && isAbsolute(cwd) ? cwd : null;
+}
+
+function idsMatch(left, right) {
+  const a = String(left);
+  const b = String(right);
+  return a === b;
+}
+
 /**
  * The workspace THIS SESSION is working in.
  *
- * process.cwd() is the DSH process's directory and says nothing about which workspace a session is
- * attached to - using it made the guard compare against the wrong root. The session's own cwd is the
- * answer, and the host exposes it in two steps because an Agent carries only an id:
- *
- *     ctx.agents.currentInitiator()  ->  Agent { id }
- *     ctx.sessions.get(agent.id)     ->  Session, whose header carries `cwd`
- *
- * Both are OPTIONAL services, so each step falls through rather than throwing. The order is:
- * explicit override, then the session, then the process directory.
+ * process.cwd() is the DSH process directory (the profile root). It is not a session
+ * workspace. Using it made every project in the real workspace look "outside" and get
+ * refused. The tool call already carries the agent, and that agent's session header cwd
+ * is the folder the session was opened in. That wins. The registry is the same fact
+ * when the session is a member of a workspace record. The profile directory is used
+ * only when no session is attached (tests, and a direct call).
  */
 function workspaceRoot() {
+  const agent = attachedAgent();
+  if (agent?.id) {
+    const id = String(agent.id);
+    const direct = headerCwd(agent.session);
+    if (direct) {
+      workspaceSource = `session ${id.slice(0, 12)}`;
+      return direct;
+    }
+    try {
+      const registry = hostGet('workspaceRegistry');
+      const workspaces = typeof registry?.list === 'function' ? registry.list() : [];
+      const owned = workspaces.find((w) => (w.sessionIds ?? []).some((s) => idsMatch(s, id)));
+      if (owned?.path && isAbsolute(owned.path)) {
+        workspaceSource = `workspace ${owned.title ?? owned.path}`;
+        return owned.path;
+      }
+      const stored = headerCwd(hostGet('sessions')?.get?.(agent.id) ?? hostGet('sessions')?.get?.(id));
+      if (stored) {
+        workspaceSource = `session ${id.slice(0, 12)}`;
+        return stored;
+      }
+    } catch {
+      // a dead registry must not be reported as "the workspace is the profile root"
+    }
+    workspaceSource = `session ${id.slice(0, 12)} (no workspace path)`;
+    throw new Error(
+      `REFUSED: session ${id} has no workspace path. The DSH profile directory is not `
+      + 'the workspace, so this call will not stage or open anything against it.',
+    );
+  }
+
   const override = process.env.MOTIONWORKS_MCP_WORKSPACE;
-  if (override) {
-    workspaceSource = 'MOTIONWORKS_MCP_WORKSPACE';
+  if (override && isAbsolute(override) && !toolContext.getStore()) {
+    workspaceSource = 'MOTIONWORKS_MCP_WORKSPACE (no session attached)';
     return override;
   }
 
-  try {
-    const agents = hostCtx?.get?.('agents');
-    const agent = agents?.currentInitiator?.();
-    if (agent?.id) {
-      const sessions = hostCtx?.get?.('sessions');
-      const session = sessions?.get?.(agent.id);
-      const cwd = session?.cwd ?? session?.header?.cwd ?? session?.meta?.cwd;
-      if (cwd) {
-        workspaceSource = `session ${String(agent.id).slice(0, 12)}`;
-        return cwd;
-      }
-    }
-  } catch {
-    // an unavailable host service must not break a tool call
-  }
+  throw new Error('REFUSED: no session workspace is available. Attach this chat to a workspace; direct callers must set MOTIONWORKS_MCP_WORKSPACE.');
+}
 
-  workspaceSource = 'process cwd (the host did not report a session workspace)';
-  return process.cwd();
+/** Resolve through the last existing ancestor so a junction cannot disguise an outside path. */
+function canonical(p) {
+  let cursor = resolve(p);
+  const suffix = [];
+  while (!existsSync(cursor)) {
+    const parent = dirname(cursor);
+    if (parent === cursor) return resolve(p);
+    suffix.push(cursor.slice(parent.length));
+    cursor = parent;
+  }
+  try {
+    cursor = realpathSync(cursor);
+  } catch {
+    return resolve(p);
+  }
+  for (let i = suffix.length - 1; i >= 0; i -= 1) cursor += suffix[i];
+  return cursor;
+}
+
+function isInside(child, parent) {
+  const root = canonical(parent).toLowerCase();
+  const full = canonical(child).toLowerCase();
+  return full === root || full.startsWith(root.endsWith(sep) ? root : root + sep);
 }
 
 function isInsideWorkspace(target) {
   try {
-    const root = resolve(workspaceRoot()).toLowerCase();
-    const full = resolve(target).toLowerCase();
-    return full === root || full.startsWith(root.endsWith(sep) ? root : root + sep);
+    return isInside(target, workspaceRoot());
   } catch {
     return false;
   }
@@ -152,6 +229,7 @@ function findProjects(root, maxDepth = 5) {
         walk(join(dir, entry.name), depth + 1);
       } else if (entry.name.toLowerCase().endsWith('.mwt')) {
         const full = join(dir, entry.name);
+        if (!isInsideWorkspace(full)) continue;
         let bytes = 0;
         let modified = null;
         try {
@@ -175,14 +253,12 @@ function findProjects(root, maxDepth = 5) {
 
 // ── POUs this plugin created ─────────────────────────────────────────────────────
 //
-// A POU made by mw_code_pou_create cannot accept an added declaration: the build stalls, silently
-// and only at the next build. The names are recorded here so mw_code_var_add can refuse instead of
-// letting an agent walk into it.
-const CREATED_FILE = join(STAGE_ROOT, 'created-pous.json');
+// Created POU names are diagnostic metadata only.
+const createdFile = () => join(stageRoot(), 'created-pous.json');
 
 function createdPous() {
   try {
-    const raw = readFileSync(CREATED_FILE, 'utf8');
+    const raw = readFileSync(createdFile(), 'utf8');
     const parsed = JSON.parse(raw);
     return Array.isArray(parsed) ? parsed : [];
   } catch {
@@ -193,10 +269,10 @@ function createdPous() {
 function rememberCreated(name) {
   if (!name) return;
   try {
-    mkdirSync(STAGE_ROOT, { recursive: true });
+    mkdirSync(stageRoot(), { recursive: true });
     const known = createdPous();
     if (!known.includes(name)) known.push(name);
-    writeFileSync(CREATED_FILE, JSON.stringify(known, null, 2));
+    writeFileSync(createdFile(), JSON.stringify(known, null, 2));
   } catch {
     // best effort: failing to record must never fail the creation itself
   }
@@ -205,7 +281,7 @@ function rememberCreated(name) {
 function forgetCreated(name) {
   try {
     const known = createdPous().filter((n) => n !== name);
-    writeFileSync(CREATED_FILE, JSON.stringify(known, null, 2));
+    writeFileSync(createdFile(), JSON.stringify(known, null, 2));
   } catch {
     // best effort
   }
@@ -232,8 +308,6 @@ const PS32 = join(
 // the IDE holds the project, so a write can never fight the IDE's cached state.
 const CODE_DIR = join(HERE, 'code');
 const CODE_HELPER = join(CODE_DIR, 'mw_code.py');
-const CODE_REQ = join(CODE_DIR, 'req.json');
-const CODE_RES = join(CODE_DIR, 'res.json');
 
 /**
  * First working Python interpreter.
@@ -248,6 +322,8 @@ function pythonExe() {
   const candidates = [
     join(process.env.LOCALAPPDATA ?? '', 'Programs', 'AryaAI', 'resources', 'runtime',
       'primary-runtime', 'dependencies', 'python', 'python.exe'),
+    join(process.env.USERPROFILE ?? '', '.cache', 'codex-runtimes',
+      'codex-primary-runtime', 'dependencies', 'python', 'python.exe'),
   ];
   for (const c of candidates) {
     if (c && existsSync(c)) return c;
@@ -266,7 +342,6 @@ function codeSrc() {
 /** Set once the bridge has been spawned by this host process. */
 let bridgeSpawned = false;
 /** Monotonic request id; replies are matched on it so a stale answer is never used. */
-let nextId = 1;
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const text = (t) => [{ type: 'text', text: t }];
@@ -289,9 +364,23 @@ function logTail(lines = 6) {
  * never read a half-written file, and a reply is accepted only when its `id`
  * matches this call's Ã¢â‚¬â€ so an earlier call's answer is never mistaken for this one.
  */
-async function call(verb, params = {}, timeoutMs = 30000) {
-  const id = nextId++;
+let bridgeQueue = Promise.resolve();
+function call(verb, params = {}, timeoutMs = 30000) {
+  const scope = ['ping', 'stop'].includes(verb) ? {} : {
+    workspace: workspaceRoot(), stage_root: stageRoot(),
+  };
+  const pending = bridgeQueue.then(() => callBridge(verb, { ...params, ...scope }, timeoutMs));
+  bridgeQueue = pending.catch(() => {});
+  return pending;
+}
+
+async function callBridge(verb, params = {}, timeoutMs = 30000) {
+  const id = randomUUID();
   const tmp = `${REQ}.tmp`;
+  // A new process starts ids at 1, and a previous bridge's res.json can still
+  // hold id 1. Accepting that file makes a dead bridge look alive, and the
+  // real request then waits out its whole timeout. Drop the old reply first.
+  rmSync(RES, { force: true });
   writeFileSync(tmp, JSON.stringify({ id, verb, ...params }), 'utf8');
   renameSync(tmp, REQ);
 
@@ -318,12 +407,16 @@ async function call(verb, params = {}, timeoutMs = 30000) {
 }
 
 /** True when the bridge answers a ping, i.e. it is actually serving requests. */
-async function bridgeAlive() {
+async function bridgeAlive(timeoutMs = 4000) {
   if (!existsSync(BRIDGE_SCRIPT)) return false;
   try {
-    await call('ping', {}, 4000);
+    const reply = await call('ping', {}, timeoutMs);
+    if (reply?.workspace_protocol !== 3) {
+      throw new Error('OUTDATED_BRIDGE: restart the MotionWorks bridge before using workspace-bound tools.');
+    }
     return true;
-  } catch {
+  } catch (error) {
+    if (error.message.startsWith('OUTDATED_BRIDGE:')) throw error;
     return false;
   }
 }
@@ -336,11 +429,11 @@ async function bridgeAlive() {
  * uses req.json/res.json Ã¢â‚¬â€ so ignoring stdio costs nothing.
  */
 async function ensureBridge() {
-  if (await bridgeAlive()) return;
+  if (await bridgeAlive(1500)) return;
   if (!existsSync(BRIDGE_SCRIPT)) throw new Error(`bridge script missing: ${BRIDGE_SCRIPT}`);
   mkdirSync(BRIDGE_DIR, { recursive: true });
   // A leftover request would be consumed by the new bridge on startup, and the
-  // `stop` verb exits Ã¢â‚¬â€ which is how a previous run's stale request killed a
+  // `stop` verb exits — which is how a previous run's stale request killed a
   // freshly started bridge. Clear both files first.
   rmSync(REQ, { force: true });
   rmSync(RES, { force: true });
@@ -357,12 +450,17 @@ async function ensureBridge() {
   child.unref();
   bridgeSpawned = true;
 
-  for (let i = 0; i < 40; i += 1) {
+  // A failed ping used to wait 4s, and this loop ran 40 times, so "within 10s"
+  // was really closer to three minutes. Short pings keep the budget honest.
+  const started = Date.now();
+  const budgetMs = 12000;
+  while (Date.now() - started < budgetMs) {
     await sleep(250);
-    if (await bridgeAlive()) return;
+    if (await bridgeAlive(700)) return;
   }
+  const waited = Math.round((Date.now() - started) / 1000);
   throw new Error(
-    `the 32-bit COM bridge did not come up within 10s. Check that ${PS32} and `
+    `the 32-bit COM bridge did not come up within ${waited}s. Check that ${PS32} and `
     + `${LAUNCHER_CMD} exist. Log: ${logTail()}`,
   );
 }
@@ -392,19 +490,26 @@ async function verb(v, params, timeoutMs) {
  */
 function runCode(codeVerb, request, timeoutMs = 180000) {
   return new Promise((resolve, reject) => {
+    const requestId = randomUUID();
+    const codeReq = join(CODE_DIR, `req-${requestId}.json`);
+    const codeRes = join(CODE_DIR, `res-${requestId}.json`);
+    const cleanup = () => {
+      rmSync(codeReq, { force: true });
+      rmSync(codeRes, { force: true });
+    };
     if (!existsSync(CODE_HELPER)) {
       reject(new Error(`code helper missing: ${CODE_HELPER}`));
       return;
     }
     const py = pythonExe();
-    if (!existsSync(py)) {
+    if (py !== 'python' && !existsSync(py)) {
       reject(new Error(`python not found at ${py} Ã¢â‚¬â€ set MW_PYTHON to a Python 3 interpreter`));
+      return;
     }
     mkdirSync(CODE_DIR, { recursive: true });
-    rmSync(CODE_RES, { force: true });
-    writeFileSync(CODE_REQ, JSON.stringify(request), 'utf8');
+    writeFileSync(codeReq, JSON.stringify(request), 'utf8');
 
-    const child = spawn(py, [CODE_HELPER, codeVerb, CODE_REQ, CODE_RES], {
+    const child = spawn(py, [CODE_HELPER, codeVerb, codeReq, codeRes], {
       stdio: 'ignore',
       windowsHide: true,
       env: {
@@ -415,11 +520,12 @@ function runCode(codeVerb, request, timeoutMs = 180000) {
         // it cannot create the backup location. Its default (~\.motionworks-iec-mcp)
         // is not writable here Ã¢â‚¬â€ measured: WinError 5 on the first real write Ã¢â‚¬â€ so
         // point it at the plugin's own directory. Without this, every write fails.
-        MOTIONWORKS_MCP_BACKUP_DIR: join(HERE, 'backups'),
-        MOTIONWORKS_MCP_ROOT: STAGE_ROOT,
-        // Let a real write close the IDE itself rather than only refusing, so the
-        // close/write sequence cannot be raced by the IDE caching project state.
-        MOTIONWORKS_MCP_CLOSE_IDE: '1',
+        MOTIONWORKS_MCP_BACKUP_DIR: join(workspaceRoot(), '.motionworks', 'backups'),
+        MOTIONWORKS_MCP_ROOT: stageRoot(),
+        // Writes must refuse an open IDE, including an unrelated workspace project.
+        MOTIONWORKS_MCP_CLOSE_IDE: '0',
+        MOTIONWORKS_MCP_WORKSPACE: workspaceRoot(),
+        MOTIONWORKS_MCP_STAGE: stageRoot(),
       },
     });
 
@@ -428,15 +534,17 @@ function runCode(codeVerb, request, timeoutMs = 180000) {
       reject(new Error(`code engine timed out after ${timeoutMs}ms on '${codeVerb}'`));
     }, timeoutMs);
 
-    child.on('error', (err) => { clearTimeout(timer); reject(err); });
+    child.on('error', (err) => { clearTimeout(timer); cleanup(); reject(err); });
     child.on('exit', () => {
       clearTimeout(timer);
       let res;
       try {
-        res = JSON.parse(readFileSync(CODE_RES, 'utf8').replace(/^\uFEFF/, ''));
+        res = JSON.parse(readFileSync(codeRes, 'utf8').replace(/^\uFEFF/, ''));
       } catch (err) {
         reject(new Error(`code engine produced no readable result for '${codeVerb}': ${err.message}`));
         return;
+      } finally {
+        cleanup();
       }
       if (!res.ok) {
         reject(new Error(res.error || `code engine failed '${codeVerb}'`));
@@ -457,14 +565,141 @@ function runCode(codeVerb, request, timeoutMs = 180000) {
 /** Refuse any path that is not inside this plugin's staging root. */
 function assertStaged(p) {
   const full = resolve(p);
-  const root = resolve(STAGE_ROOT);
-  if (full !== root && !full.startsWith(root + sep)) {
+  const root = stageRoot();
+  if (!isInside(full, root)) {
     throw new Error(
       `REFUSED: '${full}' is outside the staging root '${root}'. `
       + 'Stage a copy with mw_ide_stage first; the real project trees are never opened.',
     );
   }
   return full;
+}
+
+const IDENTITY_SUFFIX = '.identity.json';
+
+function identityPathFor(baseName) {
+  return join(stageRoot(), `${baseName}${IDENTITY_SUFFIX}`);
+}
+
+function writeIdentity(record) {
+  mkdirSync(stageRoot(), { recursive: true });
+  writeFileSync(identityPathFor(record.name), JSON.stringify(record, null, 2));
+}
+
+function readIdentityFile(file) {
+  try {
+    return JSON.parse(readFileSync(file, 'utf8'));
+  } catch {
+    return null;
+  }
+}
+
+/** The staged project whose .mwt or directory is `activePath`, if we staged it. */
+/** Refuse to compile unless the open project is a staged copy of this workspace. */
+async function assertIdeProjectProven() {
+  const status = await verb('status', {}, 20000);
+  if (!status?.is_project_open || !status.active_project) {
+    throw new Error(
+      'REFUSED: no project is open. Stage the workspace project and open that copy. '
+      + 'Do not build whatever MotionWorks restored on startup.',
+    );
+  }
+  assertProven(status.active_project);
+  return status;
+}
+
+/** Name the project a compile ran on. Call assertIdeProjectProven before the compile. */
+function tagProject(verdict, status) {
+  const id = identityMatching(status.active_project);
+  return {
+    ...verdict,
+    active_project: status.active_project,
+    identity_name: id?.name ?? null,
+    identity_source: id?.source ?? null,
+  };
+}
+
+function identityMatching(activePath) {
+  if (!activePath) return null;
+  const want = resolve(String(activePath)).toLowerCase();
+  let names;
+  try {
+    names = readdirSync(stageRoot());
+  } catch {
+    return null;
+  }
+  for (const name of names) {
+    if (!name.endsWith(IDENTITY_SUFFIX)) continue;
+    const id = readIdentityFile(join(stageRoot(), name));
+    if (!id) continue;
+    const mwt = id.staged_mwt ? resolve(id.staged_mwt).toLowerCase() : '';
+    const dir = id.staged_directory ? resolve(id.staged_directory).toLowerCase() : '';
+    if (want === mwt || want === dir || (dir && want.startsWith(dir + sep))) return id;
+  }
+  return null;
+}
+
+function identityFields(id) {
+  return {
+    identity_name: id?.name ?? null,
+    identity_source: id?.source ?? null,
+    identity_workspace: id?.workspace ?? null,
+  };
+}
+
+/** A .mwt or its sibling directory, for a read that must not stage or open anything. */
+function resolveProjectDir(p) {
+  const full = resolve(p);
+  if (!existsSync(full)) throw new Error(`project not found: ${full}`);
+  if (full.toLowerCase().endsWith('.mwt')) {
+    const dir = full.slice(0, -4);
+    if (!existsSync(dir)) throw new Error(`${full} has no project directory beside it`);
+    return dir;
+  }
+  return full;
+}
+
+/**
+ * The project a code tool should read.
+ *
+ * `reference: true` reads whatever path the caller names, including one outside
+ * the workspace, and does not stage or open it. Every other call stays on the
+ * staged copy.
+ */
+function projectRequest(args, extra = {}) {
+  if (args?.reference === true) {
+    if (!args.project) {
+      throw new Error(
+        'A reference read needs project set to the .mwt or the project folder. '
+        + 'It only reads. It does not stage, open, or edit.',
+      );
+    }
+    return {
+      ...extra,
+      project: resolveProjectDir(String(args.project)),
+      reference: true,
+      workspace: workspaceRoot(),
+    };
+  }
+  return { ...extra, project: projectOf(args) };
+}
+
+const REFERENCE_PARAM = {
+  type: 'boolean',
+  description:
+    'Read a project that is not the staged workspace copy, including one outside '
+    + 'the workspace. Read-only: nothing is staged, opened, or modified.',
+};
+
+/** Check the complete tree before copying; junctions must not import another project. */
+function validateCopyTree(dir) {
+  if (!isInsideWorkspace(dir)) throw new Error(`REFUSED: project member outside workspace: ${dir}`);
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    const path = join(dir, entry.name);
+    if (entry.isSymbolicLink()) throw new Error(`REFUSED: linked project member: ${path}`);
+    if (!isInsideWorkspace(path)) throw new Error(`REFUSED: project member outside workspace: ${path}`);
+    if (entry.isDirectory()) validateCopyTree(path);
+  }
 }
 
 /** Recursive copy (copyFileSync has no recursive mode). */
@@ -489,6 +724,10 @@ const STATUS_SCHEMA = {
     ide_window: { type: 'string', description: 'Window handle of the live IDE, e.g. 0x4A0A12.' },
     is_project_open: { type: 'boolean' },
     active_project: { oneOf: [{ type: 'string' }, { type: 'null' }] },
+    in_stage: { oneOf: [{ type: 'boolean' }, { type: 'null' }] },
+    identity_name: { oneOf: [{ type: 'string' }, { type: 'null' }] },
+    identity_source: { oneOf: [{ type: 'string' }, { type: 'null' }] },
+    identity_workspace: { oneOf: [{ type: 'string' }, { type: 'null' }] },
   },
 };
 
@@ -506,13 +745,13 @@ function scanPouContainers() {
   const damaged = [];
   let projects;
   try {
-    projects = readdirSync(STAGE_ROOT, { withFileTypes: true });
+    projects = readdirSync(stageRoot(), { withFileTypes: true });
   } catch {
     return damaged;
   }
   for (const project of projects) {
     if (!project.isDirectory()) continue;
-    const poe = join(STAGE_ROOT, project.name, 'POE');
+    const poe = join(stageRoot(), project.name, 'POE');
     let pous;
     try {
       pous = readdirSync(poe, { withFileTypes: true });
@@ -556,20 +795,7 @@ function diagnoseBuild(verdict) {
   }
 
   if (verdict?.stalled) {
-    return {
-      kind: 'stall',
-      explain:
-        'The compiler never finished, and the Errors pane will be EMPTY - hunting it for messages ' +
-        'wastes the turn. Every known cause is silent and was measured on this project: ' +
-        '(1) a declaration added to a POU created by mw_code_pou_create - 28 runs of 29, and ' +
-        'mw_code_var_add now refuses it; ' +
-        '(2) a body that READS a VAR_EXTERNAL global - the read stalls, a write does not, so prefer ' +
-        'POU-local declarations; ' +
-        '(3) a global added by mw_code_var_add, which the resource grid does not carry, so nothing ' +
-        'can resolve it. ' +
-        'The POU itself usually survives; removing the offending change clears the stall.',
-      next: 'undo the last write, or replace the global reference with a POU-local declaration',
-    };
+    return { kind: 'stall', explain: 'Completion was not verified for this request. The IDE may be busy, blocked by a dialog, failed, or reporting a cached result.', next: 'Inspect mw_ide_state and mw_ide_errors; do not treat this as success or repair files while the IDE is open.' };
   }
 
   return {
@@ -581,13 +807,22 @@ function diagnoseBuild(verdict) {
   };
 }
 
+// The engine returns `{ dry_run, result: {...} }`, and every field below describes the INSIDE of
+// that `result`. With `additionalProperties: false` the wrapper itself was undeclared, so the
+// harness rejected every call with `"value.result" is not a declared property` before render ran -
+// the tool could not succeed at all. `additionalProperties: true` is the fix that cannot drift
+// again: the engine owns the result shape and this schema documents it rather than policing it.
+// `required` is gone for the same reason - it asserted a top-level `dry_run` that list mode's
+// payload does not carry in the position the schema claimed.
 const RESTORE_SCHEMA = {
   type: 'object',
-  additionalProperties: false,
-  required: ['dry_run'],
+  additionalProperties: true,
   properties: {
     dry_run: { type: 'boolean' },
     ok: { oneOf: [{ type: 'boolean' }, { type: 'null' }] },
+    // The engine's envelope. Declared so a reader of this schema sees the real shape.
+    result: { type: 'object', additionalProperties: true },
+    plan: { type: 'object', additionalProperties: true },
     // list mode
     snapshots: { oneOf: [{ type: 'integer' }, { type: 'null' }] },
     restorable_pous: { oneOf: [{ type: 'integer' }, { type: 'null' }] },
@@ -678,6 +913,9 @@ const BUILD_SCHEMA = {
     is_compiled: { oneOf: [{ type: 'boolean' }, { type: 'null' }] },
     is_modified: { oneOf: [{ type: 'boolean' }, { type: 'null' }] },
     elapsed_s: { type: 'number' },
+    active_project: { oneOf: [{ type: 'string' }, { type: 'null' }] },
+    identity_name: { oneOf: [{ type: 'string' }, { type: 'null' }] },
+    identity_source: { oneOf: [{ type: 'string' }, { type: 'null' }] },
     diagnosis: {
       oneOf: [{ type: 'object' }, { type: 'null' }],
       description:
@@ -699,27 +937,24 @@ const BUILD_SCHEMA = {
  * guess is wrong Ã¢â‚¬â€ 1 is Make, 2 is Build, and there is no Rebuild compile type
  * at all (Rebuild is a command, and ExecuteCommand is a stub in this build).
  */
+function projectLine(v) {
+  if (!v?.active_project && !v?.identity_name) return '';
+  const name = v.identity_name ?? v.active_project;
+  const from = v.identity_source ? ` Staged from ${v.identity_source}.` : '';
+  return ` Project: ${name}.${from}`;
+}
+
 function renderBuild(_a, v) {
-  if (!v.accepted) return text(`${v.mode}: the IDE never accepted the compile request.`);
+  const where = projectLine(v);
+  if (!v.accepted) return text(`${v.mode}: the IDE never accepted the compile request.${where}`);
   if (v.stalled) {
-    return text(
-      `${v.mode}: COMPILER DID NOT FINISH (is_compiled=false, is_modified=true, ${v.elapsed_s}s). `
-      + 'This is a STALL, not a rejection - the compiler is still running, so the Errors '
-      + 'pane proves nothing. Re-check with mw_ide_compile_state, and do NOT go hunting '
-      + 'the Errors pane for messages that were never produced.',
-    );
+    return text(`${v.mode}: completion unverified after ${v.elapsed_s}s.${where} Inspect mw_ide_state and mw_ide_errors before proceeding.`);
   }
+
   return text(
     v.is_compiled
-      // Compiled is not the same as nothing to read. This verdict comes from IsCompiled, and
-      // the API never returns the messages, so a project can compile with warnings the agent
-      // would otherwise never look for. Measured on one real project: 0 errors, 9 warnings -
-      // four duplicate instances of one function block, three unused variables and an empty
-      // worksheet.
-      ? `${v.mode}: compiled cleanly (is_compiled=true, ${v.elapsed_s}s). `
-        + 'That is the IDE\'s verdict only, and it counts errors rather than warnings — call '
-        + 'mw_ide_errors with pane "Warnings" to read what the compiler also reported.'
-      : `${v.mode}: COMPILE FAILED (is_compiled=false, ${v.elapsed_s}s). `
+      ? `${v.mode}: compiled cleanly (is_compiled=true, ${v.elapsed_s}s).${where}`
+      : `${v.mode}: COMPILE FAILED (is_compiled=false, ${v.elapsed_s}s).${where} `
         + 'The automation API returns the verdict but never the messages — call mw_ide_errors to '
         + 'bring the IDE Errors pane up and capture it.',
   );
@@ -735,60 +970,238 @@ const WRITE_SCHEMA = {
     dry_run: { type: 'boolean' },
     result: { type: 'object', additionalProperties: true },
     plan: { type: 'object', additionalProperties: true },
+    // Attached by mw_code_write_st and mw_code_pou_create when the POU they touched is assigned to
+    // no task. Declared so the renderer can print it: it belongs in the rendered text, not only in
+    // the value, because a warning a caller has to go looking for is one they do not read.
+    unassigned_warning: { type: 'string' },
   },
 };
 
 function renderWrite(_a, v) {
+  // Why Array.isArray: `text()` returns ContentBlock[] and the two branches below each build one,
+  // so appending a warning has to put it INSIDE the block, not beside it. Returning
+  // [block, warningString] would put a bare string where a block belongs.
+  const withWarning = (blocks) => {
+    if (!v?.unassigned_warning || !Array.isArray(blocks)) return blocks;
+    return blocks.map((b, i) => (i === 0 && b?.type === 'text'
+      ? { ...b, text: `${b.text}\n\nWARNING: ${v.unassigned_warning}` }
+      : b));
+  };
   const r = (v && v.result) || {};
   const p = (v && v.plan) || {};
   if (v && v.dry_run) {
     if (p.pou_name) {
-      return text(`DRY RUN Ã¢â‚¬â€ nothing changed. Plan for POU '${p.pou_name}'`
+      return withWarning(text(`DRY RUN Ã¢â‚¬â€ nothing changed. Plan for POU '${p.pou_name}'`
         + (p.template_name ? ` from template '${p.template_name}'` : '')
         + (p.files ? `; would touch ${p.files.length} file(s)` : '')
         + (p.referenced_by && p.referenced_by.length
           ? `; referenced by ${p.referenced_by.join(', ')}` : '')
         + (p.assigned_to && p.assigned_to.length
-          ? `; assigned to tasks ${p.assigned_to.join(', ')}` : ''));
+          ? `; assigned to tasks ${p.assigned_to.join(', ')}` : '')));
     }
-    return text(`DRY RUN Ã¢â‚¬â€ nothing changed.`
+    return withWarning(text(`DRY RUN Ã¢â‚¬â€ nothing changed.`
       + (r.target ? ` Would write ${r.target}` : '')
-      + (r.stream ? ` (stream ${r.stream})` : ''));
+      + (r.stream ? ` (stream ${r.stream})` : '')));
   }
   if (r.applied) {
-    return text(
+    return withWarning(text(
       `APPLIED to ${r.target} (stream ${r.stream}); ${r.before_bytes} -> ${r.after_bytes} bytes, `
       + `${r.siblings_verified} sibling streams verified unchanged.`
       + (Array.isArray(r.backups) && r.backups.length ? ` Backup: ${r.backups[0]}` : ''),
-    );
+    ));
   }
   const body = Object.keys(r).length ? r : p;
   return text(`Result: ${JSON.stringify(body).slice(0, 400)}`);
 }
 
 /**
- * The project directory a code tool should act on.
+ * Report a batch declaration in the terms a batch actually has: how many landed, and WHICH failed.
  *
- * Defaults to the newest staged project, and always passes through assertStaged,
- * so a code tool can never be pointed at a real project tree.
+ * A partial batch is the normal outcome rather than an error - the engine applies what it can and
+ * names the items it could not - so the render leads with the split and then names each failure
+ * with its index, because "3 of 20 failed" without the names is a caller re-reading its own input.
  */
-function projectOf(args) {
-  const given = args?.project;
-  if (given) return assertStaged(String(given));
-  if (!existsSync(STAGE_ROOT)) {
-    throw new Error(`no staged project: ${STAGE_ROOT} does not exist Ã¢â‚¬â€ stage one first`);
+function renderBatch(_a, v) {
+  const applied = v.applied ?? 0;
+  const failed = v.failed ?? 0;
+  const head = `${v.dry_run ? 'DRY RUN — nothing changed. ' : ''}`
+    + `${applied} of ${v.requested} declaration(s) `
+    + `${v.dry_run ? 'planned' : 'applied'}${v.pou ? ` in ${v.pou}` : ' (global)'}`;
+  if (!failed) return text(`${head}. All of them.`);
+  const lines = (v.failures ?? []).map((f) => `  [${f.index}] ${f.name ?? '(unnamed)'}: ${f.error}`);
+  return text(`${head}; ${failed} FAILED and the rest were left in place. Re-issue only these:\n`
+    + lines.join('\n')
+    + `\n${v.note ?? ''}`);
+}
+
+/**
+ * Report a copy back: what it wrote, and whether the write landed.
+ *
+ * `mismatched` is the field that matters. The engine re-reads every file it wrote and compares
+ * digests, so a non-empty list means the release is NOT synced even though the copy call returned
+ * without raising - which is the difference between a verification and an intention.
+ */
+function renderSync(_a, v) {
+  if (v.dry_run) {
+    return text(`DRY RUN — nothing written. ${v.would_copy} file(s) would be copied to\n`
+      + `  ${v.destination}\n`
+      + `${v.would_skip} left alone (already identical, or not source this engine writes).`);
   }
+  const bad = v.mismatched ?? 0;
+  return text(`${bad ? 'NOT SYNCED — ' : 'Synced '}${v.copied} file(s) to\n`
+    + `  ${v.destination}\n`
+    + `${v.skipped} left alone. ${v.wrapper ?? ''}`
+    + (bad ? `\n${(v.failures ?? []).map((f) => `  ${f.file}: expected ${f.expected}, got ${f.got}`).join('\n')}` : '')
+    + `\nVerified by sha256 after the copy.`);
+}
+
+/**
+ * Name the POUs that exist but are assigned to no task, so the caller hears it before a build.
+ *
+ * WHY THIS EXISTS. A POU with no task instance NEVER RUNS, and — measured — a build does not
+ * flag it: a POU containing an undeclared variable compiled cleanly while it was unassigned. So
+ * the two symptoms a caller actually meets are a 90-second build that ends `compiled=false` with
+ * an EMPTY Errors pane, or a green build over code that does nothing. Both were hit twice in one
+ * session and the cause was this, discovered afterwards.
+ *
+ * Best-effort by design: this is a warning attached to someone else's answer, so a failure to read
+ * the task list must never turn a successful write into an error. It returns null rather than
+ * guessing when it cannot tell.
+ */
+async function unassignedWarning(project, names) {
+  try {
+    const r = await runCode('tasks', { project });
+    const unassigned = new Set(r?.unassigned ?? []);
+    const hit = (names ?? []).filter((n) => n && unassigned.has(n));
+    if (!hit.length) return null;
+    return `${hit.join(', ')} ${hit.length === 1 ? 'is' : 'are'} assigned to NO TASK, so `
+      + `${hit.length === 1 ? 'it' : 'they'} will never run — and a clean build does NOT prove `
+      + `otherwise: a POU with an undeclared variable built cleanly while unassigned. Assign it in `
+      + `the MotionWorks Project Tree (right-click the task, add the program), then confirm with `
+      + `mw_code_tasks. A build attempted before that can stall for ~90s and end with an empty `
+      + `Errors pane.`;
+  } catch {
+    // No project, no task list, or no IDE: the warning is worth having and not worth failing for.
+    return null;
+  }
+}
+
+/** The staged project directory for a path that may be the .mwt, the directory, or a file inside it. */function stagedProjectDir(p) {
+  const staged = assertStaged(p);
+  const asMwt = staged.toLowerCase().endsWith('.mwt') ? staged.slice(0, -4) : staged;
+  const root = canonical(stageRoot());
+  const full = canonical(asMwt);
+  const rel = full.slice(root.length).replace(/^[/\\]/, '');
+  const name = rel.split(/[/\\]/)[0];
+  if (!name) {
+    throw new Error(`REFUSED: '${staged}' is the staging root, not a project.`);
+  }
+  return join(root, name);
+}
+
+/**
+ * Refuse a staged copy whose identity does not name a source inside this workspace.
+ *
+ * A directory sitting in stage/ is not enough. The identity written by mw_ide_stage is
+ * what says which workspace project the copy is. Without that, the newest directory
+ * was editable, including a copy whose source was never recorded.
+ */
+function assertProven(p) {
+  const staged = assertStaged(String(p));
+  const dir = stagedProjectDir(staged);
+  const name = dir.slice(dir.lastIndexOf(sep) + 1);
+  const id = readIdentityFile(identityPathFor(name));
+  if (!id?.source) {
+    throw new Error(
+      `REFUSED: staged project '${name}' has no recorded source, so it will not be opened or edited. `
+      + `Stage it from the workspace with mw_ide_stage. `
+      + `A program elsewhere can be read with reference: true.`,
+    );
+  }
+  if (!id.workspace || canonical(id.workspace).toLowerCase() !== canonical(workspaceRoot()).toLowerCase()
+      || !isInsideWorkspace(id.source) || !isInsideWorkspace(id.source_directory ?? id.source)
+      || canonical(id.staged_directory ?? '').toLowerCase() !== canonical(dir).toLowerCase()
+      || canonical(id.staged_mwt ?? '').toLowerCase() !== canonical(`${dir}.mwt`).toLowerCase()) {
+    throw new Error(
+      `REFUSED: staged project '${name}' was copied from '${id.source}', which is outside the workspace `
+      + `'${workspaceRoot()}'. Stage the workspace project. To inspect this one, use reference: true.`,
+    );
+  }
+  return staged.toLowerCase().endsWith('.mwt') ? `${dir}.mwt` : staged;
+}
+
+function stagedProjectDirs() {
+  if (!existsSync(stageRoot())) return [];
   // A staged PROJECT is a directory with a sibling `<name>.mwt`. Requiring that
   // matters: writing a POU creates stage/backups, and a plain "newest directory"
-  // pick then selected the BACKUP FOLDER as the project, so the next call failed
-  // with "no POE directory under stage\backups".
-  const dirs = readdirSync(STAGE_ROOT, { withFileTypes: true })
+  // pick then selected the BACKUP FOLDER as the project.
+  return readdirSync(stageRoot(), { withFileTypes: true })
     .filter((e) => e.isDirectory())
-    .map((e) => join(STAGE_ROOT, e.name))
-    .filter((d) => existsSync(`${d}.mwt`))
-    .sort((a, b) => statSync(b).mtimeMs - statSync(a).mtimeMs);
-  if (dirs.length === 0) throw new Error(`no staged project directory under ${STAGE_ROOT}`);
-  return dirs[0];
+    .map((e) => join(stageRoot(), e.name))
+    .filter((d) => existsSync(`${d}.mwt`));
+}
+
+/**
+ * The project directory a code tool should act on.
+ *
+ * A named project must be a proven workspace copy. With no name, the only proven
+ * copy is used. Several proven copies is a refusal — picking the newest one is how
+ * an edit landed in the wrong project.
+ */
+/** An export is a text file. It does not land in another project or replace a .mwt. */
+function assertExportPath(p) {
+  const full = canonical(p);
+  if (full.toLowerCase().endsWith('.mwt')) {
+    throw new Error(`REFUSED: an export cannot replace a .mwt file ('${full}').`);
+  }
+  if (isInside(full, stageRoot())) {
+    throw new Error(
+      `REFUSED: export path '${full}' is inside the staged project. `
+      + 'Write it under the workspace.',
+    );
+  }
+  if (!isInsideWorkspace(full)) {
+    throw new Error(
+      `REFUSED: export path '${full}' is outside the workspace.`,
+    );
+  }
+  return full;
+}
+
+function projectOf(args) {
+  if (args?.reference === true) {
+    throw new Error(
+      'REFUSED: reference mode is read-only. A project outside the workspace can be inspected, '
+      + 'and it is never staged, opened, or edited.',
+    );
+  }
+  if (args?.project) {
+    const proven = assertProven(String(args.project));
+    return proven.toLowerCase().endsWith('.mwt') ? proven.slice(0, -4) : proven;
+  }
+  const eligible = [];
+  const unproven = [];
+  for (const dir of stagedProjectDirs()) {
+    const name = dir.slice(dir.lastIndexOf(sep) + 1);
+    const id = readIdentityFile(identityPathFor(name));
+    try { assertProven(dir); eligible.push(dir); }
+    catch { unproven.push(name); }
+  }
+  if (eligible.length === 1) return eligible[0];
+  if (eligible.length === 0) {
+    throw new Error(
+      `no staged copy of a project in the workspace '${workspaceRoot()}'. `
+      + (unproven.length
+        ? `Ignored ${unproven.join(', ')} because they have no source inside this workspace. `
+        : '')
+      + 'Call mw_project_find, then mw_ide_stage.',
+    );
+  }
+  const names = eligible.map((d) => d.slice(d.lastIndexOf(sep) + 1));
+  throw new Error(
+    `${eligible.length} staged workspace projects (${names.join(', ')}). `
+    + 'Pass project so this cannot edit the wrong one.',
+  );
 }
 
 function defineTools() {
@@ -802,14 +1215,35 @@ function defineTools() {
       parameters: { type: 'object', additionalProperties: false, properties: {} },
       output: {
         schema: STATUS_SCHEMA,
-        render: (_a, v) => text(
-          v.is_project_open
-            ? `MotionWorks IEC ${v.version} is running (window ${v.ide_window}) with '${v.active_project}' open.`
-            : `MotionWorks IEC ${v.version} is running (window ${v.ide_window}), no project open.`,
-        ),
+        render: (_a, v) => {
+          if (!v.is_project_open) {
+            return text(
+              `MotionWorks IEC ${v.version} is running (window ${v.ide_window}), no project open.`,
+            );
+          }
+          if (v.in_stage === false) {
+            return text(
+              `MotionWorks IEC ${v.version} has '${v.active_project}' open. `
+              + 'That project is NOT the staged workspace copy, so it will not be compiled, '
+              + 'saved, or edited. Stage the workspace project and open that copy. '
+              + 'A project outside the workspace can be read with reference: true.',
+            );
+          }
+          const who = v.identity_source
+            ? ` Staged from ${v.identity_source} (workspace ${v.identity_workspace}).`
+            : '';
+          return text(
+            `MotionWorks IEC ${v.version} is running (window ${v.ide_window}) `
+            + `with '${v.identity_name ?? v.active_project}' open.${who}`,
+          );
+        },
       },
       presentCall: () => ({ card: 'generic', title: 'MotionWorks IDE status', kind: 'read' }),
-      execute: () => verb('status', {}, 20000),
+      execute: async () => {
+        const status = await verb('status', {}, 20000);
+        const id = identityMatching(status.active_project);
+        return { ...status, ...identityFields(id) };
+      },
     },
 
     {
@@ -817,7 +1251,7 @@ function defineTools() {
       description:
         'Find MotionWorks projects INSIDE THE WORKSPACE. Call this first for any MotionWorks task, '
         + 'before mw_ide_stage: it answers "which project am I supposed to be working on" and '
-        + 'mq_ide_stage will refuse a path outside the workspace without an explicit override. '
+        + 'mw_ide_stage will refuse a path outside the workspace. '
         + 'A MotionWorks project is a .mwt file beside its expanded directory, so each result '
         + 'returns the .mwt to pass to mw_ide_stage. '
         + 'IF THERE ARE NO PROJECTS IT SAYS SO and tells you to ask the user for the files - that is '
@@ -846,6 +1280,7 @@ function defineTools() {
             workspace: { type: 'string' },
             workspace_source: { oneOf: [{ type: 'string' }, { type: 'null' }] },
             root: { type: 'string' },
+            outside_workspace: { oneOf: [{ type: 'boolean' }, { type: 'null' }] },
             count: { type: 'integer' },
             projects: { type: 'array' },
             guidance: { type: 'string' },
@@ -862,7 +1297,8 @@ function defineTools() {
       },
       presentCall: () => ({ card: 'generic', title: 'Find MotionWorks projects', kind: 'read' }),
       execute: async (args) => {
-        const root = args?.root ? resolve(args.root) : workspaceRoot();
+        const root = args?.root ? resolve(workspaceRoot(), args.root) : workspaceRoot();
+        if (!isInsideWorkspace(root)) throw new Error('REFUSED: project discovery must stay inside the workspace.');
         const projects = findProjects(root);
         // A root outside the workspace is allowed - this tool only reads - but it is REPORTED
         // rather than passed over. The rule is that MotionWorks work happens in the workspace, and
@@ -878,10 +1314,9 @@ function defineTools() {
           projects,
           guidance: projects.length
             ? (outside
-              ? 'NOTE: this root is OUTSIDE the workspace. Nothing here was modified - this tool '
-                + 'only reads - but MotionWorks work should happen on a project in the workspace. '
-                + 'Pass one of these to mw_ide_stage only if the USER named it, with '
-                + 'allow_outside_workspace: true.'
+              ? 'NOTE: this root is OUTSIDE the workspace. Nothing here was modified. '
+                + 'Do not stage or open any of these. To inspect one, call mw_code_read_st or '
+                + 'mw_code_pous with reference: true and that path. That is read-only.'
               : 'Pass one of these .mwt paths to mw_ide_stage.')
             : 'STOP AND ASK THE USER. There is no MotionWorks project in this workspace, and a '
               + 'project elsewhere on the machine is not what the task asked for. Tell the user '
@@ -897,13 +1332,14 @@ function defineTools() {
         + 'without touching the original. Accepts a project folder or its .mwt file, and copies '
         + 'both the .mwt and its sibling expanded directory. This only ever copies; the source '
         + 'is never modified, moved or deleted. '
-        + 'THE SOURCE MUST BE INSIDE THE WORKSPACE. A project elsewhere on the machine is refused, '
-        + 'because a task that mentions MotionWorks does not mean "find any project anywhere" - in '
-        + 'use an agent opened one from the user\'s Desktop that the task never named. So: call '
-        + 'mw_project_find first to see what the workspace holds, and if it holds nothing, STOP AND '
-        + 'ASK THE USER for the files rather than searching the machine. If the user has explicitly '
-        + 'named a path outside the workspace, pass allow_outside_workspace: true and the refusal '
-        + 'becomes a deliberate act recorded in the transcript.',
+        + 'THE SOURCE MUST BE INSIDE THE WORKSPACE. There is no override. A project elsewhere on '
+        + 'the machine is refused, because a task that mentions MotionWorks does not mean "find '
+        + 'any project anywhere". Call mw_project_find first, and if it holds nothing, STOP AND '
+        + 'ASK THE USER. To look at another program for reference, read it with reference: true '
+        + '— that does not stage it and does not open it. '
+        + 'After the copy, the .mwt is rewritten so the path stored inside it is the staged '
+        + 'directory. Left alone, opening the wrapper loads whatever directory it still names, '
+        + 'which has been a project outside the workspace.',
       parameters: {
         type: 'object',
         additionalProperties: false,
@@ -911,15 +1347,7 @@ function defineTools() {
         properties: {
           source: {
             type: 'string',
-            description:
-              'Path to the project folder or its .mwt file. Must be inside the workspace unless '
-              + 'allow_outside_workspace is set.',
-          },
-          allow_outside_workspace: {
-            type: 'boolean',
-            description:
-              'Stage a project outside the workspace. Only when the USER named that path; the '
-              + 'default refusal exists so this cannot happen by accident.',
+            description: 'Path to the project folder or its .mwt file. Must be inside the workspace.',
           },
         },
       },
@@ -927,38 +1355,43 @@ function defineTools() {
         schema: {
           type: 'object',
           additionalProperties: false,
-          required: ['staged_mwt', 'files_copied'],
+          required: ['staged_mwt', 'files_copied', 'name', 'source', 'workspace'],
           properties: {
             staged_mwt: { type: 'string' },
+            staged_directory: { type: 'string' },
             files_copied: { type: 'integer' },
+            name: { type: 'string' },
+            source: { type: 'string' },
+            workspace: { type: 'string' },
+            bound_to: { oneOf: [{ type: 'string' }, { type: 'null' }] },
+            previous_embedded_path: { oneOf: [{ type: 'string' }, { type: 'null' }] },
           },
         },
-        render: (_a, v) => text(`Staged ${v.files_copied} files. Open with: ${v.staged_mwt}`),
+        render: (_a, v) => text(
+          `Staged '${v.name}' from ${v.source}. `
+          + (v.previous_embedded_path
+            ? `The wrapper pointed at ${v.previous_embedded_path}; it now points at ${v.bound_to}. `
+            : '')
+          + `Open with: ${v.staged_mwt}`,
+        ),
       },
       presentCall: (a) => ({
         card: 'generic', title: 'Stage project copy', kind: 'other', rawInput: a.source,
       }),
-      execute: (args) => {
-        // The workspace rule is checked BEFORE existence, on purpose. Policy should not depend on
-        // whether the path happens to be there: a caller reaching outside the workspace is told the
-        // rule whether or not their path resolves, and the check costs no filesystem access.
-        //
-        // MotionWorks projects belong in the workspace. Reaching outside it should be a decision the
-        // caller makes on purpose: in use, an agent opened a project on the user's Desktop that the
-        // task never mentioned, because nothing stopped it and the plugin's own examples pointed
-        // there. So this refuses by default and names how to override, which makes the outside case
-        // visible in the transcript rather than silent.
-        const asked = resolve(String(args.source));
-        if (!isInsideWorkspace(asked) && args?.allow_outside_workspace !== true) {
+      execute: async (args) => {
+        // Checked before existence, on purpose. A caller reaching outside the workspace is told
+        // the rule whether or not the path is there. There is no override: an outside project
+        // can be read with reference: true, and it is never staged or opened.
+        const asked = resolve(workspaceRoot(), String(args.source));
+        const workspace = workspaceRoot();
+        if (!isInsideWorkspace(asked)) {
           throw new Error(
             `mw_ide_stage refuses '${asked}': it is outside the workspace `
-            + `'${workspaceRoot()}'. MotionWorks work should happen on a project IN the workspace. `
-            + `Do this: call mw_project_find to see what projects the workspace holds. If there are `
-            + `none, STOP AND ASK THE USER - tell them what you looked for and where, and ask them `
-            + `to put the project in the workspace or say which one they mean. Do not go looking `
-            + `elsewhere on the machine; a project outside the workspace is not one the task asked `
-            + `for. If the user has explicitly named this path, call again with `
-            + `allow_outside_workspace: true.`,
+            + `'${workspace}'. MotionWorks work happens on a project IN the workspace. `
+            + `Call mw_project_find. If it finds nothing, STOP AND ASK THE USER — tell them `
+            + `what you looked for and where, and ask them to put the project in the workspace. `
+            + `Do not stage a project from elsewhere. To look at one for reference, read it with `
+            + `mw_code_read_st or mw_code_pous { reference: true, project: "<path>" }.`,
           );
         }
 
@@ -969,39 +1402,83 @@ function defineTools() {
         const mwt = isMwt ? source : `${source}.mwt`;
         const dir = isMwt ? source.slice(0, -4) : source;
         if (!existsSync(mwt)) throw new Error(`no .mwt found at ${mwt}`);
+        if (!isInsideWorkspace(mwt) || !isInsideWorkspace(dir)) {
+          throw new Error('REFUSED: the wrapper and expanded project must both be inside the workspace.');
+        }
+        if (isInside(mwt, stageRoot()) || isInside(dir, stageRoot())) {
+          throw new Error('REFUSED: stage the original workspace project, not an existing staged copy.');
+        }
+        validateCopyTree(dir);
 
         const base = mwt.slice(mwt.lastIndexOf(sep) + 1, -4);
-        mkdirSync(STAGE_ROOT, { recursive: true });
-        const targetMwt = join(STAGE_ROOT, `${base}.mwt`);
-        const targetDir = join(STAGE_ROOT, base);
+        mkdirSync(stageRoot(), { recursive: true });
+        const targetMwt = join(stageRoot(), `${base}.mwt`);
+        const targetDir = join(stageRoot(), base);
 
         // REPLACE, do not merge. Copying onto an existing staged copy left POUs and
         // edits from the previous run in place, so "re-stage" did not produce a
-        // clean copy Ã¢â‚¬â€ a repeat test then ran against a dirty project.
-        const stageRoot = resolve(STAGE_ROOT);
+        // clean copy — a repeat test then ran against a dirty project.
+        const stageBoundary = resolve(stageRoot());
         for (const target of [targetMwt, targetDir]) {
-          if (resolve(target).startsWith(stageRoot + sep)) {
+          if (resolve(target).startsWith(stageBoundary + sep) || resolve(target) === targetMwt) {
             rmSync(target, { recursive: true, force: true });
           }
         }
 
         let copied = 0;
-        copyFileSync(mwt, targetMwt);
-        copied += 1;
-        if (existsSync(dir) && statSync(dir).isDirectory()) {
-          copyTree(dir, targetDir, () => { copied += 1; });
+        try {
+          copyFileSync(mwt, targetMwt);
+          copied += 1;
+          if (existsSync(dir) && statSync(dir).isDirectory()) {
+            copyTree(dir, targetDir, () => { copied += 1; });
+          }
+          // The wrapper carries an absolute directory. Opening it loads THAT directory,
+          // not the sibling of the file you passed. Rewrite it to the staged directory
+          // before anything is allowed to open the copy.
+          const bound = await runCode('bind_mwt', { mwt: targetMwt, directory: targetDir });
+          const previous = Array.isArray(bound.paths) && bound.paths[0]
+            ? bound.paths[0].from
+            : null;
+          const record = {
+            name: base,
+            source: mwt,
+            source_directory: dir,
+            workspace,
+            staged_mwt: targetMwt,
+            staged_directory: targetDir,
+            bound_to: bound.bound_to ?? targetDir,
+            previous_embedded_path: previous,
+            staged_at: new Date().toISOString(),
+          };
+          writeIdentity(record);
+          return {
+            staged_mwt: targetMwt,
+            staged_directory: targetDir,
+            files_copied: copied,
+            name: base,
+            source: mwt,
+            workspace,
+            bound_to: record.bound_to,
+            previous_embedded_path: previous,
+          };
+        } catch (err) {
+          rmSync(targetMwt, { force: true });
+          rmSync(targetDir, { recursive: true, force: true });
+          throw err;
         }
-        return Promise.resolve({ staged_mwt: targetMwt, files_copied: copied });
       },
     },
 
     {
       name: 'mw_ide_open',
       description:
-        'Open a staged project inside the running MotionWorks IDE, so its Project Tree and '
-        + 'editors populate with the real project. The path must be inside this plugin\'s stage '
-        + 'directory; use mw_ide_stage first. The conversion prompt is suppressed so this cannot '
-        + 'block on a modal dialog.',
+        'Open a staged project inside the running MotionWorks IDE. The path must be inside this '
+        + 'plugin\'s stage directory; use mw_ide_stage first. After the IDE loads, the project it '
+        + 'actually has open is compared with the path that was asked for. A different project — '
+        + 'including one the .mwt wrapper still pointed at, or one MotionWorks restored on '
+        + 'startup — is closed without saving and the call fails. Success means the staged '
+        + 'workspace copy is the project in the window, and the result names where it was staged '
+        + 'from.',
       parameters: {
         type: 'object',
         additionalProperties: false,
@@ -1012,17 +1489,25 @@ function defineTools() {
         schema: {
           type: 'object',
           additionalProperties: false,
-          required: ['requested', 'is_project_open'],
+          required: ['requested', 'is_project_open', 'matches_request', 'in_stage'],
           properties: {
             requested: { type: 'string' },
             is_project_open: { type: 'boolean' },
             active_project: { oneOf: [{ type: 'string' }, { type: 'null' }] },
+            matches_request: { type: 'boolean' },
+            in_stage: { type: 'boolean' },
+            dismissed_project: { oneOf: [{ type: 'string' }, { type: 'null' }] },
+            identity_name: { oneOf: [{ type: 'string' }, { type: 'null' }] },
+            identity_source: { oneOf: [{ type: 'string' }, { type: 'null' }] },
+            identity_workspace: { oneOf: [{ type: 'string' }, { type: 'null' }] },
           },
         },
         render: (_a, v) => text(
-          v.is_project_open
-            ? `The IDE now has '${v.active_project}' open.`
-            : 'OpenProject returned but IsProjectOpen never became true.',
+          v.is_project_open && v.matches_request
+            ? `The IDE now has '${v.identity_name ?? v.active_project}' open`
+              + (v.identity_source ? `, staged from ${v.identity_source}` : '')
+              + (v.dismissed_project ? `. Closed the other project (${v.dismissed_project}) without saving.` : '.')
+            : 'OpenProject returned but the staged project is not what the IDE has open.',
         ),
       },
       presentCall: (a) => ({
@@ -1032,7 +1517,13 @@ function defineTools() {
       // initialises its project services, answers any modal prompt it raises on the
       // way, and then waits for the project to appear Ã¢â‚¬â€ so the budget here has to
       // cover all three, not just the first retry window.
-      execute: (args) => verb('open', { path: assertStaged(String(args.path)) }, 300000),
+      execute: async (args) => {
+        const path = assertProven(String(args.path));
+        const binding = await runCode('check_mwt', { project: path });
+        const opened = await verb('open', { path, wrapper_sha256: binding.wrapper_sha256 }, 300000);
+        const id = identityMatching(opened.active_project) ?? identityMatching(path);
+        return { ...opened, ...identityFields(id) };
+      },
     },
 
     {
@@ -1156,23 +1647,40 @@ function defineTools() {
       parameters: { type: 'object', additionalProperties: false, properties: {} },
       output: { schema: BUILD_SCHEMA, render: renderBuild },
       presentCall: () => ({ card: 'generic', title: 'Make in MotionWorks IEC', kind: 'execute' }),
-      execute: () => verb('make', {}, 400000),
+      execute: async () => {
+        const status = await assertIdeProjectProven();
+        return tagProject(await verb('make', {}, 400000), status);
+      },
     },
 
     {
+      name: 'mw_ide_rebuild',
+      description: 'Request the actual native Rebuild Project menu command, distinct from Compile(2) Build. Verifies the command ID and staged workspace identity. A posted request is not completion; unobserved completion is reported as unverified. Follow with Errors, Make, save and close/reopen checks. '
+        // The limitation, stated where a caller will read it rather than left to be discovered.
+        // Measured: on IDE build 1.19 the command lookup fails outright, so this tool cannot work
+        // there and a caller that reaches for it loses a turn. mw_ide_build does work and is the
+        // one to use; this is kept because a build where the ID resolves does support it.
+        + 'KNOWN LIMITATION: measured on IDE build 1.19 this fails with "Command '
+        + '\'adeCmdBuildRebuildProject\' not found" - the command is not in that build\'s command '
+        + 'table. USE mw_ide_build INSTEAD; it is Build (Compile(2)) and it works. Rebuild is only '
+        + 'better than Build if you specifically need stale objects discarded.',
+      parameters: { type: 'object', additionalProperties: false, properties: {} },
+      output: { schema: BUILD_SCHEMA, render: renderBuild },
+      presentCall: () => ({ card: 'generic', title: 'Rebuild (may be unsupported)', kind: 'execute' }),
+      execute: async () => {
+        const status = await assertIdeProjectProven();
+        return tagProject(await verb('rebuild', {}, 400000), status);
+      },
+    },
+    {
       name: 'mw_ide_build',
-      description:
-        'Run Build in the IDE (ActiveProject.Compile(2) = adeCtBuild) and report the verdict. '
-        + 'This is the compile-verification step for code the agent wrote: it waits until a '
-        + 'second compile is accepted, which proves the first one finished, then reads '
-        + 'IsCompiled. `accepted` and `settled` distinguish "compiled and failed" from '
-        + '"never ran". Note there is no Rebuild compile type Ã¢â‚¬â€ Rebuild is an IDE command, and '
-        + 'ExecuteCommand is a stub in this build.',
+      description: 'Run Compile(2), which is Build, not Rebuild. Completion requires an observed pending-to-compiled transition; otherwise reports unverified. Use mw_ide_rebuild for the native Rebuild command.',
       parameters: { type: 'object', additionalProperties: false, properties: {} },
       output: { schema: BUILD_SCHEMA, render: renderBuild },
       presentCall: () => ({ card: 'generic', title: 'Build in MotionWorks IEC', kind: 'execute' }),
       execute: async () => {
-        const verdict = await verb('build', {}, 400000);
+        const status = await assertIdeProjectProven();
+        const verdict = tagProject(await verb('build', {}, 400000), status);
         // Say why, on the way out. A caller that gets is_compiled=false and nothing else has to
         // guess, and the three silent failure modes this project has are indistinguishable from
         // the one that leaves messages.
@@ -1249,8 +1757,11 @@ function defineTools() {
         + 'cleanly: the automation API returns the verdict but never the messages, so this reads '
         + 'the Message Window list control through MSAA and returns each line verbatim, e.g. '
         + '"No matching global variable found for \'x:y\' in resource \'Resource\'!". Panes: '
-        + 'Errors (default), Warnings, Build, Info. The Errors pane also carries INFORMATIONAL lines - structure padding notes, required-memory totals, redundant-variable counts - so read them before calling a build broken. A pane with zero lines is a CLEAN result, not '
-        + 'a failure. Set screenshot:true to also capture the pane, and limit to raise the cap.',
+        + 'Errors (default), Warnings, Build, Info. The Errors pane also carries INFORMATIONAL lines - structure padding notes, required-memory totals, redundant-variable counts - so read them before calling a build broken. '
+        + 'AN EMPTY PANE IS NOT BY ITSELF A CLEAN BUILD: this tool also reads the compile state, and '
+        + 'when the pane is empty while the project is NOT compiled it says so, because that pair is '
+        + 'a stall or a destroyed POU rather than success. Set screenshot:true to also capture the '
+        + 'pane, and limit to raise the cap.',
       parameters: {
         type: 'object',
         additionalProperties: false,
@@ -1277,15 +1788,53 @@ function defineTools() {
             lines: { type: 'array', items: { type: 'string' } },
             note: { oneOf: [{ type: 'string' }, { type: 'null' }] },
             screenshot: { oneOf: [{ type: 'string' }, { type: 'null' }] },
+            // The compile verdict, read on EVERY call, so an empty pane can be qualified instead
+            // of reported as success. Null when the IDE would not answer - which is itself a
+            // reason not to read an empty pane as clean.
+            compiles: { oneOf: [{ type: 'boolean' }, { type: 'null' }] },
+            is_modified: { oneOf: [{ type: 'boolean' }, { type: 'null' }] },
+            empty_means: { type: 'string' },
           },
         },
         render: (_a, v) => {
           if (v.count === 0) {
-            return text(`The '${v.pane}' pane is EMPTY - nothing to report.`
-              + (v.screenshot ? `\nScreenshot: ${v.screenshot}` : ''));
+            // THE FIX. An empty pane used to be reported as "nothing to report", and a build that
+            // had actually FAILED was read as a clean one - the caller is told the one thing that
+            // is wrong about this situation, and the two causes look identical from the pane alone.
+            //
+            // The pane is read through MSAA and returns zero rows both when it is genuinely empty
+            // and when the control cannot be read, so `count === 0` is "no messages AND no
+            // evidence there are none". The compile verdict is the evidence, and it is right
+            // there.
+            const head = `The '${v.pane}' pane is EMPTY - it returned no lines.`;
+            const shot = v.screenshot ? `\nScreenshot: ${v.screenshot} (the only other view of this pane)` : '';
+            if (v.compiles === false) {
+              return text(`${head}\n`
+                + `BUT is_compiled=false — this is NOT a clean build. The pane is empty and the\n`
+                + `project did not compile, which is a STALL or a DESTROYED POU, not success.\n`
+                + `Do not treat this as a pass.  ${v.empty_means}\n`
+                + `Next: mw_ide_state (is the IDE blocked on a dialog?), then mw_ide_build to retry,\n`
+                + `and mw_code_restore_pou if the build names a damaged POU.` + shot);
+            }
+            if (v.compiles === true && v.is_modified === true) {
+              return text(`${head}\n`
+                + `is_compiled=true but is_modified=true — the project is compiled and has been\n`
+                + `EDITED SINCE. An empty pane is expected here, but the edits are not compiled yet,\n`
+                + `so this says nothing about them. Run mw_ide_build before trusting the code.` + shot);
+            }
+            if (v.compiles === true) {
+              return text(`${head} Consistent with the clean compile verdict `
+                + `(is_compiled=true, is_modified=false), so this is a genuine clean result.` + shot);
+            }
+            // compiles === null: the IDE did not answer the verdict question at all.
+            return text(`${head}\n`
+              + `The compile verdict could NOT be read (no running IDE, or it did not answer), so\n`
+              + `there is no evidence this is clean — an unreadable pane and an empty one look\n`
+              + `identical here. ${v.empty_means}` + shot);
           }
           return text(`'${v.pane}': ${v.count} message(s)\n`
             + v.lines.map((l) => `  ${l}`).join('\n')
+            + (v.compiles === false ? '\n(is_compiled=false)' : '')
             + (v.screenshot ? `\nScreenshot: ${v.screenshot}` : ''));
         },
       },
@@ -1294,8 +1843,31 @@ function defineTools() {
         const pane = args?.pane ? String(args.pane) : 'Errors';
         const limit = Number.isInteger(args?.limit) ? args.limit : 200;
         const read = await verb('read_output', { pane, limit }, 60000);
+
+        // The verdict that turns "the pane is empty" into an answer. Asked on every call
+        // because it is cheap and because the empty case is exactly when it is needed; a
+        // failure to read it is null, never a guess.
+        let compiles = null;
+        let isModified = null;
+        try {
+          const state = await verb('compile_state', {}, 30000);
+          compiles = typeof state?.is_compiled === 'boolean' ? state.is_compiled : null;
+          isModified = typeof state?.is_modified === 'boolean' ? state.is_modified : null;
+        } catch { /* no IDE, or it would not answer: null is the honest report */ }
+
+        const count = read.count ?? 0;
+        const emptyMeans = count === 0
+          ? 'An empty pane can mean "no messages" OR "the pane could not be read"; the compile '
+            + 'state above is what tells the two apart. If you expected errors and see none, take '
+            + 'the screenshot before concluding the build is clean.'
+          : '';
+
         let shotPath = null;
-        if (args?.screenshot) {
+        // Auto-capture when the pane is empty and the verdict says something is wrong: that is
+        // the case where the screenshot is the only other evidence, and the caller has just been
+        // told not to trust the empty pane.
+        const wantShot = args?.screenshot || (count === 0 && compiles === false);
+        if (wantShot) {
           const out = join(HERE, 'shots', `pane-${pane.replace(/\W+/g, '')}-${Date.now()}.png`);
           mkdirSync(dirname(out), { recursive: true });
           try {
@@ -1305,10 +1877,13 @@ function defineTools() {
         }
         return {
           pane,
-          count: read.count ?? 0,
+          count,
           lines: read.lines ?? [],
           note: read.note ?? null,
           screenshot: shotPath,
+          compiles,
+          is_modified: isModified,
+          empty_means: emptyMeans,
         };
       },
     },
@@ -1324,6 +1899,7 @@ function defineTools() {
         additionalProperties: false,
         properties: {
           exe: { type: 'string', description: 'Override the Mwt.exe path.' },
+          project: { type: 'string', description: 'Staged workspace project; required when several copies exist.' },
         },
       },
       output: {
@@ -1341,18 +1917,33 @@ function defineTools() {
               description: 'A licence/trial dialog appeared during startup and was answered.',
             },
             trial_answered: { oneOf: [{ type: 'boolean' }, { type: 'null' }] },
+            dismissed_project: { oneOf: [{ type: 'string' }, { type: 'null' }] },
+            foreign_project: { oneOf: [{ type: 'string' }, { type: 'null' }] },
           },
         },
         render: (_a, v) => text(
           `MotionWorks IEC ${v.version} running at ${v.ide_window}`
-          + (v.already_running ? ' (was already up)' : ' (launched)'),
+          + (v.already_running ? ' (was already up)' : ' (launched)')
+          + (v.dismissed_project
+            ? `. Closed an auto-opened project without saving: ${v.dismissed_project}`
+            : '')
+          + (v.foreign_project
+            ? `. A project outside the staged copy is already open (${v.foreign_project}) and was left untouched. Do not build or save it.`
+            : ''),
         ),
       },
       presentCall: () => ({ card: 'generic', title: 'Start MotionWorks IEC', kind: 'execute' }),
       // The bridge waits up to 300s for the window (IDE startup can exceed two
       // minutes here), so the client must allow longer than that or it gives up
       // while the bridge is still legitimately waiting.
-      execute: (args) => verb('start_ide', args?.exe ? { exe: String(args.exe) } : {}, 330000),
+      execute: async (args) => {
+        const path = `${projectOf(args)}.mwt`;
+        const binding = await runCode('check_mwt', { project: path });
+        return verb('start_ide', {
+          ...(args?.exe ? { exe: String(args.exe) } : {}),
+          path, wrapper_sha256: binding.wrapper_sha256,
+        }, 330000);
+      },
     },
 
     {
@@ -1494,7 +2085,7 @@ function defineTools() {
         kind: 'read',
       }),
       execute: async (args) => {
-        const state = await verb('ide_state', {}, 30000);
+        const state = await verb('ide_state', {}, 45000);
         if (args?.screenshot) {
           const out = join(HERE, 'shots', `state-${Date.now()}.png`);
           mkdirSync(dirname(out), { recursive: true });
@@ -1588,7 +2179,7 @@ function defineTools() {
           },
         },
         render: (_a, v) => text(v.closed
-          ? `MotionWorks closed (pids ${JSON.stringify(v.killed_pids)}). Code writes can proceed.`
+          ? `MotionWorks closed gracefully. Code writes can proceed.`
           : 'MotionWorks is STILL running Ã¢â‚¬â€ do not write code yet.'),
       },
       presentCall: () => ({ card: 'generic', title: 'Close MotionWorks IEC', kind: 'execute' }),
@@ -1602,13 +2193,15 @@ function defineTools() {
       description:
         'List the POUs of a staged project with each one\'s language and body stream, read '
         + 'straight from the project files. `has_st_body` is the editability test: Structured '
-        + 'Text POUs are editable, while graphical LD/FBD POUs are proprietary binary and are '
-        + 'refused. Defaults to the staged project.',
+        +         'Text POUs are editable, while graphical LD/FBD POUs are proprietary binary and are '
+        + 'refused. Defaults to the staged project. Pass reference: true with a project path to '
+        + 'read a different program, including one outside the workspace, without staging or opening it.',
       parameters: {
         type: 'object',
         additionalProperties: false,
         properties: {
           project: { type: 'string', description: 'Project directory; defaults to the staged project.' },
+          reference: REFERENCE_PARAM,
         },
       },
       output: {
@@ -1636,15 +2229,18 @@ function defineTools() {
                 },
               },
             },
+            read_only: { oneOf: [{ type: 'boolean' }, { type: 'null' }] },
+            outside_workspace: { oneOf: [{ type: 'boolean' }, { type: 'null' }] },
           },
         },
         render: (_a, v) => text(
-          `${v.count} POUs:\n` + v.pous.map((p) => `  ${p.name} [${p.language ?? '?'}]`
+          (v.read_only ? 'READ ONLY. ' : '')
+          + `${v.count} POUs:\n` + v.pous.map((p) => `  ${p.name} [${p.language ?? '?'}]`
             + (p.has_st_body ? ' editable (ST)' : ' not ST-editable')).join('\n'),
         ),
       },
       presentCall: () => ({ card: 'generic', title: 'List POUs from files', kind: 'read' }),
-      execute: (args) => runCode('pous', { project: projectOf(args), ...(args ?? {}) }),
+      execute: (args) => runCode('pous', projectRequest(args)),
     },
     {
       name: 'mw_code_types',
@@ -1665,6 +2261,7 @@ function defineTools() {
         properties: {
           name: { type: 'string', description: 'One type to read in full; omit to list all.' },
           project: { type: 'string', description: 'Project directory; defaults to the staged project.' },
+          reference: REFERENCE_PARAM,
         },
       },
       output: {
@@ -1685,10 +2282,14 @@ function defineTools() {
             members: { type: 'array', items: { type: 'object', additionalProperties: true } },
           },
         },
-        render: (r) => {
-          // text() is required, not decoration: a render that returns a bare string hands the
-          // harness a primitive where it expects content blocks, and the spill policy's
-          // `content.some(...)` then fails with "content.some is not a function".
+        // `(_a, r)` and not `(r)`: the harness calls render(args, value), so a single parameter
+        // receives the ARGS. Written `(r)` this read `r.name`, `r.types` and `r.members` off an
+        // object that has none of them, and every call rendered nothing.
+        //
+        // Wrapped in `text()` because `output.render` returns ContentBlock[], not a bare string.
+        // Returning a string is not rejected - the harness only snapshots it as lossless JSON -
+        // so it fails later and further away, in whatever consumes the content.
+        render: (_a, r) => {
           if (r.name) {
             const ms = (r.members ?? []).map((m) => `${m.name}${m.array_size ? `[${m.array_size}]` : ''} : ${m.type}`).join(', ');
             return text(`${r.name} [${r.kind}] ${(r.members ?? []).length} members: ${ms}`);
@@ -1699,10 +2300,9 @@ function defineTools() {
           return text(`${r.defined} data types defined in this project (${summary})`);
         },
       },
-      execute: async (args) => runCode('types', {
-        project: projectOf(args),
+      execute: async (args) => runCode('types', projectRequest(args, {
         ...(args?.name ? { name: String(args.name) } : {}),
-      }),
+      })),
     },
     {
       name: 'mw_code_library',
@@ -1716,7 +2316,7 @@ function defineTools() {
         + 'Pass name for one block, read from its compiled .NET assembly. IMPORTANT: the '
         + 'identifier list does NOT record input/output DIRECTION - Execute and Done are '
         + 'distinguishable by convention, not by evidence - so read the declaration in the '
-        + 'calling POU with mw_code_read_st to tell an input from an output. Compiler '
+        + 'native function-block definition or mw_code_reference; a caller declaration alone does not establish pin direction. Compiler '
         + 'temporaries (__temp_1..50, s1..s7) are filtered out rather than reported as part '
         + 'of the interface.',
       parameters: {
@@ -1725,6 +2325,7 @@ function defineTools() {
         properties: {
           name: { type: 'string', description: 'One block to read; omit to list all.' },
           project: { type: 'string', description: 'Project directory; defaults to the staged project.' },
+          reference: REFERENCE_PARAM,
         },
       },
       output: {
@@ -1743,8 +2344,9 @@ function defineTools() {
             note: { type: 'string' },
           },
         },
-        render: (r) => {
-          // text() is required, not decoration: see the note on mw_code_types.
+        // `(_a, r)` and not `(r)`: see mw_code_types. Same wrong parameter, same silence.
+        // `text()` for the same reason: render returns ContentBlock[].
+        render: (_a, r) => {
           if (Array.isArray(r.blocks)) {
             const libs = r.blocks.filter((b) => b.library).length;
             return text(`${r.count} blocks (${libs} library): `
@@ -1754,23 +2356,60 @@ function defineTools() {
             + (r.identifiers ?? []).join(', '));
         },
       },
-      execute: async (args) => runCode('library', {
-        project: projectOf(args),
+      execute: async (args) => runCode('library', projectRequest(args, {
         ...(args?.name ? { name: String(args.name) } : {}),
-      }),
+      })),
+    },
+    {
+      name: 'mw_code_reference',
+      description: 'Search reviewed Yaskawa programming references with document ID, revision, section and physical PDF page links. Works offline with curated guidance; synchronized official PDFs add full-page search. Omit query to list sources/topics; pass block for one reviewed FB interface. Historical signatures are advisory until installed versions match.',
+      parameters: { type: 'object', additionalProperties: false, properties: {
+        query: { type: 'string', maxLength: 256 }, source_id: { type: 'string' },
+        block: { type: 'string', description: 'Function-block type, e.g. MC_ReadActualPosition.' },
+        limit: { type: 'integer', minimum: 1, maximum: 10 },
+      } },
+      output: { schema: WRITE_SCHEMA, render: renderWrite },
+      execute: (args) => runCode('reference', args ?? {}),
+    },
+    {
+      name: 'mw_code_reference_sync',
+      description: 'Download and index allowlisted official Yaskawa PDFs inside this workspace .motionworks/references. No project files are transmitted. Requires network access and pypdf in the plugin Python runtime. Verifies reviewed PDF hashes before using versioned page citations; changed vendor editions require catalog review. Curated references remain usable if downloads are unavailable.',
+      parameters: { type: 'object', additionalProperties: false, properties: {
+        source_ids: { type: 'array', uniqueItems: true, items: { type: 'string', enum: ['basics', 'plcopen', 'toolbox', 'quick'] } },
+      } },
+      output: { schema: WRITE_SCHEMA, render: renderWrite },
+      execute: (args) => runCode('reference_sync', args ?? {}, 600000),
+    },
+    {
+      name: 'mw_code_check_program',
+      description: 'Read-only source-linked programming review: external/global scope and types, integer bounds, named function-block pin direction/types, and task-binding candidates. Pass pou and body to check proposed ST before writing; omit them to review existing ST POUs. Project-defined interfaces take precedence over historical vendor signatures. Reports unresolved library and graphical coverage; does not replace the compiler or modify files.',
+      parameters: { type: 'object', additionalProperties: false, properties: {
+        project: { type: 'string' }, pou: { type: 'string' }, body: { type: 'string' },
+      } },
+      output: { schema: WRITE_SCHEMA, render: renderWrite },
+      execute: (args) => runCode('check_program', { ...(args ?? {}), project: projectOf(args) }),
+    },
+    {
+      name: 'mw_code_diagnose',
+      description: 'Map exact compiler or runtime diagnostic text to documented candidate causes, read-only checks and versioned Yaskawa references. Separates compiler, runtime and IDE-state problems. Does not invent a root cause or clear alarms; unknown messages are reported unmatched.',
+      parameters: { type: 'object', additionalProperties: false, required: ['message'], properties: {
+        message: { type: 'string', minLength: 1, maxLength: 20000 },
+      } },
+      output: { schema: WRITE_SCHEMA, render: renderWrite },
+      execute: (args) => runCode('diagnose', args),
+    },
+    {
+      name: 'mw_code_pattern',
+      description: 'Retrieve original, source-linked ST patterns for startup initialization, request-edge handling, cyclic sequencing and Enable/Valid position feedback. Returns declarations, body, assumptions and adaptation checks. Does not write or execute the example. Omit name to list patterns.',
+      parameters: { type: 'object', additionalProperties: false, properties: {
+        name: { type: 'string', enum: ['startup-initialization', 'request-edge', 'cyclic-sequence', 'cyclic-position-reader'] },
+      } },
+      output: { schema: WRITE_SCHEMA, render: renderWrite },
+      execute: (args) => runCode('pattern', args ?? {}),
     },
     {
       name: 'mw_code_manual',
-      description:
-        'Search the MotionWorks documentation the IDE installs, or list it. The IDE ships '
-        + 'three PDF manuals and 259 .chm help files, and the Toolbox Manual documents every '
-        + 'function block and data type the toolboxes provide - so this is how to find out '
-        + 'what CamGenerator actually does, or what a CamSegmentStruct contains, in the '
-        + "vendor's own words rather than by guessing. Call with no term to list the manuals "
-        + 'and the help topics; pass a term - a function block, a data type, a concept - to '
-        + 'get matching passages with surrounding context. The PDFs are read directly; the '
-        + '.chm files cannot be, because they are LZX-compressed, but their filenames name '
-        + 'their subjects so a caller learns which help file to open. Read-only and offline.',
+      description: 'Search installed MotionWorks PDF text and reviewed, versioned Yaskawa references. Omit term to list available manuals, CHM topic filenames and the reviewed catalog. Installed legacy text extraction is heuristic and has no verified revision/page citations; prefer mw_code_reference for source-linked programming guidance. Full PDF search requires mw_code_reference_sync; curated guidance works offline.',
       parameters: {
         type: 'object',
         additionalProperties: false,
@@ -1793,8 +2432,9 @@ function defineTools() {
             note: { type: 'string' },
           },
         },
-        render: (r) => {
-          // text() is required, not decoration: see the note on mw_code_types.
+        // `(_a, r)` and not `(r)`: see mw_code_types. Same wrong parameter, same silence.
+        // `text()` for the same reason: render returns ContentBlock[].
+        render: (_a, r) => {
           if (Array.isArray(r.manuals)) {
             return text(`${r.manuals.length} manuals, ${(r.help_topics ?? []).length} help topics: `
               + r.manuals.map((m) => `${m.name}${m.readable ? '' : ' (compiled)'}`).join(' | '));
@@ -1826,6 +2466,7 @@ function defineTools() {
         additionalProperties: false,
         properties: {
           project: { type: 'string', description: 'Project directory; defaults to the staged project.' },
+          reference: REFERENCE_PARAM,
         },
       },
       output: {
@@ -1855,10 +2496,13 @@ function defineTools() {
                 },
               },
             },
+            read_only: { oneOf: [{ type: 'boolean' }, { type: 'null' }] },
+            outside_workspace: { oneOf: [{ type: 'boolean' }, { type: 'null' }] },
           },
         },
         render: (_a, v) => text(
-          `${v.count} global declaration(s)`
+          (v.read_only ? 'READ ONLY. ' : '')
+          + `${v.count} global declaration(s)`
           + (v.source_stream ? ` from ${v.source_stream}` : '')
           + ':\n'
           + v.variables.slice(0, 40).map((x) => `  ${x.name} : ${x.type ?? '?'}`
@@ -1868,14 +2512,16 @@ function defineTools() {
         ),
       },
       presentCall: () => ({ card: 'generic', title: 'List global variables', kind: 'read' }),
-      execute: (args) => runCode('globals', { project: projectOf(args) }),
+      execute: (args) => runCode('globals', projectRequest(args)),
     },
 
     {
       name: 'mw_code_read_st',
       description:
         'Read one POU\'s Structured Text body, exactly as the container holds it, plus its '
-        + 'variable declarations. This is how the agent sees the code it is about to change.',
+        + 'variable declarations. This is how the agent sees the code it is about to change. '
+        + 'Pass reference: true and a project path to read a POU from another program, including '
+        + 'one outside the workspace. That read does not stage, open, or modify it.',
       parameters: {
         type: 'object',
         additionalProperties: false,
@@ -1883,6 +2529,7 @@ function defineTools() {
         properties: {
           pou: { type: 'string', description: 'POU name.' },
           project: { type: 'string', description: 'Project directory; defaults to the staged project.' },
+          reference: REFERENCE_PARAM,
         },
       },
       output: {
@@ -1896,6 +2543,8 @@ function defineTools() {
             body: { oneOf: [{ type: 'string' }, { type: 'null' }] },
             body_error: { oneOf: [{ type: 'string' }, { type: 'null' }] },
             variables: { type: 'array', items: { type: 'object', additionalProperties: true } },
+            read_only: { oneOf: [{ type: 'boolean' }, { type: 'null' }] },
+            outside_workspace: { oneOf: [{ type: 'boolean' }, { type: 'null' }] },
             // Informational blob straight from the engine's summary(); left
             // unconstrained on purpose so a new field there cannot make this tool
             // fail again. An empty schema node is a valid member of the subset.
@@ -1905,7 +2554,7 @@ function defineTools() {
         render: (_a, v) => text(`POU ${v.pou} (${v.language ?? '?'}):\n${v.body ?? '(no ST body)'}`),
       },
       presentCall: (a) => ({ card: 'generic', title: `Read ${a.pou}`, kind: 'read' }),
-      execute: (args) => runCode('read_st', { ...(args ?? {}), project: projectOf(args) }),
+      execute: (args) => runCode('read_st', projectRequest(args, { pou: String(args.pou) })),
     },
     {
       name: 'mw_code_export_pou',
@@ -1927,7 +2576,7 @@ function defineTools() {
           project: { type: 'string', description: 'Project directory; defaults to the staged project.' },
           path: {
             type: 'string',
-            description: 'File to write. Defaults to <plugin>/exports/<POU>.st',
+            description: 'File to write. Defaults to <workspace>/.motionworks/exports/<POU>.st',
           },
         },
       },
@@ -2037,8 +2686,8 @@ function defineTools() {
 
         const ext = wantExport ? '.ST' : '.st';
         const out = args?.path
-          ? String(args.path)
-          : join(HERE, 'exports', `${pou.replace(/[^\w.-]+/g, '_')}${ext}`);
+          ? assertExportPath(String(args.path))
+          : join(workspaceRoot(), '.motionworks', 'exports', `${pou.replace(/[^\w.-]+/g, '_')}${ext}`);
         mkdirSync(dirname(out), { recursive: true });
         writeFileSync(out, text_, 'utf8');
         return {
@@ -2049,6 +2698,107 @@ function defineTools() {
           declarations: decls.length,
         };
       },
+    },
+
+    {
+      name: 'mw_code_eip_map',
+      description:
+        'Summarize the EtherNet/IP assembly map: the size each assembly DECLARES, how many words the '
+        + 'project actually USES, and how many are left - so "is there room for another status '
+        + 'value?" is one call instead of a reconstruction. Two sources, because they hold two '
+        + 'halves of the answer: the L5X module definition gives the declared assembly size '
+        + '(PrimCxnInputSize/PrimCxnOutputSize), and the project\'s own %I/%Q addresses give the used '
+        + 'range. Pass both for a full answer, or either alone for that half. '
+        + 'The assembly is treated as a WINDOW from the lowest address in each direction, so '
+        + 'addresses belonging to a different module\'s area are reported separately rather than '
+        + 'folded into the count. `next_free_word_address` is the first address past the highest one '
+        + 'in use - it is arithmetic over what was read, NOT a claim that the peer program leaves it '
+        + 'alone; confirm a new offset against the CompactLogix side before writing it. Read-only.',
+      parameters: {
+        type: 'object',
+        additionalProperties: false,
+        properties: {
+          l5x: {
+            type: 'string',
+            description: 'Exported L5X holding the module definition. Optional.',
+          },
+          project: {
+            type: 'string',
+            description: 'MotionWorks project directory; defaults to the staged project. Optional.',
+          },
+          module_name: {
+            type: 'string',
+            description: 'One module by name, e.g. TopCutter_MP2600iec. Defaults to the first generic ETHERNET-MODULE.',
+          },
+        },
+      },
+      output: {
+        schema: {
+          type: 'object',
+          additionalProperties: true,
+          properties: {
+            result: {
+              type: 'object',
+              additionalProperties: true,
+              properties: {
+                assemblies: { type: 'array', items: { type: 'object', additionalProperties: true } },
+                module_source: { type: 'object', additionalProperties: true },
+                address_rules: { type: 'object', additionalProperties: true },
+                note: { type: 'string' },
+              },
+            },
+          },
+        },
+        render: (_a, v) => {
+          const r = v.result ?? {};
+          const lines = [];
+          const mods = r.module_source?.modules ?? [];
+          if (mods.length) {
+            lines.push(`${mods.length} module(s); using ${mods[0].name} `
+              + `(${mods[0].catalog} rev ${mods[0].revision}): `
+              + `${mods[0].input_bytes} B in / ${mods[0].output_bytes} B out`);
+          }
+          for (const a of r.assemblies ?? []) {
+            const bits = [`${a.direction}:`];
+            if (a.declared_words !== undefined) bits.push(`${a.declared_words} words declared;`);
+            bits.push(`${a.used_words} used;`);
+            if (a.unused_words !== undefined) bits.push(`${a.unused_words} free;`);
+            if (a.next_free_word_address !== undefined) {
+              bits.push(`next free address ${a.next_free_word_address}`);
+              bits.push(`(${a.contiguous_room_after_last} contiguous after the last one in use)`);
+            }
+            if (a.full) bits.push('FULL');
+            if (a.addresses_outside_this_assembly) {
+              bits.push(`+ ${a.addresses_outside_this_assembly.count} address(es) from another module's area`);
+            }
+            lines.push(bits.join(' '));
+          }
+          if (!lines.length) lines.push('nothing to report: pass `l5x` and/or `project`.');
+          if (r.note) lines.push(r.note);
+          return text(lines.join('\n'));
+        },
+      },
+      presentCall: () => ({ card: 'generic', title: 'Map the E/IP assemblies', kind: 'read' }),
+      execute: async (args) => {
+        // `project` is optional here in a way it is not elsewhere: the L5X half alone is a
+        // complete answer to "how big is it", and the project half alone to "how much is used".
+        const request = {
+          ...(args?.l5x ? { l5x: String(args.l5x) } : {}),
+          ...(args?.module_name ? { module_name: String(args.module_name) } : {}),
+        };
+        if (args?.l5x || args?.project || !args?.module_name) {
+          request.project = projectOf(args);
+        }
+        return runCode('eip_map', request);
+      },
+    },
+
+    {
+      name: 'mw_code_validate',
+      description: 'Read-only offline validation of native containers, paired declarations/grids, handles, rows, addresses and project-tree IDs/counts. Reports format refusals as errors. This is not an IDE build verdict.',
+      parameters: { type: 'object', additionalProperties: false, properties: { project: { type: 'string' } } },
+      output: { schema: WRITE_SCHEMA, render: renderWrite },
+      execute: (args) => runCode('validate', { project: projectOf(args) }),
     },
 
     {
@@ -2073,15 +2823,24 @@ function defineTools() {
       },
       output: { schema: WRITE_SCHEMA, render: renderWrite },
       presentCall: (a) => ({ card: 'generic', title: `Write ${a.pou}`, kind: 'edit' }),
-      execute: (args) => runCode('write_st', {
-        ...(args ?? {}), project: projectOf(args), dry_run: args?.dry_run !== false,
-      }),
+      execute: async (args) => {
+        const project = projectOf(args);
+        const out = await runCode('write_st', {
+          ...(args ?? {}), project, dry_run: args?.dry_run !== false,
+        });
+        // Writing the body of a POU that no task runs is work the compiler never checks. Named
+        // here rather than after a build, because this is the last point at which the caller still
+        // knows what it was trying to do.
+        const warn = args?.dry_run === false
+          ? await unassignedWarning(project, [args?.pou])
+          : null;
+        return warn ? { ...out, unassigned_warning: warn } : out;
+      },
     },
 
     {
       name: 'mw_code_var_add',
-      description:
-        'GLOBAL variables: omit pou and the declaration goes into the resource Global_Variables.VB. WARNING - a global declared this way CANNOT BE USED yet: the compiler resolves globals through the resource grid Global_Variables.VGR, which has a third layout this plugin only partly decodes, so the record is not written. Measured: referring to such a global - even from a POU that declares it VAR_EXTERNAL - makes the build STALL with an EMPTY Errors pane, and it stalls even when the variable is never used, which is how the grid was identified as the cause. The declaration is real and reads back with mw_code_globals, and the project still builds while it is unreferenced, so this is useful for staging work. To make it usable, add the global in the MotionWorks Global Variables sheet.',
+      description: "Add a local, external or global variable by updating both native VB and VGR stores. Omit pou for globals. Requires a compatible existing native donor; specify donor when ambiguous, or donor_pou for an empty local worksheet. An omitted initializer inherits the donor initializer explicitly. Descriptions update translation XML too. Preserves trailers and allocates unique handles and worksheet rows. Dry-run defaults to true; real changes require the IDE closed and use a full-project rollback transaction. IDE Rebuild/Make acceptance remains required.",
       parameters: {
         type: 'object',
         additionalProperties: false,
@@ -2090,10 +2849,12 @@ function defineTools() {
           name: { type: 'string' },
           type: { type: 'string', description: 'IEC data type, e.g. BOOL, INT, AXIS_REF.' },
           pou: { type: 'string', description: 'Owning POU; omit for a global variable.' },
-          section: { type: 'string', description: 'VAR, VAR_INPUT, VAR_OUTPUT, VAR_GLOBAL, ...' },
+          section: { type: 'string', description: 'Supported donor usages: VAR, VAR_EXTERNAL, VAR_GLOBAL.' },
           address: { type: 'string', description: 'IEC address, e.g. %IX0.0.' },
           initial_value: { type: 'string' },
           description: { type: 'string' },
+          donor: { type: 'string', description: 'Native variable donor with the required type, usage and address layout.' },
+          donor_pou: { type: 'string', description: 'POU containing a native donor, for an empty target worksheet.' },
           project: { type: 'string' },
           dry_run: { type: 'boolean', description: 'Defaults to true.' },
         },
@@ -2102,22 +2863,6 @@ function defineTools() {
       presentCall: (a) => ({ card: 'generic', title: `Add variable ${a.name}`, kind: 'edit' }),
       execute: (args) => {
 
-      // A declaration added to a POU this plugin created stalls the build - silently, and only at
-      // the next build. Refusing here is the difference between an error an agent can act on and
-      // one it cannot see. Measured: 28 of 29 runs, every body tried, including a body that never
-      // mentions the added declaration.
-      if (args?.pou && createdPous().includes(String(args.pou)) && args?.dry_run === false) {
-        throw new Error(
-          `mw_code_var_add refuses to add '${args.name}' to '${args.pou}': this POU was created by `
-          + 'mw_code_pou_create, and adding a declaration to a created POU STALLS the build. The '
-          + 'add itself would report success and the declaration would read back correctly, then '
-          + 'the next build would stall with an EMPTY Errors pane - a silent, delayed failure with '
-          + 'no diagnostic. What works instead: (1) choose a template that ALREADY declares what '
-          + 'the POU needs and write the body over those inherited declarations - that is the '
-          + 'supported path; (2) add the declaration to an EXISTING POU, which builds; or (3) add '
-          + 'it once in the MotionWorks editor and edit the POU from here afterwards.',
-        );
-      }
         return runCode('var_add', {
           ...(args ?? {}), project: projectOf(args), dry_run: args?.dry_run !== false,
         });
@@ -2126,9 +2871,7 @@ function defineTools() {
 
     {
       name: 'mw_code_var_edit',
-      description:
-        'Edit an existing variable declaration in place: rename it, change its type, address, '
-        + 'initial value or description. **dry_run defaults to true.**',
+      description: "Edit both the declaration and native variable grid, including variable-length names, initializers and addresses. Descriptions also update translation XML. Type or address-layout changes require a compatible donor. Renames with remaining references are refused even with force. Dry-run defaults to true.",
       parameters: {
         type: 'object',
         additionalProperties: false,
@@ -2142,7 +2885,8 @@ function defineTools() {
           initial_value: { type: 'string' },
           description: { type: 'string' },
           clear_address: { type: 'boolean', description: 'Remove the IEC address.' },
-          force: { type: 'boolean', description: 'Override the reference check.' },
+          force: { type: 'boolean', description: 'Legacy parameter; does not bypass dangling-reference protection.' },
+          donor: { type: 'string', description: 'Native variable donor with the required type, usage and address layout.' },
           project: { type: 'string' },
           dry_run: { type: 'boolean', description: 'Defaults to true.' },
         },
@@ -2156,10 +2900,7 @@ function defineTools() {
 
     {
       name: 'mw_code_var_delete',
-      description:
-        'Delete a variable declaration. Refuses while any POU body still references it, because '
-        + 'that leaves a dangling reference and a failed build Ã¢â‚¬â€ pass `force` to override. '
-        + '**dry_run defaults to true.** ALWAYS follow this with mw_ide_build and mw_ide_errors - a cloned POU inherits the external variable records of its template, and assigning it is what first makes the compiler check them. Measured: create, declare and add-a-global were all clean, and the ASSIGN alone turned a compiling project into 125 No-matching-global-variable errors.',
+      description: "Delete a variable from both declaration and native grid, preserving the native group trailer. Refuses remaining references even with force. Dry-run defaults to true. Requires IDE Rebuild/Make verification after committing.",
       parameters: {
         type: 'object',
         additionalProperties: false,
@@ -2180,28 +2921,238 @@ function defineTools() {
     },
 
     {
-      name: 'mw_code_pou_create',
+      name: 'mw_code_var_add_many',
       description:
-        'Create a new POU by cloning a template POU that already exists in the project. '
-        + 'Template is required: creation clones that POU\'s directory and renames its streams, '
-        + 'so a POU cannot be authored from nothing. The new POU INHERITS the template\'s variable '
-        + 'declarations and those ARE usable - write the body to use them with mw_code_write_st. '
-        + 'KNOWN LIMITATION, and it is not about how the body uses anything: ADDING A DECLARATION '
-        + 'TO A CREATED POU STALLS ITS BUILD. Measured 28 times out of 29 across every variation '
-        + 'tried - the declaration used in a comparison, read, assigned, used alongside the '
-        + 'inherited declarations, and NEVER REFERRED TO AT ALL - the build stalls with an EMPTY '
-        + 'Errors pane. The body does not matter. The add reports success and the declaration '
-        + 'reads back correctly; the POU SURVIVES at full .VB length; and it is the PRESENCE of '
-        + 'the added declaration in a created POU that does it. The identical add on an EXISTING '
-        + 'POU works and builds - that path is exercised by a full round of tests on every run. '
-        + 'The destruction this tool was once blamed for - .VB truncated to 0 bytes, grid to '
-        + '79,432,063 bytes - is a SEPARATE failure caused by a TYPE ERROR in the body, which '
-        + 'mw_code_write_st now refuses outright. '
-        + 'So: choose a template that already declares everything the new POU needs, and write the '
-        + 'body over those INHERITED declarations, which compiles and is the supported path. If '
-        + 'the new POU needs declarations it did not inherit, add them to an EXISTING POU, or add '
-        + 'them once in the MotionWorks editor and edit the POU from here afterwards. '
-        + '**dry_run defaults to true** and returns the plan without changing anything.',
+        'Declare MANY variables in one call. Use this instead of repeating mw_code_var_add: a port '
+        + 'with twenty signals is twenty calls otherwise, and the caller has to sequence them and '
+        + 'keep track of which landed. Each item takes the same fields mw_code_var_add does - name, '
+        + 'type, section, address, initial_value, description, plus per-item pou/donor overrides - '
+        + 'and each is planned and applied on its own. '
+        + 'IT DOES NOT FAIL WHOLE: an item the planner refuses is reported in `failures` with its '
+        + 'index and reason, and the other items still apply, so a partial batch is a normal '
+        + 'outcome rather than an error. Read `failures` and re-issue only those. '
+        + '**dry_run defaults to true**, and plans every item while applying none.',
+      parameters: {
+        type: 'object',
+        additionalProperties: false,
+        required: ['variables'],
+        properties: {
+          variables: {
+            type: 'array',
+            minItems: 1,
+            description: 'One object per variable: {name, type, section?, address?, initial_value?, description?}.',
+            items: {
+              type: 'object',
+              additionalProperties: true,
+              required: ['name', 'type'],
+              properties: {
+                name: { type: 'string' },
+                type: { type: 'string', description: 'IEC data type, e.g. BOOL, INT, AXIS_REF.' },
+                section: { type: 'string', description: 'VAR (default), VAR_EXTERNAL or VAR_GLOBAL.' },
+                address: { type: 'string', description: 'IEC address, e.g. %IX0.0.' },
+                initial_value: { type: 'string' },
+                description: { type: 'string' },
+                pou: { type: 'string', description: 'Owning POU, overriding the call-level `pou`.' },
+                donor: { type: 'string', description: 'Native variable donor with a matching type.' },
+                donor_pou: { type: 'string' },
+              },
+            },
+          },
+          pou: { type: 'string', description: 'Owning POU for every item; omit for globals.' },
+          section: { type: 'string', description: 'Section for every item that does not set its own.' },
+          donor: { type: 'string' },
+          donor_pou: { type: 'string' },
+          project: { type: 'string', description: 'Project directory; defaults to the staged project.' },
+          dry_run: { type: 'boolean', description: 'Defaults to true.' },
+        },
+      },
+      output: {
+        schema: {
+          type: 'object',
+          additionalProperties: true,
+          properties: {
+            dry_run: { type: 'boolean' },
+            pou: { oneOf: [{ type: 'string' }, { type: 'null' }] },
+            requested: { type: 'integer' },
+            applied: { type: 'integer' },
+            failed: { type: 'integer' },
+            results: { type: 'array', items: { type: 'object', additionalProperties: true } },
+            failures: { type: 'array', items: { type: 'object', additionalProperties: true } },
+            note: { type: 'string' },
+          },
+        },
+        render: renderBatch,
+      },
+      presentCall: (a) => ({
+        card: 'generic',
+        title: `Declare ${(a.variables ?? []).length} variable(s)`,
+        kind: 'edit',
+      }),
+      execute: (args) => runCode('var_add_many', {
+        ...(args ?? {}), project: projectOf(args), dry_run: args?.dry_run !== false,
+      }, 600000),
+    },
+
+    {
+      name: 'mw_code_sync_back',
+      description:
+        'Copy the STAGED edit back to the real project it was staged from - the step the release '
+        + 'loop was missing: close IDE -> edit the stage -> build -> COPY BACK -> re-stage -> '
+        + 'verify. Every other step was a tool; this one had to be a script that knew by convention '
+        + 'what to carry. '
+        + 'It carries SOURCE ONLY: the POU containers (src.st1), declaration and grid streams, the '
+        + 'project tree, the type list and the resource files. It does NOT carry the .mwt wrapper, '
+        + 'whose stored path is bound to the stage and would point the real project at a temporary '
+        + 'copy of itself, and it does NOT carry compiler output (.DLL/.pdb) or scratch files. '
+        + 'Measured on the TopCutter project: 8 files, where a blanket "everything that changed" '
+        + 'copy selected 90 and led with compiled DLLs. '
+        + 'The destination is the source directory mw_ide_stage recorded, and it is refused unless '
+        + 'that recording proves it lies inside the workspace. Every file is verified by sha256 '
+        + 'after the copy, so a non-empty `failures` means the release is NOT synced. '
+        + '**dry_run defaults to true.**',
+      parameters: {
+        type: 'object',
+        additionalProperties: false,
+        properties: {
+          project: { type: 'string', description: 'Staged project directory or its .mwt.' },
+          dry_run: { type: 'boolean', description: 'Defaults to true.' },
+        },
+      },
+      output: {
+        schema: {
+          type: 'object',
+          additionalProperties: true,
+          properties: {
+            dry_run: { type: 'boolean' },
+            staged: { type: 'string' },
+            destination: { type: 'string' },
+            would_copy: { type: 'integer' },
+            would_skip: { type: 'integer' },
+            copied: { type: 'integer' },
+            // A dry run reports `skipped` as the file list it did not touch; an applied run reports
+            // it as a count. The schema says both, because both are real - and the harness rejects
+            // a value its own schema does not accept, which is exactly what this caught when the
+            // first draft declared only the integer.
+            skipped: {
+              oneOf: [
+                { type: 'integer' },
+                { type: 'array', items: { type: 'object', additionalProperties: true } },
+              ],
+            },
+            mismatched: { type: 'integer' },
+            files: { type: 'array', items: { type: 'object', additionalProperties: true } },
+            failures: { type: 'array', items: { type: 'object', additionalProperties: true } },
+            wrapper: { type: 'string' },
+            note: { type: 'string' },
+          },
+        },
+        render: renderSync,
+      },
+      presentCall: () => ({ card: 'generic', title: 'Copy the stage back to the project', kind: 'edit' }),
+      execute: (args) => runCode('sync_back', {
+        ...(args ?? {}), project: projectOf(args), dry_run: args?.dry_run !== false,
+      }, 600000),
+    },
+
+    {
+      name: 'mw_code_wrapper_binding',
+      description:
+        'Read-only: how a staged project\'s .mwt wrapper is bound, and whether it is STALE. '
+        + 'mw_ide_open refuses a wrapper whose stored path is not the staged directory, and that '
+        + 'refusal can appear after mw_code_pou_create has renumbered the project. Re-staging to '
+        + 'clear it is the wrong remedy - it overwrites the stage and takes the new POU with it - '
+        + 'so this reports which wrapper is stale and whether re-binding is enough, before anything '
+        + 'tries to open it. Omit project to check every staged project.',
+      parameters: {
+        type: 'object',
+        additionalProperties: false,
+        properties: {
+          project: { type: 'string', description: 'One staged project; omit to check them all.' },
+        },
+      },
+      output: {
+        schema: {
+          type: 'object',
+          additionalProperties: true,
+          properties: {
+            count: { type: 'integer' },
+            stale: { type: 'integer' },
+            wrappers: { type: 'array', items: { type: 'object', additionalProperties: true } },
+          },
+        },
+        render: (_a, v) => text(
+          (v.count === 0
+            ? 'No staged project has a wrapper to check.'
+            : (v.stale === 0
+              ? `${v.count} wrapper(s), all bound to their staged directory.`
+              : `${v.stale} of ${v.count} wrapper(s) are STALE - mw_ide_open will refuse them.`)
+            + (v.wrappers ?? []).map((w) => `\n  ${w.wrapper}`
+              + (w.error ? ` ERROR ${w.error}`
+                : (w.stale_paths ?? []).length
+                  ? ` -> names ${w.stale_paths.join(', ')}; should name ${w.should_name}`
+                  : ' ok')).join('')),
+        ),
+      },
+      presentCall: () => ({ card: 'generic', title: 'Check wrapper binding', kind: 'read' }),
+      execute: (args) => runCode('wrapper_binding', args?.project ? { project: String(args.project) } : {}),
+    },
+
+    {
+      name: 'mw_code_rebind_wrapper',
+      description:
+        'Point a staged .mwt back at its staged directory, IN PLACE, so mw_ide_open will accept it. '
+        + 'This is the remedy for a wrapper reported stale by mw_code_wrapper_binding - and it is '
+        + 'the alternative to re-staging, which would overwrite the staged project and take any POU '
+        + 'created since with it. Idempotent and cheap when already bound: measured, an already-bound '
+        + 'wrapper reports would_change=false and the file digest is unchanged, so it is safe to call '
+        + 'unconditionally rather than working out whether it is needed. **dry_run defaults to true.**',
+      parameters: {
+        type: 'object',
+        additionalProperties: false,
+        required: ['mwt'],
+        properties: {
+          mwt: { type: 'string', description: 'The staged .mwt wrapper to re-bind.' },
+          directory: { type: 'string', description: 'Staged project directory; defaults to the wrapper\'s own name.' },
+          dry_run: { type: 'boolean', description: 'Defaults to true.' },
+        },
+      },
+      output: {
+        schema: {
+          type: 'object',
+          additionalProperties: true,
+          properties: {
+            dry_run: { type: 'boolean' },
+            changed: { type: 'boolean' },
+            would_change: { type: 'boolean' },
+            bound_to: { type: 'string' },
+            stores: { type: 'array', items: { type: 'string' } },
+            stale_paths: { type: 'array', items: { type: 'string' } },
+            paths: { type: 'array', items: { type: 'object', additionalProperties: true } },
+            note: { type: 'string' },
+          },
+        },
+        render: (_a, v) => {
+          if (v.dry_run) {
+            return text(v.would_change
+              ? `DRY RUN — this wrapper is STALE and would be re-bound to\n  ${v.bound_to}`
+                + `\nIt currently names: ${(v.stale_paths ?? []).join(', ')}`
+              : `DRY RUN — already bound to ${v.bound_to}; re-binding would change nothing.`);
+          }
+          return text(v.changed
+            ? `Re-bound to ${v.bound_to}. Rewrote: `
+              + (v.paths ?? []).map((p) => `${p.from} (${p.stream})`).join(', ')
+            : `Already bound to ${v.bound_to}; nothing changed.`);
+        },
+      },
+      presentCall: () => ({ card: 'generic', title: 'Re-bind the .mwt wrapper', kind: 'edit' }),
+      execute: (args) => runCode('rebind_wrapper', {
+        ...(args ?? {}), dry_run: args?.dry_run !== false,
+      }, 120000),
+    },
+
+    {
+      name: 'mw_code_pou_create',
+      description: "Clone a native POU in the selected staged workspace project. Preserves native external/local/FB declarations, updates tree counts, GUIDs, registry and view entries. Use compatible native donors for later variable additions. Dry-run defaults to true. Actual edits use a full-project snapshot transaction; success reports offline verification only, pending IDE Rebuild, Make, save and close/reopen.",
       parameters: {
         type: 'object',
         additionalProperties: false,
@@ -2218,15 +3169,18 @@ function defineTools() {
       },
       output: { schema: WRITE_SCHEMA, render: renderWrite },
       presentCall: (a) => ({ card: 'generic', title: `Create POU ${a.name}`, kind: 'edit' }),
-      // Record the name so mw_code_var_add can refuse later. A declaration added to a POU this
-      // tool created stalls the build - silently, and only at the next build - so the add is
-      // blocked up front and the creation has to be remembered for that to work.
+      // Track created POUs for diagnostics.
       execute: async (args) => {
+        const project = projectOf(args);
         const out = await runCode('pou_create', {
-          ...(args ?? {}), project: projectOf(args), dry_run: args?.dry_run !== false,
+          ...(args ?? {}), project, dry_run: args?.dry_run !== false,
         });
         if (args?.dry_run === false && out?.result?.pou) rememberCreated(out.result.pou);
-        return out;
+        // A NEW POU IS UNASSIGNED BY CONSTRUCTION - nothing calls it, so it never runs and the
+        // compiler does not check it. Warning here means the caller hears it before spending a
+        // build rather than after one that stalled for 90 seconds.
+        const warn = await unassignedWarning(project, [out?.result?.pou ?? out?.plan?.pou_name ?? args?.name]);
+        return warn ? { ...out, unassigned_warning: warn } : out;
       },
     },
 
@@ -2322,6 +3276,9 @@ function defineTools() {
       presentCall: (a) => ({ card: 'generic', title: `Create task ${a.name}`, kind: 'edit' }),
       execute: async (args) => {
         const name = args?.name;
+        if (typeof name !== 'string' || !name.trim() || name.length > 7) {
+          throw new Error('MotionWorks IEC task names must contain 1 to 7 characters.');
+        }
         if (args?.dry_run !== false) {
           let existing = null;
           try { existing = (await verb('task_model', {}, 60000)).tasks ?? null; } catch { /* */ }
@@ -2406,8 +3363,7 @@ function defineTools() {
           // primitive where it expects content blocks, and the spill policy's
           // `content.some(block => block.type === 'image')` then fails with
           // "content.some is not a function" before this output is ever shown. The bridge
-          // answered this verb correctly the whole time (bridge.log records ok=True), so the
-          // failure named neither the verb nor this file.
+          // answered this verb correctly the whole time (bridge.log records ok=True).
           if (!rows.length) return text('no tasks');
           return text(rows.map(([k, t]) => `${k} [${t.cycle ?? '?'}] `
             + ((t.instances ?? []).map((i) => i.name).join(', ') || '(none)')).join('\n'));
@@ -2419,18 +3375,13 @@ function defineTools() {
 
     {
       name: 'mw_code_tasks',
-      description:
-        'List the project\'s tasks and which POU is assigned to each, plus the POUs that are '
-        + 'assigned to NOTHING. **Call this before claiming a new POU works.** A POU that exists '
-        + 'but is assigned to no task never runs, and Ã¢â‚¬â€ measured Ã¢â‚¬â€ the build does not catch it '
-        + 'either: a POU containing an undeclared variable compiled cleanly while it was '
-        + 'unassigned. So a clean build is not evidence that an unassigned POU is correct. '
-        + 'Assign it with mw_code_pou_assign.',
+      description: 'List native task instances in execution order and program names without matching instance names. Unmatched names are review candidates: an instance name can differ from its program type, and indirect calls need inspection. Confirm actual bindings and startup/cyclic context in the IDE; this tool does not create task assignments.',
       parameters: {
         type: 'object',
         additionalProperties: false,
         properties: {
           project: { type: 'string', description: 'Project directory; defaults to the staged project.' },
+          reference: REFERENCE_PARAM,
         },
       },
       output: {
@@ -2445,6 +3396,14 @@ function defineTools() {
             tasks: { type: 'object', additionalProperties: true },
             unassigned: { type: 'array', items: { type: 'string' } },
             unassigned_note: { type: 'string' },
+            // DECLARED because the engine RETURNS it, and an undeclared field under
+            // `additionalProperties: false` is not ignored - the harness REJECTS the whole value
+            // with `"value.next_step" is not a declared property`, before render is ever called.
+            // So this tool's promise to tell the caller what to do next was not merely dropped
+            // from the output; it failed every call. Found by test/render_contract.mjs phase 2.
+            next_step: { type: 'string' },
+            read_only: { oneOf: [{ type: 'boolean' }, { type: 'null' }] },
+            outside_workspace: { oneOf: [{ type: 'boolean' }, { type: 'null' }] },
           },
         },
         render: (_a, v) => {
@@ -2453,13 +3412,15 @@ function defineTools() {
             lines.push(`  ${task}: ${programs.join(', ') || '(nothing assigned)'}`);
           }
           if ((v.unassigned ?? []).length) {
-            lines.push(`NOT ASSIGNED (never run, not compile-checked): ${v.unassigned.join(', ')}`);
+            lines.push(`TASK BINDING NEEDS REVIEW (instance names may differ): ${v.unassigned.join(', ')}`);
           }
+          if (v.unassigned_note) lines.push(v.unassigned_note);
+          if (v.next_step) lines.push(`NEXT: ${v.next_step}`);
           return text(lines.join('\n'));
         },
       },
       presentCall: () => ({ card: 'generic', title: 'List tasks and assignments', kind: 'read' }),
-      execute: (args) => runCode('tasks', { project: projectOf(args) }),
+      execute: (args) => runCode('tasks', projectRequest(args)),
     },
 
     {
@@ -2566,7 +3527,10 @@ function defineTools() {
       parameters: {
         type: 'object',
         additionalProperties: false,
-        properties: { project: { type: 'string' } },
+        properties: {
+          project: { type: 'string' },
+          reference: REFERENCE_PARAM,
+        },
       },
       output: {
         schema: {
@@ -2576,6 +3540,8 @@ function defineTools() {
           properties: {
             count: { type: 'integer' },
             blocked: { type: 'array', items: { type: 'object', additionalProperties: true } },
+            read_only: { oneOf: [{ type: 'boolean' }, { type: 'null' }] },
+            outside_workspace: { oneOf: [{ type: 'boolean' }, { type: 'null' }] },
           },
         },
         render: (_a, v) => text(v.count === 0
@@ -2584,7 +3550,7 @@ function defineTools() {
             + v.blocked.map((b) => `  ${b.name}: ${b.reason}`).join('\n')),
       },
       presentCall: () => ({ card: 'generic', title: 'Check editability', kind: 'read' }),
-      execute: (args) => runCode('unsupported', { project: projectOf(args) }),
+      execute: (args) => runCode('unsupported', projectRequest(args)),
     },
 
     {
@@ -2623,6 +3589,34 @@ function defineTools() {
  * @param ctx - registrant context carrying the tool registry.
  */
 export function apply(ctx) {
+  // ── WHY THIS PLUGIN LOADS ON macOS AND LINUX, AND IMMEDIATELY STOPS ────────────────────────
+  //
+  // Everything below this line drives MotionWorks IEC 3 Pro, which is a Windows application: it
+  // reaches it through COM, through a PowerShell bridge, and through an MTA-pinned Python child.
+  // None of that exists anywhere else, so on another platform there is nothing to operate.
+  //
+  // The plugin still LOADS there, and that is deliberate rather than an oversight. Its manifest
+  // used to declare `"os": ["win32"]`, which is correct about the plugin and fatal about shipping
+  // it: `os` is an install-time platform gate, and a REQUIRED dependency that does not match the
+  // host fails `pnpm install` outright with ERR_PNPM_UNSUPPORTED_PLATFORM rather than being
+  // skipped. This plugin is meant to be built into every AryaAI install, and the harness has Linux
+  // and macOS CI lanes and release targets - so a required `os: win32` edge would have broken the
+  // install for everyone who is not on Windows, to no benefit.
+  //
+  // Declaring no `os` and refusing at apply() instead is the shape the repo already uses for
+  // platform-specific payloads: the dependency edge stays installable everywhere, and the plugin
+  // itself states the limitation where a caller can read it.
+  if (process.platform !== 'win32') {
+    try {
+      ctx.logger?.info?.(
+        'motionworks-iec-use: not loaded. This plugin drives the MotionWorks IEC 3 Pro IDE, which '
+        + `is a Windows application, and this host is ${process.platform}. No tools or skill are `
+        + 'registered.',
+      );
+    } catch { /* a logger that refuses must not turn an unsupported host into a crash */ }
+    return;
+  }
+
   // Kept for per-call workspace lookup: currentInitiator() reports the agent for the
   // current driver chain, so it can only be asked while a tool is executing.
   hostCtx = ctx;
@@ -2661,7 +3655,11 @@ export function apply(ctx) {
           + 'and open a project, read the live object model, read and rewrite POU Structured Text, '
           + 'add variable declarations, compile, and read the compiler verdict and error text. '
           + 'START HERE: run mw_project_find before anything else, and work only on a project inside '
-          + 'the workspace — never one from elsewhere on the machine, even if you know where it is.',
+          + 'the workspace — never one from elsewhere on the machine, even if you know where it is. '
+          + 'Another program may be read with reference: true; that does not stage or open it. '
+          + 'Do not click MotionWorks, even when windows_computer_use_mcp_DRY_RUN is false. '
+          + 'A click opens the last project. A plugin result with dry_run true changed nothing: '
+          + 'call the same tool with dry_run false.',
         whenToUse: 'The user has MotionWorks IEC 3 Pro open or asks for work in it — a real build, a '
           + 'compile verdict, the live project model, reading or changing POU Structured Text, or '
           + 'the IDE error list. ALSO USE WHEN a MotionWorks project is mentioned at all, even to '
@@ -2687,7 +3685,9 @@ export function apply(ctx) {
     // escapes the tool pipeline instead of surfacing as a tool error.
     ctx.tools.register({
       ...definition,
-      async execute(args, exec) { return definition.execute(args, exec); },
+      async execute(args, exec) {
+        return toolContext.run(exec ?? {}, () => definition.execute(args, exec));
+      },
     });
   }
   // Spawned lazily on first use and stopped on dispose, so unloading the plugin
@@ -2699,5 +3699,5 @@ export function apply(ctx) {
 export const __internals = {
   call, ensureBridge, stopBridge, verb, assertStaged, defineTools,
   runCode, pythonExe, codeSrc,
-  STAGE_ROOT, BRIDGE_DIR, BRIDGE_SCRIPT, CODE_DIR, CODE_HELPER,
+  get STAGE_ROOT() { return stageRoot(); }, workspaceRoot, assertProven, projectOf, BRIDGE_DIR, BRIDGE_SCRIPT, CODE_DIR, CODE_HELPER,
 };

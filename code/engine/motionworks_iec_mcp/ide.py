@@ -29,7 +29,7 @@ import sys
 from pathlib import Path
 
 #: Executable names that indicate the IDE. Only these block writing.
-MAIN_PROCESSES = ("mwt", "mwt.exe")
+MAIN_PROCESSES = ("mwt", "mwt.exe", "mwiec", "motionworks")
 #: Helper processes that can hold the same project files open. They are closed
 #: alongside the IDE and reported, but a bare write gate does not fail on them.
 HELPER_PROCESSES = (
@@ -67,9 +67,10 @@ def _window_owner_pids() -> set:
         return True
 
     try:
-        user32.EnumWindows(callback_type(visit), 0)
-    except Exception:  # noqa: BLE001
-        return pids
+        if not user32.EnumWindows(callback_type(visit), 0):
+            raise RuntimeError('Could not enumerate IDE windows; offline write refused')
+    except Exception as exc:
+        raise RuntimeError('Could not verify that the IDE is closed') from exc
     return pids
 
 
@@ -82,6 +83,10 @@ def _image_name(pid: int):
 
     PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
     kernel32 = ctypes.windll.kernel32
+    kernel32.OpenProcess.argtypes = [wintypes.DWORD, wintypes.BOOL, wintypes.DWORD]
+    kernel32.OpenProcess.restype = wintypes.HANDLE
+    kernel32.QueryFullProcessImageNameW.argtypes = [wintypes.HANDLE, wintypes.DWORD, wintypes.LPWSTR, ctypes.POINTER(wintypes.DWORD)]
+    kernel32.CloseHandle.argtypes = [wintypes.HANDLE]
     handle = kernel32.OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, False, pid)
     if not handle:
         return None
@@ -284,15 +289,14 @@ def ensure_ide_closed(auto_close: bool | None = None, timeout: float = 15.0):
 
     if sys.platform != "win32":
         return
-    if auto_close is None:
-        auto_close = auto_close_enabled()
+    # Project identity can only be verified by the bridge close tool.
+    auto_close = False
     procs = require_ide_closed(auto_close=auto_close, timeout=timeout)
     if procs:
         described = ", ".join(f"{name} (pid {pid})" for pid, name in procs)
         raise IdeRunning(
             f"MotionWorks is running ({described}), so nothing was written. Close "
-            f"MotionWorks IEC and retry, or set MOTIONWORKS_MCP_CLOSE_IDE=1 to have "
-            f"this close the IDE automatically."
+            f"MotionWorks IEC through the guarded mw_ide_close tool and retry."
         )
 
 

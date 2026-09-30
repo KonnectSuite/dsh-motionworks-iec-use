@@ -48,11 +48,6 @@ POWERSHELL_32 = Path(
 #: The build helper lives in the repository's tools/ directory.
 _HELPER = Path(__file__).resolve().parents[2] / "tools" / "mw_build.ps1"
 
-#: Where a space-free copy of a project is staged when its real path contains a
-#: space.  Deliberately inside the repository rather than the system temp
-#: directory: the development sandbox permits writes only under the workspace,
-#: and a denied create can block instead of raising.
-_STAGE_ROOT = Path(__file__).resolve().parents[2] / ".mw_build_stage"
 
 
 class BuildUnavailable(MotionWorksError):
@@ -133,45 +128,9 @@ def build_available() -> tuple[bool, str]:
     return True, "ok"
 
 
-def _stage_spacefree(project_mwt: Path) -> Path:
-    """Return a copy of ``project_mwt`` at a path containing no spaces.
-
-    The ``.mwt`` is a small pointer file and the real project lives in the
-    sibling directory, so the sibling is copied alongside it to keep the pair
-    together.  Returns the original path unchanged when it already has no space.
-    """
-    project_mwt = Path(project_mwt)
-    if " " not in str(project_mwt) and "\t" not in str(project_mwt):
-        return project_mwt
-
-    import tempfile  # noqa: F401  (kept out of the path logic on purpose)
-
-    project_dir = project_mwt.with_suffix("")
-    base = _STAGE_ROOT
-    base.mkdir(parents=True, exist_ok=True)
-
-    staged_mwt = base / project_mwt.name
-    shutil.copy2(project_mwt, staged_mwt)
-
-    staged_dir = base / project_dir.name
-    if staged_dir.exists():
-        shutil.rmtree(staged_dir, ignore_errors=True)
-    if project_dir.is_dir():
-        shutil.copytree(project_dir, staged_dir)
-    return staged_mwt
-
-
-def _quote(value: str) -> str:
-    """Wrap an argument in quotes when it contains a space.
-
-    PowerShell's ``-File`` parameter splits its own arguments, and a path such as
-    ``...\\MP2600iec Program\\TopCutter.mwt`` is silently truncated without this.
-    That failure mode is nasty: the helper then reports "project did not load",
-    which looks like a problem with the project rather than with the invocation.
-    """
-    if " " in value or "\t" in value:
-        return f'"{value}"'
-    return value
+def _ps_quote(value: str) -> str:
+    """Quote a literal for PowerShell -Command, including apostrophes in paths."""
+    return "'" + value.replace("'", "''") + "'"
 
 
 def run_build(project_mwt: Path, timeout: int = 600) -> BuildResult:
@@ -184,13 +143,25 @@ def run_build(project_mwt: Path, timeout: int = 600) -> BuildResult:
     if not available:
         raise BuildUnavailable(f"cannot drive a build: {reason}")
 
-    # Invoked through a short space-free staging directory.  PowerShell's -File
-    # parameter does its own argument splitting, and a path containing a space
-    # (such as "...\MP2600iec Program\TopCutter.mwt") is silently truncated --
-    # the helper then reports "project did not load", which looks like a project
-    # problem rather than an invocation bug.  Avoiding the space is more robust
-    # than trying to escape it through two layers of quoting.
-    staged = _stage_spacefree(project_mwt)
+    # A build opens the project. The wrapper's embedded directory is what loads,
+    # so an outside path here is the same wrong-project failure as an IDE open.
+    from .mwt_bind import embedded_paths
+    from .staging import StagingRefused, assert_proven
+
+    project_mwt = Path(project_mwt)
+    assert_proven(project_mwt)
+    paths = embedded_paths(project_mwt)
+    if not paths:
+        raise StagingRefused("REFUSED: wrapper has no verified project binding")
+    for embedded in paths:
+        if Path(embedded).resolve() != project_mwt.with_suffix("").resolve():
+            raise StagingRefused(
+                f"REFUSED: '{project_mwt}' still points at '{embedded}', which is outside "
+                "the staging root. Stage it with mw_ide_stage before building it."
+            )
+
+    # Keep the build in the workspace; quote paths rather than relocating them.
+    staged = project_mwt
     # Invoked with -ExecutionPolicy Bypass AND -Command.
     #
     # Both are needed, which was established by testing each form:
@@ -206,7 +177,7 @@ def run_build(project_mwt: Path, timeout: int = 600) -> BuildResult:
         "-NonInteractive",
         "-ExecutionPolicy", "Bypass",
         "-Command",
-        f"& '{_HELPER}' -Project '{staged}'",
+        "& " + _ps_quote(str(_HELPER)) + " -Project " + _ps_quote(str(staged)),
     ]
     try:
         completed = subprocess.run(

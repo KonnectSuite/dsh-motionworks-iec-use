@@ -372,7 +372,16 @@ def manual_text(name: str, cache_dir: Path | None = None) -> str:
         raise NotFound(f"no manual matching {name!r}. Available: {available}")
     path = matches[0]
 
-    cache = (cache_dir or path.parent / ".mw_manual_cache") / (path.stem + ".txt")
+    from .knowledge import cache_root
+    import hashlib
+    root_cache = cache_root()
+    cache_base = (cache_dir or root_cache / 'legacy').resolve()
+    if not cache_base.is_relative_to(root_cache):
+        raise ValueError('Manual extraction cache must stay inside workspace reference storage')
+    key = hashlib.sha256(path.read_bytes()).hexdigest()
+    cache = cache_base / (key + '.txt')
+    if not cache.resolve().is_relative_to(root_cache):
+        raise ValueError('Linked manual extraction cache escapes reference storage')
     try:
         if cache.is_file() and cache.stat().st_mtime >= path.stat().st_mtime:
             return cache.read_text(encoding="utf-8")

@@ -437,6 +437,8 @@ def apply_pou_deletion(
     from .ide import ensure_ide_closed
     from .tree_writer import backup_and_write
 
+    from .staging import assert_proven
+    assert_proven(plan.project_root)
     ensure_ide_closed()
 
     project_root = Path(plan.project_root)
@@ -474,7 +476,8 @@ def apply_pou_deletion(
         raise PouPlanError(f"the archive location already exists: {archive}")
 
     writes: list[tuple[Path, bytes, bytes]] = [
-        (src, original, _edited_container_bytes(src, rendered))
+        (src, original, _edited_container_bytes(src, {"PROJECT.TRE": rendered.encode("latin1"),
+            "PRMVIEWALL.DAT": _view_change(src, plan.pou_name, getattr(plan, "template_name", None))}))
     ]
     writes.extend(_deletion_registry_writes(project_root, plan))
 
@@ -748,8 +751,11 @@ def plan_transplant(
     source_vb = donor_cfb.read_stream(donor_streams[1])
     source_vgr = donor_cfb.read_stream(donor_streams[2])
 
-    localized_vb = source_vb.replace(b"VAR_EXTERNAL", b"VAR")
-    localized_vgr, localized, fb_instances = localize_variable_grid(source_vgr)
+    from .grid import validate_pair, parse
+    validate_pair(source_vb.decode("latin1"), source_vgr)
+    localized_vb, localized_vgr = source_vb, source_vgr
+    localized = 0
+    fb_instances = sum(r["usage"] == 0x40001 for r in parse(source_vgr))
 
     target_cfb = CompoundFile(target.source_path)
     plan = TransplantPlan(
@@ -773,8 +779,7 @@ def plan_transplant(
     if not plan.changed:
         plan.notes.append("the target already matches the donor")
     plan.notes.append(
-        "the donor's external declarations were localized, because its external "
-        "references belong to the donor's project"
+        "Native declaration usages are preserved; donor and target share the staged project"
     )
     return plan
 
@@ -786,6 +791,8 @@ def apply_transplant(plan: TransplantPlan, *, backup_dir: Path) -> dict[str, obj
     from .ide import ensure_ide_closed
     from .tree_writer import backup_and_write
 
+    from .staging import assert_proven
+    assert_proven(plan.project_root)
     ensure_ide_closed()
 
     project_root = Path(plan.project_root)
@@ -858,10 +865,11 @@ def apply_pou_creation(
     verification that runs after the write cannot prevent damage.
     """
     from .cfb import CompoundFile
-    from .cfb import CompoundFile
     from .ide import ensure_ide_closed
     from .tree_writer import backup_and_write
 
+    from .staging import assert_proven
+    assert_proven(project_root or plan.project_root)
     ensure_ide_closed()
 
     project_root = Path(project_root or plan.project_root)
@@ -920,11 +928,12 @@ def apply_pou_creation(
 
         _rewrite_node_properties(target_dir, plan)
         _rename_pou_streams(target_dir, plan)
-        # Localize AFTER renaming, so the stream names are already the clone's own.
-        localization = _localize_pou_variables(target_dir)
+        # Preserve the donor's native local/external/FB semantics.
+        localization = {"preserved_native_declarations": True}
 
         writes: list[tuple[Path, bytes, bytes]] = [
-            (src, original, _edited_container_bytes(src, rendered))
+            (src, original, _edited_container_bytes(src, {"PROJECT.TRE": rendered.encode("latin1"),
+            "PRMVIEWALL.DAT": _view_change(src, plan.pou_name, getattr(plan, "template_name", None))}))
         ]
         writes.extend(_registry_writes(project_root, plan))
         backups = backup_and_write(writes, backup_dir, project_root=project_root)
@@ -955,6 +964,27 @@ def apply_pou_creation(
         # is exactly the state that makes a later assign fail to compile.
         "localization": localization,
     }
+
+
+def _view_change(source: Path, name: str, template: str | None) -> bytes:
+    from .cfb import CompoundFile
+    raw = CompoundFile(source).read_stream("PRMVIEWALL.DAT")
+    lines = raw.decode("latin1").splitlines(keepends=True)
+    target = "@POUGRP." + name
+    matches = [i for i, line in enumerate(lines) if line.rstrip("\r\n").casefold() == target.casefold()]
+    if template is None:
+        if len(matches) > 1: raise PouPlanError("Duplicate native POU view entries")
+        if matches: del lines[matches[0]]
+    else:
+        if matches: raise PouPlanError("POU view already contains the new name")
+        donors = [i for i, line in enumerate(lines) if line.rstrip("\r\n").casefold() == ("@POUGRP." + template).casefold()]
+        if not donors:
+            donors = [i for i, line in enumerate(lines) if line.rstrip("\r\n") == "@POUGRP"]
+        if len(donors) != 1: raise PouPlanError("Expected one native POU view anchor")
+        original = lines[donors[0]]
+        ending = "\r\n" if original.endswith("\r\n") else "\n"
+        lines.insert(donors[0]+1, target + ending)
+    return "".join(lines).encode("latin1")
 
 
 def _edited_container_bytes(src: Path, replacements: dict[str, bytes] | str) -> bytes:
@@ -1236,6 +1266,14 @@ def plan_pou_creation(
 ) -> PouCreationPlan:
     """Produce a POU creation plan, marking every field that cannot be derived."""
     from .cfb import CompoundFile
+    import re
+    for value in (pou_name, template_name):
+        if not re.fullmatch(r'[A-Za-z_][A-Za-z_0-9]*', value):
+            raise PouPlanError('POU names must be IEC identifiers, not paths')
+    import re
+    for value in (pou_name, template_name):
+        if not re.fullmatch(r'[A-Za-z_][A-Za-z_0-9]*', value):
+            raise PouPlanError('POU names must be IEC identifiers, not paths')
 
     project_root = Path(project_root)
     src = project_root / "src.st1"

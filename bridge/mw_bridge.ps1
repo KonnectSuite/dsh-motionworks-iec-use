@@ -193,15 +193,17 @@ public class MWW {
   const uint SMTO_ABORTIFHUNG = 0x0002;
   const uint TEXT_TIMEOUT_MS = 200;
 
-  public static string ReadText(IntPtr h) {
+  public static string ReadText(IntPtr h) { return ReadTextMs(h, TEXT_TIMEOUT_MS); }
+
+  public static string ReadTextMs(IntPtr h, uint ms) {
     IntPtr result;
-    IntPtr sent = SendTimeoutInt(h, 0x000E, IntPtr.Zero, IntPtr.Zero, SMTO_ABORTIFHUNG, TEXT_TIMEOUT_MS, out result);  // WM_GETTEXTLENGTH
+    IntPtr sent = SendTimeoutInt(h, 0x000E, IntPtr.Zero, IntPtr.Zero, SMTO_ABORTIFHUNG, ms, out result);  // WM_GETTEXTLENGTH
     if (sent == IntPtr.Zero) return "";                       // hung or gone: no text
     int n = result.ToInt32();
     if (n <= 0) return "";
     if (n > 65536) n = 65536;
     StringBuilder sb = new StringBuilder(n + 2);
-    sent = SendTimeoutStr(h, 0x000D, (IntPtr)(n + 1), sb, SMTO_ABORTIFHUNG, TEXT_TIMEOUT_MS, out result);              // WM_GETTEXT
+    sent = SendTimeoutStr(h, 0x000D, (IntPtr)(n + 1), sb, SMTO_ABORTIFHUNG, ms, out result);              // WM_GETTEXT
     if (sent == IntPtr.Zero) return "";
     return sb.ToString();
   }
@@ -243,9 +245,10 @@ function Get-IdeWindow {
     $cb = [MWW+EnumWindowsProc]{
         param($h, $l)
         if ([MWW]::IsWindowVisible($h)) {
-            $sb = New-Object System.Text.StringBuilder 512
-            [void][MWW]::GetWindowTextW($h, $sb, 512)
-            $t = $sb.ToString()
+            # ReadText, not GetWindowTextW. The latter sends WM_GETTEXT and waits
+            # forever on a window that is not pumping, which made the first
+            # ide_state of a session time out while some other app was hung.
+            $t = [MWW]::ReadTextMs($h, 50)
             if ($t -like 'MotionWorks IEC 3 Pro*' -or $t -like 'MULTIPROG*') {
                 $rc = New-Object MWW+RECT
                 $area = 0
@@ -287,9 +290,7 @@ function Get-TrialDialog {
                 $script:trialDlg = $h
                 $cb2 = [MWW+EnumWindowsProc]{
                     param($k, $l2)
-                    $t = New-Object System.Text.StringBuilder 512
-                    [void][MWW]::GetWindowTextW($k, $t, 512)
-                    if ($t.ToString() -eq 'Use Trial') { $script:trialBtn = $k }
+                    if ([MWW]::ReadText($k) -eq 'Use Trial') { $script:trialBtn = $k }
                     return $true
                 }
                 [void][MWW]::EnumChildWindows($h, $cb2, [IntPtr]::Zero)
@@ -367,8 +368,7 @@ function Get-IdeDialogs {
 
         $buttons = New-Object System.Collections.ArrayList
         $texts = New-Object System.Collections.ArrayList
-        $t = New-Object System.Text.StringBuilder 512
-        [void][MWW]::GetWindowTextW($h, $t, 512)
+        $title = [MWW]::ReadText($h)
         $hex = "0x{0:X}" -f ([int64]$h)
         $script:dialogHwnds[$hex] = $h
         $script:curDlgHex = $hex
@@ -405,7 +405,7 @@ function Get-IdeDialogs {
 
         [void]$found.Add([ordered]@{
             handle  = $hex
-            title   = $t.ToString()
+            title   = $title
             message = (($texts | Select-Object -Unique) -join "`n")
             buttons = $buttons
             enabled = [MWW]::IsWindowEnabled($h)
@@ -430,9 +430,7 @@ function Get-IdeState {
     }
     $t = ''
     if ($w) {
-        $sb = New-Object System.Text.StringBuilder 512
-        [void][MWW]::GetWindowTextW([IntPtr]$w, $sb, 512)
-        $t = $sb.ToString()
+        $t = [MWW]::ReadText([IntPtr]$w)
     }
     return [ordered]@{
         ide_running  = [bool]$w
@@ -528,11 +526,158 @@ function Connect-App {
         $script:App = $null
     }
     if (-not (Get-IdeWindow)) {
+        # A freshly launched IDE has a live Mwt process before it has a top-level window,
+        # and the coding loop closes and restarts the IDE constantly. Polling while the
+        # process exists turns "start_ide then open" from a spurious refusal into a wait.
+        # When no Mwt process exists there is genuinely no IDE, and the refusal stands at
+        # once rather than making every request pay a timeout.
+        $deadline = (Get-Date).AddSeconds(20)
+        while ((Get-Date) -lt $deadline -and -not (Get-IdeWindow) -and (Get-Process -Name Mwt -ErrorAction SilentlyContinue)) {
+            Start-Sleep -Milliseconds 400
+        }
+        if (Get-IdeWindow) { Log 'IDE window appeared while waiting for a freshly started IDE' }
+    }
+    if (-not (Get-IdeWindow)) {
         throw "no running MotionWorks IDE window; refusing to instantiate (that would launch a new IDE and a trial licence permits only one instance). Use the 'start_ide' verb to launch one deliberately."
     }
     $script:App = New-Object -ComObject Ade.Application.550
     Log "connected: Version=$($script:App.Version)"
     return $script:App
+}
+
+function Normalize-MwPath([string]$path) {
+    if ([string]::IsNullOrWhiteSpace($path)) { return '' }
+    try { return [IO.Path]::GetFullPath($path).TrimEnd('\') } catch { return $path.Trim().TrimEnd('\') }
+}
+
+function Set-RequestScope($req) {
+    $verb = [string]$req.verb
+# Scope is supplied for EACH request, never inherited from the last chat.
+$script:WorkspaceRoot = $null
+$script:StageRoot = ''
+if ($verb -notin @('ping', 'stop')) {
+    if ([string]::IsNullOrWhiteSpace([string]$req.workspace) -or
+        -not [IO.Path]::IsPathRooted([string]$req.workspace)) {
+        throw 'REFUSED: the bridge request has no absolute session workspace.'
+    }
+    Assert-NoLinkedPath ([string]$req.workspace)
+    $script:WorkspaceRoot = Normalize-MwPath ([string]$req.workspace)
+    $script:StageRoot = Join-Path $script:WorkspaceRoot '.motionworks\stage'
+    Assert-NoLinkedPath $StageRoot
+    if (-not ((Normalize-MwPath ([string]$req.stage_root)).Equals((Normalize-MwPath $StageRoot), [StringComparison]::OrdinalIgnoreCase))) {
+        throw 'REFUSED: bridge stage does not match the request workspace.'
+    }
+}
+}
+
+function Assert-NoLinkedPath([string]$path) {
+    $cursor = [IO.Path]::GetFullPath($path)
+    while ($cursor) {
+        if (Test-Path -LiteralPath $cursor) {
+            $item = Get-Item -LiteralPath $cursor -Force -ErrorAction Stop
+            if ($item.Attributes -band [IO.FileAttributes]::ReparsePoint) {
+                throw "REFUSED: linked path cannot be used by the IDE bridge: $cursor"
+            }
+        }
+        $parent = [IO.Path]::GetDirectoryName($cursor)
+        if ($parent -eq $cursor) { break }
+        $cursor = $parent
+    }
+}
+
+function Test-InsideWorkspace([string]$path) {
+    if ([string]::IsNullOrWhiteSpace($path) -or -not $script:WorkspaceRoot) { return $false }
+    Assert-NoLinkedPath $path
+    $full = Normalize-MwPath $path
+    $root = Normalize-MwPath $script:WorkspaceRoot
+    return ($full.Equals($root, [StringComparison]::OrdinalIgnoreCase) -or
+        $full.StartsWith($root + '\', [StringComparison]::OrdinalIgnoreCase))
+}
+
+function Test-InsideStage([string]$path) {
+    if (-not (Test-InsideWorkspace $path)) { return $false }
+    $full = Normalize-MwPath $path
+    $root = Normalize-MwPath $StageRoot
+    if (-not $full -or -not $root) { return $false }
+    return ($full.Equals($root, [StringComparison]::OrdinalIgnoreCase) -or
+            $full.StartsWith($root + '\', [StringComparison]::OrdinalIgnoreCase))
+}
+
+function Test-SameProject([string]$active, [string]$requested) {
+    $a = Normalize-MwPath $active
+    $r = Normalize-MwPath $requested
+    if (-not $a -or -not $r) { return $false }
+    $bare = {
+        param($p)
+        if ($p.EndsWith('.mwt', [StringComparison]::OrdinalIgnoreCase)) { return $p.Substring(0, $p.Length - 4) }
+        return $p
+    }
+    $aBare = & $bare $a
+    $rBare = & $bare $r
+    return $aBare.Equals($rBare, [StringComparison]::OrdinalIgnoreCase)
+}
+
+function Get-MwSha256([string]$path) {
+    $sha = [System.Security.Cryptography.SHA256]::Create()
+    $stream = [System.IO.File]::OpenRead($path)
+    try { return [System.BitConverter]::ToString($sha.ComputeHash($stream)).Replace('-', '') }
+    finally { $stream.Dispose(); $sha.Dispose() }
+}
+
+function Get-OpenProjectPath($app) {
+    try {
+        if (-not $app.IsProjectOpen()) { return $null }
+        $name = [string]$app.ActiveProject.FullName
+        if ([string]::IsNullOrWhiteSpace($name)) { return $null }
+        return $name
+    } catch { return $null }
+}
+
+# Every live IDE verb that compiles, saves, or reads the open project calls this.
+# A project outside stage/ is the wrong project — often one MotionWorks restored,
+# or one the .mwt wrapper still pointed at — and it is not edited from here.
+function Assert-ProvenCopy([string]$path) {
+    # A directory under stage/ is not provenance. mw_ide_stage writes <name>.identity.json
+    # with the workspace source. Compile and save refuse a copy that has none.
+    $full = Normalize-MwPath $path
+    if ($full.EndsWith('.mwt', [StringComparison]::OrdinalIgnoreCase)) {
+        $full = $full.Substring(0, $full.Length - 4)
+    }
+    $name = [IO.Path]::GetFileName($full)
+    $ident = Join-Path (Normalize-MwPath $StageRoot) ($name + '.identity.json')
+    Assert-NoLinkedPath $ident
+    if (-not (Test-Path -LiteralPath $ident)) {
+        throw "REFUSED: '$path' has no identity file. Stage it from the workspace with mw_ide_stage. A project dropped into stage is not compiled or saved."
+    }
+    try { $raw = Get-Content -LiteralPath $ident -Raw -Encoding UTF8 | ConvertFrom-Json } catch {
+        throw "REFUSED: could not read the identity for '$name'."
+    }
+    if ([string]::IsNullOrWhiteSpace([string]$raw.source)) {
+        throw "REFUSED: staged project '$name' has no recorded source. Stage it again from the workspace project before compiling or saving it."
+    }
+    if (-not (Test-InsideStage $path) -or
+        -not (Test-InsideWorkspace ([string]$raw.source)) -or
+        -not (Test-InsideWorkspace ([string]$raw.source_directory)) -or
+        -not ((Normalize-MwPath ([string]$raw.workspace)).Equals((Normalize-MwPath $script:WorkspaceRoot), [StringComparison]::OrdinalIgnoreCase)) -or
+        -not (Test-SameProject ([string]$raw.staged_mwt) $path) -or
+        -not (Test-SameProject ([string]$raw.staged_directory) $path) -or
+        -not (Test-SameProject ([string]$raw.bound_to) $path)) {
+        throw "REFUSED: project identity does not belong to this request's workspace."
+    }
+
+}
+
+function Assert-StagedOpen($app, [string]$what) {
+    $path = Get-OpenProjectPath $app
+    if (-not $path) { throw 'no project is open in the IDE' }
+    if (-not (Test-InsideStage $path)) {
+        throw ("REFUSED: {0} would act on '{1}', which is outside the staging root '{2}'. " +
+               "That is not the staged workspace copy. Close it, or open the staged project " +
+               "with mw_ide_open. A program outside the workspace can be read with " +
+               "mw_code_read_st { reference: true } and is never opened or edited here.") -f $what, $path, $StageRoot
+    }
+    Assert-ProvenCopy $path
+    return $path
 }
 
 Log "bridge started pid=$PID bits=$([IntPtr]::Size * 8) stage=$StageRoot"
@@ -551,11 +696,12 @@ while ($true) {
 
     $data = $null; $err = $null; $ok = $false
     try {
+        Set-RequestScope $req
         switch ($verb) {
 
             'ping' {
                 $ok = $true
-                $data = [ordered]@{ alive = $true; ide_window = (Get-IdeWindow -ne $null) }
+                $data = [ordered]@{ alive = $true; workspace_protocol = 3; ide_window = (Get-IdeWindow -ne $null) }
             }
 
             'stop' {
@@ -576,12 +722,15 @@ while ($true) {
                 $isOpen = $null; $activeName = $null
                 try { $isOpen = $app.IsProjectOpen() } catch { $isOpen = $null }
                 if ($isOpen) { try { $activeName = $app.ActiveProject.FullName } catch { } }
+                $inStage = $false
+                if ($activeName) { $inStage = Test-InsideStage $activeName }
                 $ok = $true
                 $data = [ordered]@{
                     version         = [string]$app.Version
                     ide_window      = ("0x{0:X}" -f ([int64]$ideW))
                     is_project_open = $isOpen
                     active_project  = $activeName
+                    in_stage        = [bool]$inStage
                 }
             }
 
@@ -597,11 +746,35 @@ while ($true) {
                 $swOpen = [Diagnostics.Stopwatch]::StartNew()
                 $full = [IO.Path]::GetFullPath($path)
                 $stageFull = [IO.Path]::GetFullPath($StageRoot)
-                if (-not $full.StartsWith($stageFull, [StringComparison]::OrdinalIgnoreCase)) {
+                if (-not (Test-InsideStage $full)) {
                     throw "REFUSED: '$full' is outside the staging root '$stageFull'. Only staged copies may be opened."
                 }
                 if (-not (Test-Path $full)) { throw "project not found: $full" }
+                Assert-ProvenCopy $full
+                $digest = Get-MwSha256 $full
+                if (-not $req.wrapper_sha256 -or $digest -ne [string]$req.wrapper_sha256) {
+                    throw 'REFUSED: wrapper binding must be verified by mw_ide_open before opening.'
+                }
                 $app = Connect-App
+                # A project already in the window is not the one this call asked for until
+                # it is. An unmodified foreign project is closed without saving so the staged
+                # copy can take its place. Unsaved changes on that other project are left alone.
+                $dismissed = $null
+                $prior = Get-OpenProjectPath $app
+                if ($prior -and -not (Test-SameProject $prior $full)) {
+                    $modified = $false
+                    try { $modified = [bool]$app.ActiveProject.IsModified } catch { }
+                    if ($modified) {
+                        throw "REFUSED: the IDE already has '$prior' open with unsaved changes. That project was left untouched. Save or close it in MotionWorks before opening the staged project '$full'."
+                    }
+                    try {
+                        $app.ActiveProject.Close($false)
+                        $dismissed = $prior
+                        Log "closed other project before open: $prior"
+                    } catch {
+                        throw "REFUSED: the IDE has '$prior' open and it could not be closed ($($_.Exception.Message)). The staged project '$full' was not opened."
+                    }
+                }
                 # From Ade.tlb: OpenProject(Name, ConfirmConvert). ConfirmConvert=$false
                 # suppresses the conversion prompt, which would otherwise block an
                 # unattended flow on a modal dialog nobody is there to answer.
@@ -675,7 +848,7 @@ while ($true) {
                         Start-Sleep -Seconds 2
                     }
                 }
-                Log "open attempt(s)=$pass opened=$opened elapsed=$([Math]::Round($swOpen.Elapsed.TotalSeconds,1))s"
+                Log "open attempt(s)=$pass opened=$opened elapsed=$([Math]::Round($swOpen.Elapsed.TotalSeconds,1))s requested=$full"
                 if (-not $opened) {
                     if ($watcher) { try { Stop-Process -Id $watcher.Id -Force -ErrorAction SilentlyContinue } catch { } }
                     throw "OpenProject never succeeded within 60s; last error: $lastErr"
@@ -700,8 +873,24 @@ while ($true) {
                 if ($watcher) {
                     try { Stop-Process -Id $watcher.Id -Force -ErrorAction SilentlyContinue; Log "dialog watcher stopped" } catch { }
                 }
-                $ok = [bool]$verified
-                $data = [ordered]@{ requested = $full; is_project_open = $verified; active_project = $activeName }
+                $matches = Test-SameProject $activeName $full
+                $inStage = Test-InsideStage $activeName
+                Log "open loaded active=$activeName matches=$matches inStage=$inStage"
+                if ($verified -and (-not $matches -or -not $inStage)) {
+                    try { $app.ActiveProject.Close($false); Log "closed mismatched project $activeName" } catch {
+                        Log "could not close mismatched project: $($_.Exception.Message)"
+                    }
+                    throw "REFUSED: asked to open '$full' but the IDE loaded '$activeName'. That is not the staged workspace copy, so it was closed without saving."
+                }
+                $ok = [bool]$verified -and $matches -and $inStage
+                $data = [ordered]@{
+                    requested          = $full
+                    is_project_open    = [bool]$verified
+                    active_project     = $activeName
+                    matches_request    = [bool]$matches
+                    in_stage           = [bool]$inStage
+                    dismissed_project  = $dismissed
+                }
                 if (-not $verified) {
                     $blocking = @(Get-IdeDialogs)
                     if ($blocking.Count -gt 0) {
@@ -713,7 +902,7 @@ while ($true) {
 
             'pous' {
                 $app = Connect-App
-                if (-not $app.IsProjectOpen()) { throw 'no project is open in the IDE' }
+                [void](Assert-StagedOpen $app $verb)
                 $col = $app.ActiveProject.Pous
                 $items = @()
                 for ($i = 1; $i -le $col.Count; $i++) {
@@ -734,7 +923,7 @@ while ($true) {
             # build into 125 unresolved-external errors while the files are provably fine.
             'task_model' {
                 $app = Connect-App
-                if (-not $app.IsProjectOpen()) { throw 'no project is open in the IDE' }
+                [void](Assert-StagedOpen $app $verb)
                 $tasks = [ordered]@{}
                 $taskNames = @()
                 # The resource lookup is the one call here that can fail outright, and it used to
@@ -794,10 +983,11 @@ while ($true) {
 
             'create_task' {
                 $app = Connect-App
-                if (-not $app.IsProjectOpen()) { throw 'no project is open in the IDE' }
+                [void](Assert-StagedOpen $app $verb)
                 $name = [string]$req.name
                 $kind = [string]$req.kind
                 if ([string]::IsNullOrWhiteSpace($name)) { throw 'create_task requires "name"' }
+                if ($name.Length -gt 7) { throw "MotionWorks IEC task names are limited to 7 characters; '$name' has $($name.Length)." }
                 if ([string]::IsNullOrWhiteSpace($kind)) { $kind = 'CYCLIC' }
 
                 $resource = $app.ActiveProject.GetObjectByLogicalName(
@@ -839,7 +1029,7 @@ while ($true) {
 
             'delete_task' {
                 $app = Connect-App
-                if (-not $app.IsProjectOpen()) { throw 'no project is open in the IDE' }
+                [void](Assert-StagedOpen $app $verb)
                 $name = [string]$req.name
                 if ([string]::IsNullOrWhiteSpace($name)) { throw 'delete_task requires "name"' }
 
@@ -883,7 +1073,7 @@ while ($true) {
 
             'assign_pou' {
                 $app = Connect-App
-                if (-not $app.IsProjectOpen()) { throw 'no project is open in the IDE' }
+                [void](Assert-StagedOpen $app $verb)
                 $taskName = [string]$req.task
                 $pouName = [string]$req.pou
                 $instName = $req.instance
@@ -924,7 +1114,7 @@ while ($true) {
 
             'unassign_pou' {
                 $app = Connect-App
-                if (-not $app.IsProjectOpen()) { throw 'no project is open in the IDE' }
+                [void](Assert-StagedOpen $app $verb)
                 $taskName = [string]$req.task
                 $pouName = [string]$req.pou
                 if ([string]::IsNullOrWhiteSpace($taskName)) { throw 'unassign requires "task"' }
@@ -966,7 +1156,7 @@ while ($true) {
 
             'save' {
                 $app = Connect-App
-                if (-not $app.IsProjectOpen()) { throw 'no project is open in the IDE' }
+                [void](Assert-StagedOpen $app $verb)
                 $swSave = [Diagnostics.Stopwatch]::StartNew()
                 $app.ActiveProject.Save()
                 $swSave.Stop()
@@ -982,7 +1172,7 @@ while ($true) {
 
             'compile_state' {
                 $app = Connect-App
-                if (-not $app.IsProjectOpen()) { throw 'no project is open in the IDE' }
+                [void](Assert-StagedOpen $app $verb)
                 $ok = $true
                 $data = [ordered]@{
                     is_compiled = [bool]$app.ActiveProject.IsCompiled
@@ -999,6 +1189,7 @@ while ($true) {
             # is not reachable programmatically at all.
             'make'      { $mode = 1 }
             'build'     { $mode = 2 }
+            'rebuild'   { $mode = $null }
             'patch'     { $mode = 3 }
             'worksheet' { $mode = 4 }
             'datatypes' { $mode = 5 }
@@ -1020,7 +1211,9 @@ while ($true) {
             'command' {
                 $name = [string]$req.name
                 if ([string]::IsNullOrWhiteSpace($name)) { throw 'command requires "name"' }
+                if ($name -ne 'adeCmdBuildRebuildProject') { throw 'Only the offline Rebuild command is allowed; use the dedicated rebuild tool' }
                 $app = Connect-App
+                [void](Assert-StagedOpen $app 'command')
                 $cid = $app.GetIdOfCommand($name)
                 if ($cid -eq 0) { throw "unknown command '$name' (GetIdOfCommand returned 0)" }
                 $app.ExecuteCommand($cid)
@@ -1042,7 +1235,7 @@ while ($true) {
             # Optional "pou" narrows to one POU; omitted reads all of them.
             'variables' {
                 $app = Connect-App
-                if (-not $app.IsProjectOpen()) { throw 'no project is open in the IDE' }
+                [void](Assert-StagedOpen $app $verb)
                 $want = [string]$req.pou
                 $pous = $app.ActiveProject.Pous
                 $result = @()
@@ -1091,6 +1284,12 @@ while ($true) {
             # that starts the IDE - and Mwt.exe is launched with no project, then
             # `open` loads one, because a bare launch has no project services.
             'start_ide' {
+                $launchProject = [string]$req.path
+                Assert-ProvenCopy $launchProject
+                $digest = Get-MwSha256 $launchProject
+                if (-not $req.wrapper_sha256 -or $digest -ne [string]$req.wrapper_sha256) {
+                    throw 'REFUSED: startup requires a verified workspace wrapper.'
+                }
                 $exe = [string]$req.exe
                 if ([string]::IsNullOrWhiteSpace($exe)) {
                     $exe = 'C:\Program Files (x86)\Yaskawa\MotionWorks IEC 3 Pro\Mwt.exe'
@@ -1100,7 +1299,7 @@ while ($true) {
                 $trialSeen = $false
                 if (-not $already) {
                     if (-not (Test-Path $exe)) { throw "Mwt.exe not found at $exe" }
-                    Start-Process -FilePath $exe | Out-Null
+                    Start-Process -FilePath $exe -ArgumentList ('"' + $launchProject + '"') -WindowStyle Hidden | Out-Null
                     # 300s, not 120s: measured on this machine the IDE can take
                     # well over two minutes to show its window (licence check and
                     # CodeMeter are part of startup). A shorter wait made a merely
@@ -1137,14 +1336,43 @@ while ($true) {
                 # Force a fresh connection: the previous one pointed at the old process.
                 $script:App = $null
                 $app = Connect-App
+                # A bare Mwt.exe launch restores the last project. That project is
+                # often outside the workspace. When WE just launched the IDE, close
+                # it without saving so the window is not left on it. An IDE that was
+                # already running is left as the user had it, and named so the caller
+                # can see it is not the staged copy.
+                $dismissed = $null
+                $foreign = $null
+                $openPath = Get-OpenProjectPath $app
+                Log "start_ide already=$already openPath=$openPath"
+                # A bare launch restores the last project. That is how an outside
+                # project appeared in the window and then got built. When WE just
+                # launched, close whatever came up, in stage or not.
+                if ($openPath -and -not $already -and -not (Test-SameProject $openPath $launchProject)) {
+                    try {
+                        $app.ActiveProject.Close($false)
+                        $dismissed = $openPath
+                        Log "dismissed auto-opened project $openPath"
+                    } catch {
+                        $foreign = $openPath
+                        Log "could not dismiss auto-opened project: $($_.Exception.Message)"
+                    }
+                } elseif ($openPath -and -not (Test-InsideStage $openPath)) {
+                    $foreign = $openPath
+                }
+                if ($foreign) {
+                    throw "REFUSED: MotionWorks has an unrelated project open: $foreign. Save or close it manually; no project operation was performed."
+                }
                 $ok = $true
                 $data = [ordered]@{
-                    already_running = $already
-                    ide_window      = ("0x{0:X}" -f ([int64]$w))
-                    version         = [string]$app.Version
-                    launched_exe    = $exe
-                    trial_dialog    = $trialSeen
-                    trial_answered  = $trialAnswered
+                    already_running    = $already
+                    ide_window         = ("0x{0:X}" -f ([int64]$w))
+                    version            = [string]$app.Version
+                    launched_exe       = $exe
+                    trial_dialog       = $trialSeen
+                    trial_answered     = $trialAnswered
+                    dismissed_project  = $dismissed
+                    foreign_project    = $foreign
                 }
             }
 
@@ -1339,6 +1567,7 @@ while ($true) {
                 $name = if ($req.pane) { [string]$req.pane } else { 'Errors' }
                 $limit = if ($req.limit) { [int]$req.limit } else { 200 }
                 $app = Connect-App
+                [void](Assert-StagedOpen $app 'read_output')
                 # Activate first: a pane that is not showing has no visible list.
                 try {
                     $ow = $app.OutputWindows
@@ -1364,9 +1593,7 @@ while ($true) {
                     # dock pane), not a top-level window, so EnumWindows never sees it.
                     $cbTop = [MWW+EnumWindowsProc]{
                         param($h, $l)
-                        $t = New-Object System.Text.StringBuilder 128
-                        [void][MWW]::GetWindowTextW($h, $t, 128)
-                        $title = $t.ToString()
+                        $title = [MWW]::ReadText($h)
                         if ($title -eq 'Message Window' -or $title -eq 'Messages') { $script:msgWin = $h }
                         return $true
                     }
@@ -1424,32 +1651,25 @@ while ($true) {
             # process enumeration is unreliable in this environment and omits Mwt
             # entirely, which would make this report success while nothing closed.
             'close_ide' {
-                # The cached Application can describe a project that no longer
-                # exists once this has run; drop it so the next verb reconnects.
-                $script:App = $null
-                $psapi = @'
-using System; using System.Runtime.InteropServices;
-public class KILLW {
-  [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr h, out uint pid);
-}
-'@
-                try { Add-Type -TypeDefinition $psapi -ErrorAction Stop } catch { }
-                $deadline = (Get-Date).AddSeconds(40)
-                $killed = @()
-                while ((Get-IdeWindow) -and (Get-Date) -lt $deadline) {
-                    $h = Get-IdeWindow
-                    $procId = [uint32]0
-                    [void][KILLW]::GetWindowThreadProcessId([IntPtr]$h, [ref]$procId)
-                    if ($procId -gt 0 -and ($killed -notcontains $procId)) {
-                        $killed += $procId
-                        try { Stop-Process -Id $procId -Force -ErrorAction Stop } catch { }
+                if (-not (Get-IdeWindow)) {
+                    $ok = $true; $data = @{ closed = $true; window_remaining = $false }
+                } else {
+                    $app = Connect-App
+                    [void](Assert-StagedOpen $app 'close_ide')
+                    $app.ActiveProject.Save()
+                    # WM_CLOSE permits native save/modal handling; never kill the process.
+                    [void][MWW]::PostMessage([IntPtr](Get-IdeWindow), 0x0010, [IntPtr]::Zero, [IntPtr]::Zero)
+                    $deadline = (Get-Date).AddSeconds(15)
+                    while ((Get-IdeWindow) -and (Get-Date) -lt $deadline) {
+                        if (@(Get-IdeDialogs).Count -gt 0) { break }
+                        Start-Sleep -Milliseconds 300
                     }
-                    Start-Sleep -Milliseconds 600
+                    $still = [bool](Get-IdeWindow)
+                    $ok = -not $still
+                    $data = @{ closed = (-not $still); window_remaining = $still }
+                    if ($still) { $err = 'IDE close is pending; inspect ide_state and resolve the native dialog before editing' }
+                    if (-not $still) { $script:App = $null }
                 }
-                $still = [bool](Get-IdeWindow)
-                $ok = (-not $still)
-                $data = [ordered]@{ closed = (-not $still); killed_pids = $killed; window_remaining = $still }
-                if ($still) { $err = 'the IDE window is still present after 40s' }
             }
 
             # Capture the IDE window's OWN content.
@@ -1535,171 +1755,74 @@ public class KILLW {
             }
         }
 
-        if ($verb -in @('make', 'build', 'patch', 'worksheet', 'datatypes')) {
+        if ($verb -in @('make', 'build', 'rebuild', 'patch', 'worksheet', 'datatypes')) {
             $app = Connect-App
-            if (-not $app.IsProjectOpen()) { throw 'no project is open in the IDE' }
+            [void](Assert-StagedOpen $app $verb)
 
-            # Snapshot the project container BEFORE compiling.
-            #
-            # A FAILING build damages the project. Measured under control on a pristine
-            # copy: a successful build left all five tasks alone, while a build that
-            # returned is_compiled=false dropped the `Start` task and its
-            # TopCutterInitialize assignment out of PROJECT.TRE - with the same check
-            # taken immediately before the build showing them present. So the IDE
-            # rewrites the tree when a compile fails and loses assignments with it.
-            #
-            # That is almost certainly what "the first attempt corrupted the project"
-            # turned out to be: not a code write, but a build that failed. Capturing
-            # the container here means the damage can be detected and undone instead of
-            # discovered later by a surprised user.
-            $projDir = $null; $treeBefore = $null; $registriesBefore = @{}; $filesBefore = @{}
-            try {
-                $mwt = [string]$app.ActiveProject.FullName
-                if ($mwt -and (Test-Path $mwt)) {
-                    $cand = Join-Path ([IO.Path]::GetDirectoryName($mwt)) ([IO.Path]::GetFileNameWithoutExtension($mwt))
-                    $srcFile = Join-Path $cand 'src.st1'
-                    if (Test-Path $srcFile) {
-                        $projDir = $cand
-                        $treeBefore = [IO.File]::ReadAllBytes($srcFile)
-                    }
-                    # Snapshot the node registries too.
-                    #
-                    # MEASURED: a build that FAILS rewrites NODES.LST from its internal
-                    # model and TRUNCATES it at the last unit it managed to process. On a
-                    # project with five tasks, a failed build took the resource NODES.LST
-                    # from 802 bytes to 499, deleting TASK Start, PROGRAM
-                    # TopCutterInitialize, VAR_GLOBALS and IO/CONFIGURATION. Losing
-                    # VAR_GLOBALS is what makes every later build report "No matching
-                    # global variable found", so one failure cascades into a project that
-                    # looks destroyed.
-                    #
-                    # Both copies matter: a project has NODES.LST at the root and in the
-                    # resource directory, and the failed build truncated both.
-                    Get-ChildItem -Path $cand -Filter 'NODES.LST' -Recurse -File -ErrorAction SilentlyContinue |
-                        ForEach-Object { $registriesBefore[$_.FullName] = [IO.File]::ReadAllBytes($_.FullName) }
-                }
-            } catch { Log "could not snapshot the tree before compiling: $($_.Exception.Message)" }
-
+            $compiledBefore = [bool]$app.ActiveProject.IsCompiled
             $sw = [Diagnostics.Stopwatch]::StartNew()
             $accepted = $false; $lastErr = $null
             # A compile is refused while the compiler is busy ("Operation not
             # possible while compiler is running."), so retry rather than sleep a
             # fixed time.
             while ($sw.Elapsed.TotalSeconds -lt 120) {
-                try { $app.ActiveProject.Compile($mode); $accepted = $true; break }
+                try {
+                    if ($verb -eq 'rebuild') {
+                        $cid = [int]$app.GetIdOfCommand('adeCmdBuildRebuildProject')
+                        if ($cid -ne 36570) { throw 'This IDE does not expose the verified Rebuild command' }
+                        $window = Get-IdeWindow
+                        if (-not $window) { throw 'No IDE window for Rebuild' }
+                        $accepted = [MWW]::PostMessage([IntPtr]$window, 0x0111, [IntPtr]$cid, [IntPtr]::Zero)
+                        if (-not $accepted) { throw 'Rebuild menu request was not posted' }
+                    } else { $app.ActiveProject.Compile($mode); $accepted = $true }
+                    break
+                }
                 catch { $lastErr = $_.Exception.Message; Start-Sleep -Milliseconds 750 }
             }
             if (-not $accepted) { throw "Compile($mode) never accepted within 120s; last error: $lastErr" }
 
-            # Completion detection by POLLING IsCompiled.
-            #
-            # The earlier version re-offered Compile() and treated ACCEPTANCE as proof
-            # the previous build had finished. That is wrong: re-offering starts
-            # ANOTHER BUILD, so the IsCompiled read immediately afterwards is false -
-            # and this verb reported "COMPILE FAILED" for a project that was in fact
-            # compiling cleanly. Measured on the same IDE, same project:
-            #     IsCompiled = True, IsModified = False, Errors pane = 0 errors
-            # while this verb still said COMPILE FAILED. A false negative here is the
-            # worst possible bug for a verification tool, because it makes working
-            # code look broken.
-            #
-            # IsCompiled is the authority: a successful compile sets it true, a failed
-            # one leaves it false. Poll it and take the first true.
+            # A cached IsCompiled=true is not proof that this request completed.
+            # Only a false-to-true transition observed for this invocation settles it.
             $isCompiled = $false
+            $observedPending = -not $compiledBefore
+            $alreadyUpToDate = $false
+            $settle = [Diagnostics.Stopwatch]::StartNew()
             $swPoll = [Diagnostics.Stopwatch]::StartNew()
             while ($swPoll.Elapsed.TotalSeconds -lt 90) {
                 Start-Sleep -Milliseconds 400
-                try { if ([bool]$app.ActiveProject.IsCompiled) { $isCompiled = $true; break } } catch { }
-            }
-            $swPoll.Stop()
-            # `settled` means only "a verdict was reached". The three fields together
-            # keep the distinction the tool documents:
-            #   accepted=false                  -> the compile never ran
-            #   accepted=true, is_compiled=false -> compiled and FAILED
-            #   accepted=true, is_compiled=true  -> compiled cleanly
-            # A third outcome exists, and it is the one an agent most needs to see.
-            #
-            # Polling IsCompiled gives two states - true, or still false when the window
-            # closes. But "still false" covers two very different situations: the compiler
-            # FINISHED and rejected the code, or it NEVER FINISHED. IsModified separates
-            # them. Measured on a project that would not compile after a declaration was
-            # added: IsCompiled stayed false and IsModified stayed TRUE for 135+ seconds
-            # with an EMPTY Errors pane - the compiler was still working, not reporting a
-            # verdict. Calling that "compiled and failed" sends an agent hunting for
-            # errors that are not there.
-            #
-            #   is_compiled=false, is_modified=false -> compiled and REJECTED (read Errors)
-            #   is_compiled=false, is_modified=true  -> STALLED (the pane proves nothing)
-            $stalled = $false
-            try {
-                if (-not $isCompiled -and [bool]$app.ActiveProject.IsModified) { $stalled = $true }
-            } catch { }
-            $settled = -not $stalled
-
-            # Undo the damage a failed build does to the project tree.
-            #
-            # The IDE rewrites the container when a compile fails and drops task
-            # assignments while doing it. Restoring the pre-build bytes puts the project
-            # back exactly as the agent left it, so a failed build costs the agent a
-            # verdict and nothing else. Only ever applied to the STAGED copy, and only
-            # after a failed build, so a successful build is never second-guessed.
-            $treeRepaired = $false
-            if (-not $isCompiled -and $projDir -and $treeBefore) {
                 try {
-                    $srcFile = Join-Path $projDir 'src.st1'
-                    if (Test-Path $srcFile) {
-                        $now = [IO.File]::ReadAllBytes($srcFile)
-                        $same = ($now.Length -eq $treeBefore.Length)
-                        if ($same) {
-                            for ($i = 0; $i -lt $now.Length; $i++) {
-                                if ($now[$i] -ne $treeBefore[$i]) { $same = $false; break }
-                            }
+                    $currentCompiled = [bool]$app.ActiveProject.IsCompiled
+                    if (-not $currentCompiled) { $observedPending = $true }
+                    if ($currentCompiled -and $observedPending) { $isCompiled = $true; break }
+                    # A project that was ALREADY compiled and records no modification has nothing
+                    # to compile, so IsCompiled never drops and the transition test above can never
+                    # be satisfied: a successful no-op Make waited the full 90 seconds and reported
+                    # "completion unverified" while the project was in fact compiled and unmodified.
+                    # Holding the condition for two seconds separates a genuine no-op from the
+                    # instant before a real compile flips the flag.
+                    if ($currentCompiled -and $compiledBefore -and -not [bool]$app.ActiveProject.IsModified) {
+                        if ($settle.Elapsed.TotalSeconds -ge 2) {
+                            $isCompiled = $true; $alreadyUpToDate = $true; break
                         }
-                        if (-not $same) {
-                            [IO.File]::WriteAllBytes($srcFile, $treeBefore)
-                            $treeRepaired = $true
-                            Log "failed build rewrote PROJECT.TRE; restored the pre-build container"
-                        }
-                    }
-                } catch { Log "tree repair after a failed build failed: $($_.Exception.Message)" }
+                    } else { $settle.Restart() }
+                } catch { }
             }
+            $settled = $isCompiled
+            $stalled = -not $settled
 
-            # Undo the registry truncation a failed build causes.
-            #
-            # This runs on the same condition as the tree repair - only after a FAILED
-            # build - because a successful build is entitled to rewrite these files.
-            $registriesRepaired = @()
-            if (-not $isCompiled -and $registriesBefore.Count -gt 0) {
-                foreach ($path in $registriesBefore.Keys) {
-                    try {
-                        if (-not (Test-Path $path)) { continue }
-                        $now = [IO.File]::ReadAllBytes($path)
-                        $was = $registriesBefore[$path]
-                        $same = ($now.Length -eq $was.Length)
-                        if ($same) {
-                            for ($i = 0; $i -lt $now.Length; $i++) {
-                                if ($now[$i] -ne $was[$i]) { $same = $false; break }
-                            }
-                        }
-                        if (-not $same) {
-                            [IO.File]::WriteAllBytes($path, $was)
-                            $registriesRepaired += [IO.Path]::GetFileName($path)
-                            Log "failed build rewrote $([IO.Path]::GetFileName($path)) ($($was.Length) -> $($now.Length) bytes); restored it"
-                        }
-                    } catch { Log "registry repair failed for $path : $($_.Exception.Message)" }
-                }
-            }
+            # Never restore disk files underneath the running IDE. An offline
+            # transaction journal is the recovery source after a verified close.
 
             $ok = $true
             $data = [ordered]@{
-                mode          = $verb
-                compile_type  = $mode
-                accepted      = $accepted
-                settled       = $settled
-                stalled       = $stalled
-                is_compiled   = $isCompiled
-                is_modified   = $(try { [bool]$app.ActiveProject.IsModified } catch { $null })
-                elapsed_s     = [Math]::Round($sw.Elapsed.TotalSeconds, 1)
+                mode            = $verb
+                compile_type    = $mode
+                accepted        = $accepted
+                settled         = $settled
+                stalled         = $stalled
+                is_compiled     = $isCompiled
+                is_modified     = $(try { [bool]$app.ActiveProject.IsModified } catch { $null })
+                elapsed_s       = [Math]::Round($sw.Elapsed.TotalSeconds, 1)
             }
         }
     }

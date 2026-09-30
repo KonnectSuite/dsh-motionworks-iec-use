@@ -130,8 +130,9 @@ def default_backup_dir(project_root: Path) -> Path:
     Deliberately outside the project directory: a backup inside the tree would
     be picked up by MotionWorks and by later snapshots.
     """
-    return (
-        Path(os.environ.get("MOTIONWORKS_MCP_BACKUP_DIR", Path.home() / ".motionworks-iec-mcp"))
-        / "backups"
-        / project_root.name
-    )
+    from .staging import workspace_root, StagingRefused
+    workspace = workspace_root()
+    base = Path(os.environ.get("MOTIONWORKS_MCP_BACKUP_DIR", workspace / '.motionworks')).resolve()
+    if not base.is_relative_to(workspace):
+        raise StagingRefused('REFUSED: backup directory must remain inside the workspace')
+    return base / 'backups' / project_root.name

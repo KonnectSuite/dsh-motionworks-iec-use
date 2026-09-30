@@ -1,35 +1,8 @@
-"""The staging guard, in the layer that cannot be routed around.
+"""Workspace-scoped project guards shared by the file engine.
 
-WHY THIS EXISTS, AND WHY IT IS HERE.
-
-index.js already refuses a project outside the plugin's staging root - assertStaged(), and
-mw_ide_stage refuses a source outside the session's workspace. That covers everything that goes
-through the plugin's TOOLS. It does not cover the engine.
-
-Measured: the workspace at Desktop\\Arya WorkSpace holds 25-odd scripts the agent wrote for itself,
-and they call the engine DIRECTLY:
-
-    Tools/_mw_call.py     "Invoke the MotionWorks code engine directly, the same way ..."
-    Tools/_mw_call2.py    "Invoke the MotionWorks code engine directly: python mw_code.py ..."
-    Tools/_real_state.py  "Record the state of the owner's REAL MotionWorks project, ..."
-
-So the agent routed around every guard simply by not using the tools, and the owner reported, three
-times, that a project outside the workspace had been opened again. A guard that a caller can walk
-past is not a guard; it is a suggestion.
-
-The engine is the choke point. Nothing writes a POU, and nothing opens a project in the IDE, without
-coming through here - whether the caller is a tool, a script the agent wrote, or a person at a
-command line. So the rule lives here, once, and every entry point inherits it.
-
-WHAT IT REFUSES. A project root that is not inside the staging root. The staging root is derived from
-the engine's own location - <plugin>/stage - so it cannot be talked out of position by an environment
-variable, a working directory, or an argument. MOTIONWORKS_MCP_STAGE overrides it for a deployment
-that genuinely stages elsewhere, which is the same deliberate-override shape as the tool layer.
-
-WHAT IT DOES NOT DO. It does not stop a caller who is not using this engine at all. An agent that
-drives MotionWorks' COM interface with its own code is outside any plugin's reach, and no guard here
-changes that. What this guarantees is narrower and still worth having: THIS engine never writes to or
-opens anything but a staged copy.
+The host supplies the current session workspace for each child process. Missing scope
+fails closed. Staged copies live at <workspace>/.motionworks/stage and identities
+must match that workspace, source, wrapper and project directory.
 """
 from __future__ import annotations
 
@@ -38,7 +11,7 @@ from pathlib import Path
 
 from .errors import MotionWorksError
 
-#: Set to stage somewhere else on purpose. Unset, the root is derived from this file's location.
+#: Optional consistency check; it cannot relocate the workspace stage.
 STAGE_ENV = "MOTIONWORKS_MCP_STAGE"
 
 
@@ -46,16 +19,23 @@ class StagingRefused(MotionWorksError):
     """A project path outside the staging root."""
 
 
-def staging_root() -> Path:
-    """The staging root: where copies live, and the only tree this engine will touch.
+def workspace_root() -> Path:
+    value = os.environ.get("MOTIONWORKS_MCP_WORKSPACE")
+    if not value or not Path(value).is_absolute():
+        raise StagingRefused("REFUSED: no absolute session workspace was supplied to the engine.")
+    return Path(value).resolve()
 
-    Derived from the engine's own location so that no argument, environment variable or working
-    directory can move it. <plugin>/code/engine/motionworks_iec_mcp/staging.py -> <plugin>/stage
-    """
+
+def staging_root() -> Path:
+    """A private stage within the calling workspace, never the shared plugin stage."""
+    workspace = workspace_root()
+    fixed = workspace / ".motionworks" / "stage"
+    if not _inside(fixed, workspace):
+        raise StagingRefused("REFUSED: workspace stage resolves outside the workspace.")
     override = os.environ.get(STAGE_ENV)
-    if override:
-        return Path(override).resolve()
-    return Path(__file__).resolve().parents[3] / "stage"
+    if override and Path(override).resolve() != fixed.resolve():
+        raise StagingRefused("REFUSED: stage override does not match the calling workspace stage.")
+    return fixed.resolve()
 
 
 def _inside(child: Path, parent: Path) -> bool:
@@ -83,10 +63,64 @@ def assert_staged(project_root: Path | str, what: str = "project") -> Path:
         f"REFUSED: {what} '{given}' is outside the staging root '{root}'. This engine only ever "
         f"reads or writes a STAGED COPY, never a real project tree - a real tree holds the owner's "
         f"work and MotionWorks rewrites whole files, so a mistake there is not recoverable from "
-        f"here. Stage a copy first (mw_ide_stage in the plugin, or copy the project under {root} "
-        f"yourself), then point at the copy. If the caller deliberately needs another root, set "
-        f"{STAGE_ENV}."
+        f"here. Stage a copy first with mw_ide_stage, then point at the copy. "
+        f"{STAGE_ENV} cannot aim this root at a real project."
     )
+
+
+def assert_proven(project_root: Path | str) -> Path:
+    """Refuse a staged copy that mw_ide_stage did not record a source for.
+
+    A directory under stage/ is not provenance. Scripts that call this engine directly
+    used to edit whichever copy was there, including one with no recorded workspace source.
+    """
+    import json
+
+    given = assert_staged(project_root)
+    root = staging_root()
+    path = given
+    if path.suffix.lower() == ".mwt":
+        path = path.with_suffix("")
+    try:
+        rel = path.resolve().relative_to(root.resolve())
+    except ValueError as exc:
+        raise StagingRefused(
+            f"REFUSED: '{given}' is not inside the staging root '{root}'."
+        ) from exc
+    if not rel.parts:
+        raise StagingRefused(
+            f"REFUSED: '{given}' is the staging root, not a project."
+        )
+    name = rel.parts[0]
+    ident = root / f"{name}.identity.json"
+    if not ident.is_file():
+        raise StagingRefused(
+            f"REFUSED: staged project '{name}' has no identity file. Stage it from the workspace "
+            f"with mw_ide_stage. A folder copied into stage by hand is not edited."
+        )
+    try:
+        data = json.loads(ident.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise StagingRefused(f"REFUSED: could not read {ident.name}: {exc}") from exc
+    if not data.get("source"):
+        raise StagingRefused(
+            f"REFUSED: staged project '{name}' has no recorded source. Stage it again from the "
+            f"workspace project. A copy with no provenance is not edited."
+        )
+    workspace = workspace_root()
+    if (not data.get("workspace")
+            or Path(data["workspace"]).resolve() != workspace
+            or not _inside(Path(data["source"]), workspace)
+            or not _inside(Path(data.get("source_directory", data["source"])), workspace)
+            or Path(data.get("staged_directory", "")).resolve() != (root / name).resolve()
+            or Path(data.get("staged_mwt", "")).resolve() != (root / f"{name}.mwt").resolve()):
+        raise StagingRefused("REFUSED: project identity does not belong to the calling workspace.")
+    project = root / name
+    if project.is_dir():
+        for member in project.rglob("*"):
+            if not _inside(member, project):
+                raise StagingRefused(f"REFUSED: linked project member escapes the project: {member}")
+    return given
 
 
 def is_staged(project_root: Path | str) -> bool:

@@ -639,6 +639,8 @@ def _refuse_tree_assignment(action: str = 'assign') -> None:
     from .cfb import CompoundFile
     from .ide import ensure_ide_closed
 
+    from .staging import assert_proven
+    assert_proven(project_root)
     ensure_ide_closed()
 
     original = src_path.read_bytes()

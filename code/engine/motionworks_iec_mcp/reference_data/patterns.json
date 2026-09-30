@@ -1,0 +1,86 @@
+[
+  {
+    "id": "startup-initialization",
+    "title": "Explicit startup initialization",
+    "topic_ids": [
+      "initialization",
+      "task-order"
+    ],
+    "use_when": "A startup POU initializes application state through explicitly configured warm/cold system tasks.",
+    "assumptions": [
+      "G_Ready and G_State already exist as compatible resource globals.",
+      "Assign this POU to the intended startup task; retention policy is project-specific.",
+      "Do not reset retained production counters or calibration values without a requirement."
+    ],
+    "declarations": "VAR_EXTERNAL\n    G_Ready : BOOL;\n    G_State : INT;\nEND_VAR",
+    "body": "(* Startup task only: application state, no hardware commands. *)\nG_Ready := FALSE;\nG_State := INT#0;\n",
+    "checks": [
+      "Confirm the warm/cold task binding.",
+      "Set Ready only after the application has actually established its initialization conditions."
+    ]
+  },
+  {
+    "id": "request-edge",
+    "title": "Request edge with startup suppression",
+    "topic_ids": [
+      "execute",
+      "initialization"
+    ],
+    "use_when": "Generate one request pulse per deliberate false-to-true transition; suppress an already-high request on the first scan.",
+    "assumptions": [
+      "These variables are non-retained locals unless the application explicitly requires otherwise.",
+      "A request pulse is not a stop command."
+    ],
+    "declarations": "VAR\n    xRequest : BOOL := FALSE;\n    xLast : BOOL := FALSE;\n    xInitialized : BOOL := FALSE;\n    xPulse : BOOL := FALSE;\nEND_VAR",
+    "body": "xPulse := FALSE;\nIF NOT xInitialized THEN\n    xLast := xRequest;\n    xInitialized := TRUE;\nELSE\n    xPulse := xRequest AND NOT xLast;\n    xLast := xRequest;\nEND_IF;\n",
+    "checks": [
+      "Connect xRequest to the intended application request.",
+      "Call every scan of the owning cyclic task.",
+      "Reset/rearm behavior must match the consuming function block."
+    ]
+  },
+  {
+    "id": "cyclic-sequence",
+    "title": "Nonblocking two-stage handshake",
+    "topic_ids": [
+      "task-order",
+      "fb-results",
+      "initialization"
+    ],
+    "use_when": "Coordinate two application operations using completion and error inputs without waiting in a WHILE loop.",
+    "assumptions": [
+      "AckA/AckB describe the current operation, not stale completion bits.",
+      "Requests and acknowledgments are mapped to real project code separately.",
+      "Add a project-approved timeout for each wait state."
+    ],
+    "declarations": "VAR\n    Request : BOOL := FALSE;\n    AckA : BOOL := FALSE;\n    AckB : BOOL := FALSE;\n    OperationError : BOOL := FALSE;\n    ResetRequest : BOOL := FALSE;\n    StartA : BOOL := FALSE;\n    StartB : BOOL := FALSE;\n    Complete : BOOL := FALSE;\n    Fault : BOOL := FALSE;\n    State : INT := INT#0;\nEND_VAR",
+    "body": "StartA := FALSE;\nStartB := FALSE;\nComplete := FALSE;\nCASE State OF\n    0:\n        IF Request AND NOT Fault THEN State := INT#10; END_IF;\n    10:\n        StartA := TRUE;\n        IF OperationError THEN State := INT#900;\n        ELSIF AckA THEN State := INT#20; END_IF;\n    20:\n        StartB := TRUE;\n        IF OperationError THEN State := INT#900;\n        ELSIF AckB THEN State := INT#30; END_IF;\n    30:\n        Complete := TRUE;\n        IF NOT Request THEN State := INT#0; END_IF;\n    900:\n        Fault := TRUE;\n        IF ResetRequest AND NOT Request AND NOT OperationError THEN\n            Fault := FALSE;\n            State := INT#0;\n        END_IF;\nELSE\n    Fault := TRUE;\n    State := INT#900;\nEND_CASE;\n",
+    "checks": [
+      "Every wait returns control to the cyclic task.",
+      "Define timeout, abort and retry requirements.",
+      "Application request outputs are not physical safety outputs."
+    ]
+  },
+  {
+    "id": "cyclic-position-reader",
+    "title": "Cyclic Enable/Valid position reader",
+    "topic_ids": [
+      "enable",
+      "axis-id",
+      "fb-results"
+    ],
+    "use_when": "Read an existing logical axis position and latch errors without issuing motion commands.",
+    "assumptions": [
+      "Axis is an existing correctly configured global AXIS_REF.",
+      "MC_ReadActualPosition matches the installed firmware interface.",
+      "MonitorEnable is controlled by application readiness."
+    ],
+    "declarations": "VAR_EXTERNAL\n    Axis : AXIS_REF;\nEND_VAR\nVAR\n    fbPosition : MC_ReadActualPosition;\n    MonitorEnable : BOOL := FALSE;\n    PositionValid : BOOL := FALSE;\n    LastPosition : LREAL := LREAL#0.0;\n    ReadFault : BOOL := FALSE;\n    LastErrorID : UINT := UINT#0;\nEND_VAR",
+    "body": "fbPosition(Axis := Axis, Enable := MonitorEnable);\nPositionValid := fbPosition.Valid;\nIF PositionValid THEN\n    LastPosition := fbPosition.Position;\nEND_IF;\nIF fbPosition.Error THEN\n    ReadFault := TRUE;\n    LastErrorID := fbPosition.ErrorID;\nEND_IF;\n",
+    "checks": [
+      "Call cyclically; do not equate a retained last position with current validity.",
+      "Define explicit fault acknowledgment separately.",
+      "Check logical AxisNum and user units before consuming position."
+    ]
+  }
+]

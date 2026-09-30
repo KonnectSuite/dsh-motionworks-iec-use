@@ -165,9 +165,11 @@ def verb_write_st(req):
 
     root = Path(req["project"])
     dry = bool(req.get("dry_run", True))
+    from motionworks_iec_mcp.program_checks import check_project
+    programming_review = check_project(root, pou=req["pou"], body=req["body"])
     plan = W.plan_st_body(root, req["pou"], req["body"], run_lint=bool(req.get("run_lint", True)))
     result = W.apply_st_body(plan, root, dry_run=dry)
-    return _ok(dry_run=dry, result=_jsonable(result))
+    return _ok(dry_run=dry, result=_jsonable(result), programming_review=programming_review)
 
 
 def verb_var_add(req):
@@ -185,8 +187,95 @@ def verb_var_add(req):
         address=req.get("address"),
         initial_value=req.get("initial_value"),
         description=req.get("description"),
+        donor=req.get("donor"), donor_pou=req.get("donor_pou"),
     )
     return _ok(dry_run=dry, result=_jsonable(W.apply_declaration(plan, root, dry_run=dry)))
+
+
+def verb_var_add_many(req):
+    """Declare many variables in one call, applying what it can.
+
+    WHY THIS EXISTS: a port with twenty signals took twenty tool calls, and a caller declaring a
+    twenty-field structure has to sequence them by hand. Every item here goes through exactly the
+    per-item machinery verb_var_add uses - the same planner, the same donor matching, the same
+    grid update - so this is a loop and not a second implementation.
+
+    IT DOES NOT FAIL WHOLE. An item that the planner refuses is recorded with its reason and the
+    rest still apply, because the usual cause is one name that is already declared or one type the
+    donor cannot supply, and discarding nineteen correct declarations over the twentieth is not a
+    safe default for a caller that then has to work out which of the twenty landed.
+
+    dry_run defaults to True, and is all-or-nothing in the other direction: a dry run plans every
+    item and applies none, so the report shows what WOULD happen without changing the project.
+    """
+    from motionworks_iec_mcp import writer as W
+
+    root = Path(req["project"])
+    dry = bool(req.get("dry_run", True))
+    items = req.get("variables")
+    if not isinstance(items, list) or not items:
+        raise ValueError("variables must be a non-empty array of {name, type, ...} objects")
+
+    pou = req.get("pou")
+    applied: list[dict] = []
+    failed: list[dict] = []
+
+    for index, raw in enumerate(items):
+        if not isinstance(raw, dict):
+            failed.append({"index": index, "name": None,
+                           "error": "not an object; expected {name, type, section, ...}"})
+            continue
+        # Per-item overrides fall back to the call-level values, so a caller declaring twenty
+        # globals writes `pou` once and a caller mixing sections sets it on the items that differ.
+        name = raw.get("name")
+        type_name = raw.get("type")
+        # CHECKED HERE, not left to the planner. Measured: an item with no `type` reached the donor
+        # matcher and came back as `AttributeError: 'NoneType' object has no attribute 'casefold'`,
+        # which names neither the item nor the field. A batch reports per item, so the message has
+        # to be about the item.
+        missing = [field for field, value in (("name", name), ("type", type_name)) if not value]
+        if missing:
+            failed.append({"index": index, "name": name,
+                           "error": f"missing required field(s): {', '.join(missing)}"})
+            continue
+        try:
+            plan = W.plan_variable_add(
+                root,
+                raw.get("pou", pou),
+                name,
+                type_name,
+                section=raw.get("section", req.get("section", "VAR")),
+                address=raw.get("address"),
+                initial_value=raw.get("initial_value"),
+                description=raw.get("description"),
+                donor=raw.get("donor", req.get("donor")),
+                donor_pou=raw.get("donor_pou", req.get("donor_pou")),
+            )
+            if dry:
+                applied.append({"index": index, "name": name, "planned": True,
+                                **_plan_summary(plan)})
+            else:
+                result = _jsonable(W.apply_declaration(plan, root, dry_run=False))
+                applied.append({"index": index, "name": name, "applied": True, "result": result})
+        except Exception as exc:
+            # One bad item must not take the batch with it - see the docstring.
+            failed.append({"index": index, "name": name,
+                           "error": f"{type(exc).__name__}: {exc}"})
+
+    return _ok(
+        dry_run=dry,
+        pou=pou,
+        requested=len(items),
+        applied=len(applied),
+        failed=len(failed),
+        results=applied,
+        failures=failed,
+        # Stated because it is the thing a caller must not assume: a partial batch is normal.
+        note=(
+            "each item is planned and applied on its own, so a failure does not roll back the "
+            "items that succeeded - read `failures` and re-issue only those"
+        ),
+    )
 
 
 def verb_var_edit(req):
@@ -206,6 +295,7 @@ def verb_var_edit(req):
         description=req.get("description"),
         clear_address=bool(req.get("clear_address", False)),
         force=bool(req.get("force", False)),
+        donor=req.get("donor"),
     )
     return _ok(dry_run=dry, result=_jsonable(W.apply_declaration(plan, root, dry_run=dry)))
 
@@ -240,8 +330,14 @@ def _backup_dir(req, root: Path) -> Path:
     projects only.
     """
     raw = req.get("backup_dir")
-    directory = Path(raw) if raw else (Path(__file__).resolve().parent.parent / "backups")
-    directory.mkdir(parents=True, exist_ok=True)
+    from motionworks_iec_mcp.staging import workspace_root
+    workspace = workspace_root()
+    directory = Path(raw) if raw else workspace / ".motionworks" / "backups"
+    if not directory.resolve().is_relative_to(workspace):
+        raise ValueError("REFUSED: backups must remain inside the workspace")
+    from uuid import uuid4
+    directory = directory / uuid4().hex
+    directory.mkdir(parents=True, exist_ok=False)
     return directory
 
 
@@ -284,14 +380,7 @@ def verb_pou_delete(req):
 
 
 def verb_tasks(req):
-    """List the tasks and which POU is assigned to each, plus the unassigned ones.
-
-    This matters more than it looks. A POU that exists but is assigned to no task
-    NEVER RUNS, and -- measured -- it is also not flagged by the build: a POU
-    containing an undeclared variable compiled cleanly while it was unassigned.
-    So an agent that creates a POU and stops there has produced code that does
-    nothing, and a green build will not tell it so.
-    """
+    """List task instances in native execution order; unmatched names need review."""
     from motionworks_iec_mcp.cfb import CompoundFile
     from motionworks_iec_mcp.tree import load_tree, task_assignments
 
@@ -309,23 +398,15 @@ def verb_tasks(req):
 
     return _ok(
         project=str(root),
-        tasks={k: sorted(v) for k, v in sorted(assignments.items())},
+        tasks={k: list(v) for k, v in assignments.items()},
         task_count=len(assignments),
         unassigned=sorted(set(known) - assigned),
         unassigned_note=(
-            "These POUs exist but are assigned to no task, so they never run and a clean "
-            "build does NOT prove they compile - measured, a POU with an undeclared "
-            "variable built cleanly while unassigned. THIS PLUGIN CANNOT ASSIGN: writing "
-            "the instance node into PROJECT.TRE makes MotionWorks rewrite the tree it "
-            "touches at open, so mw_code_pou_assign is refused. The step is manual and "
-            "takes a moment: in the MotionWorks Project Tree, right-click the task and add "
-            "the program. Then call this tool again to confirm it landed - the entries "
-            "above are read from the tree, so a successful assignment shows up here."
+            "Candidates based on program and instance names, which may differ. "
+            "Confirm the program type and indirect calls before concluding a program is unused. "
+            "Task entries retain native tree execution order. Task assignment writing remains refused."
         ),
-        next_step=(
-            "Tell the user which POU needs a task and which task, then re-run this tool to "
-            "verify. Do not report the POU as working until it appears under a task."
-        ),
+        next_step="Inspect task bindings in the IDE and confirm the intended cyclic or startup execution context.",
     )
 
 
@@ -482,7 +563,7 @@ def verb_library(request):
 
     WHAT THE MEMBER LIST IS NOT: it does not record input/output DIRECTION. Execute and Done
     are distinguishable by convention, not by anything in the heap, and this does not guess.
-    The declaration in the calling POU, read with mw_code_read_st, is what settles direction.
+    Use the native block definition or matching versioned reference to establish direction.
     """
     from motionworks_iec_mcp import libraries as L
 
@@ -499,8 +580,8 @@ def verb_library(request):
             filtered_out=m.filtered_out,
             note=(
                 "these are the identifiers the assembly defines; input/output DIRECTION is "
-                "not recorded in them, so read the declaration in the calling POU "
-                "(mw_code_read_st) to tell an input from an output"
+                "not recorded in them, so inspect the native function-block definition or matching versioned manual "
+                "(mw_code_reference) to tell an input from an output; caller declarations alone do not establish direction"
             ),
         )
 
@@ -517,54 +598,28 @@ def verb_library(request):
 
 
 def verb_manual(request):
-    """Search the MotionWorks manuals the IDE installs, or list what is available.
-
-    The IDE ships its own documentation - three PDFs and 259 .chm help files - so an agent
-    writing MotionWorks code can be given the vendor's own words rather than guessing at a
-    library block's behaviour. The Toolbox Manual documents every function block and data type
-    the toolboxes provide, which is exactly what is needed to call CamGenerator or read a
-    CamSegmentStruct correctly.
-    """
-    from motionworks_iec_mcp import manuals as M
-
-    name = request.get("name")
-    term = request.get("term")
-
+    """Search installed PDFs and the versioned vendor-reference catalog together."""
+    from motionworks_iec_mcp import manuals as M, knowledge as K
+    name, term = request.get('name'), request.get('term')
+    limit = max(1, min(int(request.get('limit', 5)), 10))
     if not term:
-        listed = M.list_manuals()
-        topics = []
-        try:
-            topics = M.help_topics()
-        except Exception:
-            pass
-        return _ok(
-            manuals=[
-                {"name": m.name, "bytes": m.bytes, "readable": m.readable, "note": m.note}
-                for m in listed
-            ],
-            help_topics=topics,
-            note=(
-                "Pass a 'term' to search. The PDFs are read; the .chm files are compiled help "
-                "whose text cannot be extracted here, though their filenames name their subjects."
-            ),
-        )
-
-    raw = request.get("limit")
-    limit = int(raw) if isinstance(raw, (int, float)) else 5
-    results = M.search(str(term), name=str(name) if name else None, limit=limit)
-    if not results:
-        return _ok(
-            term=str(term), found=0,
-            note=(
-                "No manual mentions that. Try a symbol the project actually uses - a function "
-                "block, a data type - or call this with no term to see what is available."
-            ),
-        )
-    return _ok(
-        term=str(term),
-        found=len(results),
-        results=results,
-    )
+        try: listed = M.list_manuals()
+        except Exception: listed = []
+        try: topics = M.help_topics()
+        except Exception: topics = []
+        return _ok(manuals=[{'name': m.name, 'path': str(m.path), 'bytes': m.bytes,
+                            'readable': m.readable, 'note': m.note, 'revision': 'not_verified'} for m in listed],
+                   help_topics=topics, references=K.search(),
+                   note='Use mw_code_reference for reviewed revisions and page citations; installed CHM topic names are not extracted content.')
+    try:
+        results = M.search(str(term), name=str(name) if name else None, limit=limit)
+        for result in results:
+            result.update(extraction='legacy_heuristic', revision='not_verified', page_citations_available=False)
+    except Exception as exc:
+        results = [{'manual': 'installed PDFs', 'hits': 0, 'error': str(exc)}]
+    references = K.search(str(term), limit=limit)
+    return _ok(term=str(term), found=sum(bool(r.get('hits')) for r in results), results=results,
+               references=references, note='Legacy extracted text may be imperfect. Prefer reviewed reference citations and the actual installed FB interface.')
 
 
 
@@ -592,7 +647,405 @@ def verb_restore_pou(req):
     report = R.restore_pou(root, pou, which=which, dry_run=dry)
     return _ok(dry_run=dry, result=_jsonable(report))
 
+def verb_bind_mwt(req):
+    """Rewrite the staged .mwt so the path inside it is the staged directory.
+
+    The wrapper is a pointer. Left alone, opening it loads whatever directory
+    was stored in it — measured as a project outside the workspace. This only
+    accepts paths already inside the staging root.
+    """
+    from motionworks_iec_mcp.mwt_bind import retarget
+    from motionworks_iec_mcp.staging import assert_staged
+
+    mwt = assert_staged(req["mwt"], what="mwt wrapper")
+    directory = assert_staged(req["directory"], what="staged directory")
+    return _ok(**retarget(mwt, directory))
+
+
+def verb_check_mwt(req):
+    """Reject a wrapper that would open a different project before COM sees it."""
+    from motionworks_iec_mcp.mwt_bind import embedded_paths
+    from motionworks_iec_mcp.staging import assert_proven
+    mwt = assert_proven(req["project"])
+    if mwt.suffix.lower() != ".mwt":
+        raise ValueError("open requires a .mwt wrapper")
+    directory = mwt.with_suffix("").resolve()
+    paths = embedded_paths(mwt)
+    # Some valid wrappers carry no absolute path and let the IDE open the
+    # sibling expanded directory. Staging recorded this exact pair, and the
+    # caller checks the IDE's active project after opening. Reject only a
+    # concrete embedded path that points elsewhere.
+    if paths and any(Path(p).resolve() != directory for p in paths):
+        raise ValueError("REFUSED: wrapper is not bound to the staged workspace project; stage it again.")
+    import hashlib
+    return _ok(bound_to=str(directory), wrapper_sha256=hashlib.sha256(mwt.read_bytes()).hexdigest())
+
+
+#: Reads that may look at a project outside the staging root when the caller
+#: sets reference=true. Everything else still has to be a staged copy.
+READ_VERBS = frozenset({
+    "pous", "read_st", "unsupported", "globals", "tasks", "types", "library",
+})
+
+def verb_sync_back(req):
+    """Copy the staged edit back to the real project it was staged from. dry_run defaults to True.
+
+    WHY THIS EXISTS: the release loop is close IDE -> edit the stage -> build -> copy back ->
+    re-stage -> verify, and every step was a tool except the copy back, which had to be a script
+    that knew by convention what to carry. The convention belongs here, next to the staging guard
+    that already knows what a staged copy is.
+
+    WHAT IT CARRIES
+      * the project tree, minus the .mwt WRAPPER - whose stored path is bound to the stage, so
+        copying it to the real project would point the real project at a temp copy of itself;
+      * the source project's own .mwt is NOT this function's business and is left byte-for-byte
+        alone;
+      * build outputs and caches are skipped, so a copy back does not drag the IDE's scratch state
+        over a project the IDE will open again.
+
+    WHAT IT REFUSES
+      * a staged copy with no recorded source (identity file), because there is nowhere to copy to;
+      * a destination outside the staging root's recorded workspace, via the same assert_staged
+        gate every other verb passes through;
+      * a destination that is itself a staged copy, which would be a copy stage-to-stage and
+        almost certainly not what was meant.
+
+    Verified by hash, not by the copy call returning: the report lists the files that landed and
+    the ones whose digest differs afterwards, so "synced" is an observation rather than an intent.
+    """
+    import hashlib
+
+    from motionworks_iec_mcp.staging import assert_proven, assert_staged
+
+    staged = assert_staged(req["project"], what="staged project")
+    # assert_proven is the gate that makes the identity file safe to read: it proves the copy was
+    # staged from this workspace and that source, wrapper and directory all agree. Reading the
+    # identity file without it would trust a file this engine did not necessarily write.
+    assert_proven(staged)
+    dry = bool(req.get("dry_run", True))
+
+    # The identity file sits beside the staged project and records where the copy came from.
+    # Without it there is no destination to guess at, and guessing is how a copy back writes into
+    # the wrong project.
+    identity_path = staged.parent / f"{staged.name}.identity.json"
+    if not identity_path.exists():
+        alt = staged.with_suffix(".identity.json")
+        identity_path = alt if alt.exists() else identity_path
+    if not identity_path.exists():
+        raise ValueError(
+            f"REFUSED: no identity file beside the staged project ({identity_path.name}). "
+            "sync_back needs the recorded source directory, and there is no safe way to guess it."
+        )
+    identity = json.loads(identity_path.read_text(encoding="utf-8-sig"))
+    source_dir = identity.get("source_directory") or identity.get("source")
+    if not source_dir:
+        raise ValueError(
+            f"REFUSED: {identity_path.name} records no source_directory, so there is nowhere to "
+            "copy back to."
+        )
+    destination = Path(source_dir).resolve()
+
+    if destination == staged.resolve():
+        raise ValueError("REFUSED: the recorded source is the staged copy itself.")
+
+    # THE PROTECTION THAT MATTERS, and it is NOT the staging guard.
+    #
+    # Every other verb refuses to touch anything under stage/, because a real project tree holds
+    # the owner's work and a mistake there is not recoverable. sync_back is the one verb whose
+    # PURPOSE is to write the real tree - a copy back that only wrote the stage would be a no-op
+    # - so assert_staged would make it impossible rather than safe, which is what it did when this
+    # was first written.
+    #
+    # The safety comes from the identity file instead, and it is narrower than the guard: the
+    # source must be a path mw_ide_stage itself recorded, and it must lie inside the workspace
+    # that recording names. That is provenance, not a pattern match on a path, and it is the same
+    # evidence assert_proven already checks on the staged side.
+    workspace = Path(identity.get("workspace") or "").resolve() if identity.get("workspace") else None
+    if workspace is None:
+        raise ValueError(
+            f"REFUSED: {identity_path.name} records no workspace, so the recorded source cannot "
+            "be proven to lie inside the workspace this engine is allowed to write."
+        )
+    try:
+        destination.relative_to(workspace)
+    except ValueError:
+        raise ValueError(
+            f"REFUSED: the recorded source '{destination}' lies outside the recorded workspace "
+            f"'{workspace}'. sync_back writes only a project this staging was taken from."
+        ) from None
+    # Writing the stage again is a no-op the caller did not ask for, and a destination inside
+    # stage/ would mean the identity file named the stage as its own source.
+    from motionworks_iec_mcp.staging import is_staged
+    if is_staged(destination):
+        raise ValueError(
+            f"REFUSED: the recorded source '{destination}' is itself inside the staging root. "
+            "There is nothing to copy back to - stage the project again from the real one."
+        )
+
+    if not destination.exists():
+        raise ValueError(f"REFUSED: the recorded source directory does not exist: {destination}")
+
+    # WHAT IS CARRIED, and why it is a list of SOURCE roles rather than a list of exclusions.
+    #
+    # Measured on the real project: a naive "everything that changed" copy back selected 90 files,
+    # and the first eight were `__1stResourceEx.DLL`, `__BG.DLL`, `__FastTsk.pdb` and so on - the
+    # compiler's own output, which the IDe regenerates and which this engine never edits. Carrying
+    # those back over a project the IDE will open again is the "broad sync" a session had to do by
+    # hand, and it was the likely cause of the build failure that followed.
+    #
+    # So the rule is: copy back the files this engine can WRITE, and only those. A blanket copy
+    # cannot be made safe by lengthening an exclusion list, because the next build output the IDE
+    # invents is not on it; an inclusion list fails safe instead, since an unlisted new artifact is
+    # simply not carried.
+    SOURCE_SUFFIXES = (
+        ".st1",   # a POU container: the .VB declarations, .VGR grid and body streams inside it
+        ".vb",    # a bare declaration stream, for a project that stores them separately
+        ".vgr",   # a bare grid, likewise
+        ".tre",   # the project tree
+        ".pou",   # the POU registry
+        ".typ",   # the data-type list
+        ".xml",   # NodeProperties and the library manifest
+        ".dat",   # the dependency manifest
+        ".txt",   # the POU's textual sidecars
+        ".st",    # an exported source, when one is kept in the tree
+        ".set",   # task settings
+        ".ldi",
+    )
+    #: Names that are project state rather than source, even though they match a suffix above.
+    SOURCE_NAMES = {"list.pou", "project.tre", "nodes.lst", "tyllist.typ", "eclrpoudependencies.dat"}
+    SKIP_DIRS = {"__pycache__", ".git", "node_modules", "backups", ".motionworks"}
+
+    def carry_reason(name: str) -> str | None:
+        """None to carry the file, or the reason it is not source."""
+        low = name.lower()
+        if low.endswith(".mwt"):
+            # THE WRAPPER IS NEVER CARRIED. Its stored path names the stage, so copying it would
+            # bind the real project to a temporary copy of itself - the exact failure the staging
+            # guard exists to prevent, and the one thing the hand-written script also had to know.
+            return "the .mwt wrapper stays bound to the stage"
+        if low.startswith("tmp.") or low.endswith((".tmp", ".sto", ".log", ".cache")):
+            return "scratch or log"
+        if low.endswith((".dll", ".pdb", ".exe", ".obj", ".o", ".lib", ".exp", ".ilk")):
+            return "compiler output, not source"
+        if low in SOURCE_NAMES:
+            return None
+        if low.endswith(SOURCE_SUFFIXES):
+            return None
+        return "not a file this engine writes"
+
+    copied: list[dict] = []
+    skipped: list[dict] = []
+    mismatched: list[dict] = []
+
+    for path in sorted(staged.rglob("*")):
+        if not path.is_file():
+            continue
+        rel = path.relative_to(staged)
+        if any(part in SKIP_DIRS for part in rel.parts):
+            continue
+        reason = carry_reason(path.name)
+        if reason is not None:
+            skipped.append({"file": str(rel), "reason": reason})
+            continue
+        target = destination / rel
+        record = {
+            "file": str(rel),
+            "bytes": path.stat().st_size,
+            "sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
+        }
+        if target.exists():
+            current = hashlib.sha256(target.read_bytes()).hexdigest()
+            if current == record["sha256"]:
+                skipped.append({"file": str(rel), "reason": "already identical"})
+                continue
+            record["previous_sha256"] = current
+        copied.append(record)
+
+    if dry:
+        return _ok(
+            dry_run=True,
+            staged=str(staged),
+            destination=str(destination),
+            would_copy=len(copied),
+            would_skip=len(skipped),
+            files=copied,
+            skipped=skipped,
+            note="nothing was written; pass dry_run=false to apply",
+        )
+
+    for record in copied:
+        source = staged / record["file"]
+        target = destination / record["file"]
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes(source.read_bytes())
+        # VERIFIED, not assumed: re-read the file that landed and compare digests.
+        landed = hashlib.sha256(target.read_bytes()).hexdigest()
+        if landed != record["sha256"]:
+            mismatched.append({"file": record["file"], "expected": record["sha256"], "got": landed})
+        record["verified"] = landed == record["sha256"]
+
+    return _ok(
+        dry_run=False,
+        staged=str(staged),
+        destination=str(destination),
+        copied=len(copied),
+        skipped=len(skipped),
+        mismatched=len(mismatched),
+        files=copied,
+        failures=mismatched,
+        wrapper="not carried - the .mwt stays bound to the stage",
+        note=(
+            "files are verified by sha256 after the copy; a non-empty `failures` means the copy "
+            "did not land and the release is not synced"
+        ),
+    )
+
+
+def verb_wrapper_binding(req):
+    """Read-only: how each staged project's .mwt wrapper is bound, and whether it is stale.
+
+    WHY THIS EXISTS: mw_ide_open refuses a wrapper whose stored path is not the staged directory,
+    and the refusal was reached in a session where the PROJECT had just been renumbered by a POU
+    creation. Re-staging to clear it is worse than the problem - it overwrites the stage and takes
+    the new POU with it - so the useful answer is "which wrapper is stale, and is re-binding it
+    enough", reported before anything tries to open it.
+
+    Reports every staged project, so a caller does not have to know which one is at fault.
+    """
+    from motionworks_iec_mcp.mwt_bind import embedded_paths
+    from motionworks_iec_mcp.staging import staging_root
+
+    binding: list[dict] = []
+    targets = []
+    if req.get("project"):
+        from motionworks_iec_mcp.staging import assert_staged
+        targets.append(assert_staged(req["project"], what="project"))
+    else:
+        targets = [p for p in sorted(staging_root().glob("*.mwt"))]
+
+    for mwt in targets:
+        if mwt.suffix.lower() != ".mwt":
+            continue
+        directory = mwt.with_suffix("")
+        try:
+            paths = embedded_paths(mwt)
+        except Exception as exc:
+            binding.append({"wrapper": str(mwt), "error": f"{type(exc).__name__}: {exc}"})
+            continue
+        stale = [p for p in paths if Path(p).resolve() != directory.resolve()]
+        binding.append({
+            "wrapper": str(mwt),
+            "should_name": str(directory),
+            "stores": paths,
+            "bound": bool(paths) and not stale,
+            "stale_paths": stale,
+            "note": (
+                "no path is stored in this wrapper, so nothing points anywhere and mw_ide_open "
+                "will refuse it" if not paths
+                else ("re-binding is enough: mw_ide_stage would overwrite the staged project and "
+                      "take any POU created since with it" if stale else "")
+            ),
+        })
+
+    return _ok(
+        count=len(binding),
+        wrappers=binding,
+        stale=sum(1 for b in binding if b.get("stale_paths")),
+    )
+
+
+def verb_rebind_wrapper(req):
+    """Point a staged .mwt back at its staged directory, in place. dry_run defaults to True.
+
+    Idempotent and cheap when already bound - measured: an already-bound wrapper returns
+    changed=false and the file digest is unchanged, so a caller may call this unconditionally
+    rather than working out whether it needs to.
+    """
+    from motionworks_iec_mcp.mwt_bind import embedded_paths, retarget
+    from motionworks_iec_mcp.staging import assert_staged
+
+    mwt = assert_staged(req["mwt"], what="mwt wrapper")
+    if mwt.suffix.lower() != ".mwt":
+        raise ValueError("rebind_wrapper needs a .mwt wrapper")
+    directory = assert_staged(req["directory"] if req.get("directory") else mwt.with_suffix(""),
+                              what="staged directory")
+    dry = bool(req.get("dry_run", True))
+
+    if dry:
+        paths = embedded_paths(mwt)
+        stale = [p for p in paths if Path(p).resolve() != directory.resolve()]
+        return _ok(
+            dry_run=True,
+            would_change=bool(stale),
+            bound_to=str(directory),
+            stores=paths,
+            stale_paths=stale,
+            note="nothing was written; pass dry_run=false to re-bind",
+        )
+    return _ok(dry_run=False, **retarget(mwt, directory))
+
+
+def verb_eip_map(req):
+    """Summarize the EtherNet/IP assembly map: declared size, words used, words left.
+
+    Answers "is there room for another status value?" - the question that comes up every time a
+    diagnostic is added - from the two sources that hold the two halves of the answer: the L5X
+    module definition for the declared size, the project's IEC addresses for what is used.
+    """
+    from motionworks_iec_mcp import eip as E
+
+    return _ok(result=E.build_map(
+        project_root=req.get("project"),
+        l5x=req.get("l5x"),
+        module_name=req.get("module_name"),
+    ))
+
+
+def verb_validate(req):
+    from motionworks_iec_mcp.validation import validate
+    return _ok(result=validate(req['project']))
+
+
+def verb_reference(req):
+    from motionworks_iec_mcp import knowledge as K
+    if req.get('block'):
+        result = K.signature(req['block'])
+        return _ok(result={'block': req['block'], 'signature': result,
+                          'note': 'No reviewed signature found; inspect the installed FB definition.' if result is None else 'Historical vendor interface; confirm installed version.'})
+    return _ok(result=K.search(req.get('query', ''), source_id=req.get('source_id'), limit=req.get('limit', 5)))
+
+
+def verb_reference_sync(req):
+    from motionworks_iec_mcp.knowledge import sync
+    return _ok(result=sync(req.get('source_ids')))
+
+
+def verb_diagnose(req):
+    from motionworks_iec_mcp.knowledge import diagnose
+    return _ok(result=diagnose(req['message']))
+
+
+def verb_pattern(req):
+    from motionworks_iec_mcp.knowledge import patterns
+    return _ok(result=patterns(req.get('name')))
+
+
+def verb_check_program(req):
+    from motionworks_iec_mcp.program_checks import check_project
+    if 'body' in req and not req.get('pou'):
+        raise ValueError('A proposed body requires a target POU')
+    return _ok(result=check_project(req['project'], pou=req.get('pou'), body=req.get('body')))
+
+
 VERBS = {
+    "reference": verb_reference,
+    "reference_sync": verb_reference_sync,
+    "diagnose": verb_diagnose,
+    "pattern": verb_pattern,
+    "check_program": verb_check_program,
+    "validate": verb_validate,
+    "check_mwt": verb_check_mwt,
+    "eip_map": verb_eip_map,
     "types": verb_types,
     "manual": verb_manual,
     "library": verb_library,
@@ -601,6 +1054,10 @@ VERBS = {
     "unsupported": verb_unsupported,
     "write_st": verb_write_st,
     "var_add": verb_var_add,
+    "var_add_many": verb_var_add_many,
+    "sync_back": verb_sync_back,
+    "wrapper_binding": verb_wrapper_binding,
+    "rebind_wrapper": verb_rebind_wrapper,
     "restore_pou": verb_restore_pou,
     "var_edit": verb_var_edit,
     "var_delete": verb_var_delete,
@@ -611,6 +1068,7 @@ VERBS = {
     "assign": verb_assign,
     "unassign": verb_unassign,
     "ide_closed": verb_ide_closed,
+    "bind_mwt": verb_bind_mwt,
 }
 
 
@@ -669,15 +1127,48 @@ def main(argv):
             from motionworks_iec_mcp.staging import StagingRefused, assert_staged
         except ImportError:
             assert_staged = None
-    if assert_staged is not None and req.get("project"):
+    if req.get("reference") is True and verb not in READ_VERBS:
+        _write(res, _fail(
+            f"REFUSED: '{verb}' cannot use reference mode. Reference is read-only. "
+            "A project outside the workspace can be inspected, and it is never "
+            "staged, opened, or edited.",
+            refused_by="reference guard",
+            verb=verb,
+        ))
+        return 1
+
+    reference_read = req.get("reference") is True and verb in READ_VERBS
+    if assert_staged is not None and req.get("project") and not reference_read:
         try:
             assert_staged(req["project"], what=f"{verb} project")
+            try:
+                from engine.motionworks_iec_mcp.staging import assert_proven
+            except ImportError:
+                from motionworks_iec_mcp.staging import assert_proven
+            assert_proven(req["project"])
         except StagingRefused as exc:
             _write(res, _fail(str(exc), refused_by="staging guard", verb=verb))
             return 1
 
     try:
-        _write(res, handler(req))
+        if verb in {"write_st", "var_add", "var_edit", "var_delete", "pou_create", "pou_delete", "restore_pou"} and req.get("dry_run", True) is False:
+            from motionworks_iec_mcp.transaction import run
+            payload = run(Path(req["project"]), lambda: handler(req))
+        else:
+            payload = handler(req)
+        if reference_read and isinstance(payload, dict):
+            payload = dict(payload)
+            payload["read_only"] = True
+            workspace = req.get("workspace")
+            outside = None
+            if workspace and req.get("project"):
+                try:
+                    Path(req["project"]).resolve().relative_to(Path(workspace).resolve())
+                    outside = False
+                except ValueError:
+                    outside = True
+            payload["outside_workspace"] = outside
+        _write(res, payload)
         return 0
     except Exception as exc:
         _write(res, _fail(

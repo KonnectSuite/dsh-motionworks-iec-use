@@ -1,4 +1,4 @@
-"""MCP server for offline Yaskawa MotionWorks IEC 3 Pro project work.
+"""File engine behind the MotionWorks plugin.
 
 The package is layered so that the dangerous parts stay in one place:
 
@@ -6,10 +6,9 @@ The package is layered so that the dangerous parts stay in one place:
     project      - project/expanded-directory resolution and inventory
     variables    - merged view of the .VB text and .VGR binary variable stores
     errors       - typed failures that surface as readable tool errors
-    server       - FastMCP tool registration (Tier 1 read-only, Tier 2 writes)
+    staging      - refuses anything that is not a proven staged copy
 
-Tier 1 tools are read-only and safe to use while MotionWorks IEC is open.
-Tier 2 tools mutate the project and require MotionWorks to be closed.
+The plugin in index.js is the tool surface. Writes go through mw_code.py.
 """
 
 __version__ = "0.1.0"

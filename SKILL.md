@@ -4,784 +4,215 @@ description: Operate a running Yaskawa MotionWorks IEC 3 Pro IDE and edit its co
 whenToUse: The user has MotionWorks IEC 3 Pro open or asks for work in it — a real build, a compile verdict, the live project model, reading or changing POU Structured Text, or reading the IDE's error list. ALSO USE WHEN a MotionWorks project is mentioned at all, even to ask a question about it, because the first step is always to find which project is actually in the workspace. For pure offline `.mwt` inspection without the IDE, the file-level tools alone are enough.
 ---
 
-# MotionWorks Use
-
-**Two rules come before everything else in this file.**
-
-**1. Find the project — `mw_project_find`, first, every time.** It scans the workspace and
-tells you which MotionWorks projects are actually here. **If it reports none, STOP AND ASK
-THE USER.** Tell them what you looked for (`.mwt` files) and where, and ask them to put the
-project in the workspace or to say which one they mean. **Do not go looking elsewhere on the
-machine.** A project outside the workspace is not one the task asked for, however sure you are
-that it is the right one — an agent that "knew where it was" opened a different project with
-the same name from the user's Desktop, and the user had to say so three times.
-
-**2. Work on a staged copy — `mw_ide_stage`.** It copies the workspace project into the
-plugin's `stage/` directory, and every read, write and build happens on the copy. That is why
-the real project can never be damaged from here. The guard refuses a source outside the
-workspace; `allow_outside_workspace: true` overrides it and should be used **only when the
-user has explicitly named that path** — it makes the exception visible in the transcript
-rather than silent.
-
-**These are enforced, not merely advised.** `mw_ide_stage` refuses an outside source. Every
-`mw_code_*` tool refuses a project outside the staging root. **So does the engine itself** —
-`code/mw_code.py` guards every verb, because the agent's own helper scripts call the engine
-directly and walked straight past the tool-level guard. Being stopped is the expected
-behaviour, not a bug to route around. If a call is refused, **ask the user**; do not reach for
-the COM interface, a bespoke script, or the IDE's own menus to get at a project the plugin
-declined.
-
-Twenty-one tools that drive a live MotionWorks IEC 3 Pro IDE and edit its code.
-They come from the `motionworks-iec-use` Cordis plugin; nothing here needs to be
-launched by hand, and no path needs to be configured.
-
-## Most users have no licence â€” and that is fine
-
-**Editing code does NOT need a MotionWorks licence.** The code half is pure file
-I/O on the project container, so it works with the IDE closed, unlicensed, or
-never installed:
-
-`mw_ide_stage`, `mw_code_pous`, `mw_code_read_st`, `mw_code_write_st`,
-`mw_code_pou_create`, `mw_code_pou_delete`, `mw_code_var_add`,
-`mw_code_var_edit`, `mw_code_var_delete`, `mw_code_unsupported`.
-
-Only the `mw_ide_*` tools need a running, licensed IDE â€” they add **compile
-verification**, the live object model, the error list and screenshots.
-
-So when someone has no licence: **carry on and edit the code.** Do not report the
-task as blocked. Say what a licence would add (a compile verdict) and let them
-decide.
-
-If the IDE is unlicensed it shows a modal dialog **before** creating any window;
-until it is answered the IDE has no project services and `OpenProject` fails with
-`Internal error in 'OpenProject'`, which looks exactly like a broken install.
-`mw_ide_start` detects that dialog and clicks "Use Trial" itself. If the dialog is
-an **activation** form (`Activate Online` / `Activate by Phone` / `Retry`, no
-`Use Trial`), no trial remains and no automation can proceed â€” that is licensing,
-not a defect.
-
-## Reading compiler errors
-
-`mw_ide_errors` returns the compiler messages **verbatim** — a failed build is
-actionable, not a dead end:
-
-```
-mw_ide_build   -> COMPILE FAILED (is_compiled=false)
-mw_ide_errors  -> 24 message(s)
-                    No matching global variable found for 'x:y' in resource 'Resource'!
-                    Instance 'CalcSplineMatrix' is used more than once!
-```
-
-- `mw_ide_errors { pane: "Warnings" }` — warnings
-- `mw_ide_errors { pane: "Build" }` — the compile phases, step by step
-- Panes: `Errors`, `Warnings`, `Build`, `Infos`, `PLC Errors`, `Print`, `Statistics`, `SCC`
-- **Zero lines is a clean result**, not a failure
-- `limit` raises the 200-line cap; `screenshot: true` also captures the pane
-
-`mw_ide_compile_state` reports `is_compiled` / `is_modified` without building, which
-is the cheap check before deciding whether a build is needed at all.
-## The .VGR variable grid, fully decoded
-
-A POU's declarations live in **two** stores, and the compiler reads both:
-
-| Where | What |
-|---|---|
-| `<POU>V.VB` | the text: `VAR` / `VAR_EXTERNAL` blocks |
-| `<POU>V.VGR` | a binary grid: a header and one record per variable |
-
-**The `row` field in each record is the declaration's 1-based LINE NUMBER in the `.VB`.**
-Verified across a whole POU, 12 records for 12 declarations:
-
-```
-row=6  -> text line 5   TopCutterCamTableID      row=18 -> line 17  xGenerate
-row=14 -> line 13       fbCamGen                 row=20 -> line 19  iState
-row=25 -> line 24       TopCutterEyeToKnifeDistance
-```
-
-The grid and the text are two views of one list; `row` is the link between them.
-
-### Record layout
-
-```
-+0    6 x uint32   handle, usage, group, flags, WORKSHEET ROW, final flags
-+24   uint32 len + string 1  TYPE
-      uint32 len + string 2  always empty
-      uint32 len + string 3  INITIAL VALUE  ("" external, "FALSE" local BOOL,
-                                             "0" local INT, "" for a struct)
-      uint32 len + string 4  NAME
-      trailing run           the EXTERNAL marker lives here: ffffffff for usage=5,
-                             zeros for usage=1
-```
-
-Strings are UTF-16LE with a NUL terminator, so `len` counts bytes and is always even.
-
-`usage` is **1** local, **5** external, **0x00040001** a function-block instance.
-Records are found by their field pattern, not a fixed stride, because the strings make it
-uneven (84 to 258 bytes in the project measured).
-
-### Reading is reliable
-
-`variables.parse_grid_records` and `variables.read_grid_record` decode every record,
-including the initial value. Measured across the project: **239 records, 239 clean names,
-0 failures** - where the earlier reader, which skipped a fixed 12 bytes between the type
-and the name, produced garbage for every local record because 12 is only correct when
-strings 2 AND 3 are both empty.
-
-### What a POU's state actually consists of
-
-Worth writing down, because two rounds were spent looking in the wrong place. A POU is not
-just a text file and a grid:
-
-| Where | What | Input or output? |
-|---|---|---|
-| `POE/<pou>/src.st1` `.VB` stream | the declaration text | **input** |
-| `POE/<pou>/src.st1` `.VGR` stream | the variable grid | **input** |
-| `<pou>V.VB` inside the project | duplicate of the above text | input |
-| `Resource/ICI<NNNNN>.DIT` | a text interface: `T: PROGRAM <pou>`, `QVE: 13`, then per variable `@V 1 6 0 / <name> / VAR_EXTERNAL / @TYP:7` | **OUTPUT** |
-| `Resource/ICI<NNNNN>V.DBD` | every variable name in order, 3 x uint32 header, a uint32 count, then per entry two uint32 and a one-byte length with an ASCII name (`0x13` = 19 for `TopCutterCamTableID`) | **OUTPUT** |
-| `Resource/ICI<NNNNN>.{CIC,SP,DBD,DIW,CIW}` | code, source paths, debug info | OUTPUT |
-| `Resource/IR.{LCI,LDI,TDI}`, `IR_FULL.TDI` | project-wide indexes; `NUPG`/`NFBI` tallies, and the `.vb` path per unit | OUTPUT |
-| `Resource/eCLRPouDependencies.dat` | the POU/library dependency map | OUTPUT |
-
-The output rows are the ones that matter here, and they are distinguishable by experiment
-rather than by guessing: **remove them and a successful build recreates them.** With a
-declaration added and NOT used, deleted ICI files came back (7 of them) and the build passed.
-With a declaration added and USED, the build stalled and they did **not** come back - because
-the stall is the thing that stops them being written.
-
-So they are a symptom, not a cause, and a stale one cannot be the reason a declaration stalls.
-That was worth testing because they are ordinary files rather than streams inside a
-container, so rewriting them would have needed no binary surgery at all. It does not work.
-
-The `.VGR` grid remains the governing input, and the two limit rows below are unchanged.
-
-### Declaring is safe; USING needs the grid
-
-Isolated, each case on a freshly staged copy and each judged by a build:
-
-```
-declaration only                        is_compiled=true
-declaration AND a body write            is_compiled=true
-declaration AND a body that USES it     is_compiled=false  (STALLED, empty Errors pane)
-body write only                         is_compiled=true
-```
-
-and in **every** case the POU was intact afterwards - the `.VB` stayed at 1134 bytes and the
-grid at 1565. So `mw_code_var_add` for a POU works, and declaring is harmless.
-
-**The one limitation is precise: a declaration that exists only in the text cannot be
-USED.** The compiler resolves variables through the `.VGR` grid, and a variable declared
-only in the `.VB` is not in it. Referring to it in the body makes the build **stall** -
-`is_compiled=false`, `is_modified=true`, and an **empty** Errors pane, so nothing warns you.
-
-To actually use a new variable, either:
-
-- add it in the MotionWorks **variable worksheet**, then re-read with `mw_code_read_st`; or
-- `mw_code_export_pou { format: "export" }`, edit the declarations in that file, and
-  **import** it — the IDE writes the grid itself from the text.
-
-An earlier version of this plugin REFUSED POU declarations outright. That was wrong: the
-POU destruction seen at the time came from this plugin's own `.VGR` append, not from the
-declaration. Removing the append removed the damage.
-## Two traps that make a green build lie
-
-Both were measured on a real project, not inferred.
-
-### 1. An unassigned POU is never compiled
-
-`mw_code_pou_create` leaves the new POU assigned to **no task**. Such a POU never
-runs, and â€” measured â€” the build does not check it either. A POU containing
-`UndefinedThingXYZ := UndefinedThingXYZ + 1;` reported **`is_compiled=true`** while
-unassigned, and **`is_compiled=false`** the moment it was assigned to a task.
-
-So after creating a POU:
-
-```
-mw_code_pou_create { name: "Helper", template: "Main", dry_run: false }
-mw_code_pou_assign { task: "SlowTsk", pou: "Helper", dry_run: false }   # or it is inert
-mw_code_tasks                                                          # confirm
-```
-
-`mw_code_tasks` lists every task, what each one calls, and which POUs are assigned
-to nothing. **Check that `unassigned` is empty before believing a clean build.**
-
-### 2. Opening a project that contains a broken POU DROPS a task
-
-Measured under control on a pristine copy:
-
-```
-after create + assign (before open) : 5 tasks  â€” SlowTsk(2) Start(1)
-after OPEN, before any build        : 4 tasks  â€” Start GONE
-```
-
-`Start` and its `TopCutterInitialize` assignment disappeared from `PROJECT.TRE`,
-`NODES.LST` **and** the resource `NODES.LST`. The raw tree shows why it is invisible:
-one line is deleted, so the node header reads `13 0 0 0` (level 0) instead of
-`13 5 1 0` (level 5), and the task simply ceases to exist as a task.
-
-**This is almost certainly what "the first attempt corrupted the project" was** â€” not
-a code write, but the IDE's own handling of a project holding a POU that does not
-compile.
-
-What to do about it:
-
-- **Write code that compiles before you reopen.** The linter catches undeclared
-  names for you; `mw_code_write_st` refuses such a body unless you pass
-  `run_lint: false`. Do not override it casually.
-- **After opening any project you know holds broken code, run `mw_code_tasks`** and
-  compare with what you expect. A missing task is this bug, not your edit.
-- The deleted assignment is recoverable: the plugin backs up before every write, and
-  `mw_code_pou_assign` can put the task back.
-
-## NEVER conclude "the IDE closed" without checking
-
-This is the single easiest way to get lost here. An `mw_ide_*` call fails, or
-reports no project, and it gets read as *"the IDE has closed"*. Almost always the
-IDE is running fine and is simply **waiting for a button on a modal dialog**.
-
-The automation API is silent while a dialog is up: `IsProjectOpen()` returns false
-or throws, `OpenProject` fails with `Internal error`, and the frame window is
-disabled. COM alone therefore *cannot* distinguish "no project" from "waiting for
-an answer".
-
-**Rule: after every `mw_ide_*` step, call `mw_ide_state`.**
-
-- `blocked: false` â†’ carry on.
-- `blocked: true` â†’ the IDE is waiting for a button. The result carries each
-  dialog's **exact message text and button labels** (read with `WM_GETTEXT` from
-  the standard Win32 dialog â€” exact, not an OCR guess). Answer it with
-  `mw_ide_dialog`, then call `mw_ide_state` again to confirm.
-- Pass `screenshot: true` when a dialog has no readable text â€” the .NET licence
-  dialog is owner-drawn, and then the image is the only source. Read the returned
-  PNG with the image tool; do not guess at what it says.
-
-MotionWorks only ever asks about the **staged copy** ("defragment this project?",
-"this project was not closed cleanly â€” load anyway?", licence notices), and the
-plugin never opens your original project â€” so answering "Yes, load anyway" is
-safe by construction.
-
-Two safety nets mean you rarely hit this cold:
-
-- `mw_ide_open` answers the recurring safe prompts (defragment â†’ No, load anyway â†’
-  Yes, software-key notice â†’ OK) itself, while it waits.
-- **Every failing bridge call already names any blocking dialog**, quoting its text
-  and buttons, and says explicitly that the IDE is *not* closed. If a tool errors,
-  read the error before concluding anything â€” the answer is usually in it.
-
-## The one thing to understand: there are two effectors
-
-**Code is not edited through the IDE's automation API, because that API cannot
-touch code.** All three COM routes were tried and are closed:
-
-| Route | Result |
-|---|---|
-| A body accessor on `_Pou` | does not exist â€” 35 members, none is Source/Body/Text |
-| `ExecuteCommand` to drive menus | a stub â€” *"The method or operation is not implemented"* |
-| `iec_61131-3_file_export` / `_import` providers | untyped IDispatch; `Execute()` returns OK and writes nothing |
-
-So:
-
-- **COM** (32-bit `Ade.Application.550`) owns the *IDE*: lifecycle, live model,
-  compiler, output panes, screenshots.
-- **The CFB container writer** owns the *code*: it edits the textual `.STB`/`.VB`
-  streams directly, backs up first, and verifies the untouched sibling streams
-  byte-for-byte.
-
-**Consequence for you: file writes require the IDE to be CLOSED.** The IDE caches
-project state and rewrites whole files, so an external edit under a running IDE is
-discarded. Anything code-changing is therefore: close â†’ write â†’ start â†’ open â†’ build.
-
-## Read before you change
-
-```js
-mw_code_pous          // POUs + language + has_st_body  <- the editability test
-mw_code_unsupported   // POUs that CANNOT be edited safely
-mw_code_read_st { pou }   // the ST body, exactly as the container holds it
-```
-
-`has_st_body: false` means a graphical **LD/FBD** POU. Its body is proprietary
-binary with no public grammar â€” **refuse it**, or transplant a known-good body.
-Never guess at graphical bytes.
-
-## The coding loop
-
-```
-mw_ide_stage   { source }          copy a project into the plugin's own stage/
-mw_code_pous                       see what is there, and what is editable
-mw_code_read_st { pou }            read the current code
-mw_ide_close                       REQUIRED before any write (skip if no IDE is running)
-mw_code_write_st { pou, body, dry_run: true }    preview â€” changes nothing
-mw_code_write_st { pou, body, dry_run: false }   apply (backs up first)
-mw_code_read_st { pou }            confirm what actually landed
-mw_ide_start                       bring the IDE back
-mw_ide_open    { path: <stage>\X.mwt }
-mw_ide_build                       compile
-mw_ide_errors                      READ THE MESSAGES AS TEXT (see below)
-```
-
-Structural edits use the same rhythm:
-
-```
-mw_code_pou_create { name, template, dry_run: false }   clone an existing POU
-mw_code_pou_delete { name, force?, dry_run: false }     archived, not destroyed
-mw_code_var_add    { name, type, pou?, section?, dry_run: false }
-mw_code_var_edit   { name, pou?, type?/new_name?/description?, dry_run: false }
-mw_code_var_delete { name, pou?, force?, dry_run: false }
-```
-
-`mw_code_pou_create` needs a `template`: creation clones an existing POU's
-directory and renames its streams, so a POU cannot be authored from nothing. Use
-an ST POU as the template when you want an ST POU. The new POU starts with the
-template's body â€” replace it with `mw_code_write_st`.
-
-`dry_run` defaults to **true** on every write, so the first call is always a
-preview. Read the `result` block: `applied`, `before_bytes`/`after_bytes`,
-`siblings_verified`, and `backups`.
-
-## Compile semantics â€” do not trust the folklore
-
-From `Ade.tlb`, the real enum is:
-
-```
-1 adeCtMake   2 adeCtBuild   3 adeCtPatch   4 adeCtWorksheet   5 adeCtDataTypes
-```
-
-The widely repeated "1 = Build, 2 = Rebuild" is **wrong**. There is **no Rebuild
-compile type** â€” Rebuild is an IDE command, and `ExecuteCommand` is a stub, so
-Rebuild is not reachable programmatically. Use `mw_ide_build` (`Compile(2)`).
-
-## Reading a result honestly
-
-- **Never report a compile you did not observe.** Read `is_compiled` from the
-  reply. `accepted` and `settled` separate "compiled and failed" from "never ran".
-- **`ApplicationState` is not a busy indicator** â€” it reads idle 0 s into a running
-  build. The plugin detects completion by re-offering the compile until the IDE
-  accepts it; do not replace that with a state poll.
-- **Error text exists only as an image.** The output panes expose
-  `Activate`/`Clear`/`AddEntry` but no read accessor, so `mw_ide_errors` brings the
-  pane forward and captures the window. Read the returned path with the image tool.
-- `mw_ide_variables` returns the IDE's own live model (names, types, initial
-  values, IEC addresses, groups) and is a good cross-check on the file view.
-
-## Facts that cost real time to learn
-
-- **The IDE titles itself `MULTIPROG - <project>`** when `Mwt.exe` is launched
-  directly â€” which is what automation does. Match the caption by *prefix*, and
-  pick the **largest** matching window: startup creates small windows with the
-  same caption, and choosing one yields a 426Ã—166 "screenshot".
-- A **cached COM proxy outlives the IDE**. After close â†’ reopen it fails with
-  `0x800706BA` until the connection is probed and dropped.
-- Writes need a **writable backup directory**; the engine refuses a write it
-  cannot back up.
-
-## Safety â€” non-negotiable
-
-- **Never download to a controller. Never command motion.** No such tool exists.
-- **Code tools only ever touch the plugin's own `stage/`.** Every code path refuses
-  a real project tree, so stage a copy first.
-- **Every write is backed up** and its untouched sibling streams verified.
-- **Graphical LD/FBD bodies are refused**, not guessed at.
-
-## Known limits
-
-- LD/FBD graphics can be **transplanted, never authored**.
-- Arbitrary menu commands are unavailable (`ExecuteCommand` is a stub).
-- Compile error text is image-only.
-- `mw_code_var_edit` / `mw_code_var_delete` are not exposed yet â€” only
-  `mw_code_var_add`; the engine already has the other two.
-
-
-## The IDE's own tree output, kept as a reference
-
-`docs/reference/` holds three snapshots of the SAME project tree, captured in one run of
-`test/tree_diff_damage.mjs`:
-
-| file | what it is |
-|---|---|
-| `pristine-tree.tre` | the staged project, before any edit |
-| `plugin-spliced-tree.tre` | after this plugin's assignment splice, before the IDE has seen it |
-| `ide-rewritten-tree.tre` | after the IDE opened the project |
-
-**This is the artifact that was missing for many rounds.** Every earlier attempt at task
-assignment reasoned about what the IDE MIGHT object to; these three files show what it
-actually does, and the answer is narrow and specific.
-
-Opening the project after a splice rewrites **only the one generated node** and leaves every
-real instance byte-for-byte alone:
-
-    real instance, untouched                 generated node, rewritten by the IDE
-    562 | '19'                               571 | '19'
-    563 | '46 6 0 0'                         572 | '62'          <- my '62 6 0 0', split
-    564 | 'ServoTaskSlow\t0\t0\t'            573 | '12 0 0 0'    <- a line that was never written
-    565 | 'ServoTaskSlow\teCLR\t...'          574 | 'DiffProbe\t0\t0\tCYCLIC\t-1\t'
-    566 | ''                                 575 | '\t\t\t\t-1\t'
-    567 | '0\t-1\t0\t0\t0\t0\t0\t0\t0'     576 | '0'
-    568 | ''                                 577 | '10410112\t0\t0\t0\t0\t0\t0\t0\t0'
-    569 | 'B7C90EAD 919B ...'                  578 | 'D861BDEB 0535 ...'   <- my GUID, kept
-    570 | '0\t0\t0\t0\t0\t0\t0\t0\t0\t0' 579 | '00000000 0000 ...'   <- zeroed
-
-Two facts follow, and neither was knowable from reasoning:
-
-* the IDE PARSED the generated node (it kept the marker `19` and my GUID), so the block is
-  recognised as a node rather than skipped;
-* it read the fields at DIFFERENT OFFSETS than this plugin writes them - `62 6 0 0` came back
-  as `62` followed by `12 0 0 0`, and the name line came back with the path's cycle field
-  folded into it.
-
-So the remaining question is a field-offset question, not a "does the format match" question,
-and the three files settle it by comparison instead of by guesswork.
-
-The assignment stays REFUSED. A tool that reports success and returns a project whose task
-list the IDE has rewritten is worse than one that declines.
-
-
-### The IDE's own node format, read off its output
-
-The three snapshots in `docs/reference/` show the IDE writing nodes in a form that does NOT
-match what this plugin reads and writes. Side by side, for the same three nodes:
-
-    this plugin reads / writes            the IDE writes
-    ----------                            ----------
-    id 13 @563  '13 4 0 0'                id 13 @442  '13' / '9 2 16 0' / 'Configuration'
-    id 25 @533  '25 5 1 0'                id 25 @582  '25' / '13 0 0 0' / 'C\...\Start'
-    id 35 @543  '35 6 0 0'                id 35 @592  '35' / '25 0 0 0' / 'TopCutterInitialize'
-
-Two differences, and the first is the one that matters:
-
-* **the id is on its own line**, and the numbers that follow are a DIFFERENT SET OF FIELDS -
-  ``<parent> <children> <flags> <unknown>`` rather than ``<id> <level> <children> <flags>``.
-  A node's "level" in this plugin's model is really a node TYPE, and the IDE does not carry it
-  in that position at all.
-* **the name and path are merged onto one line**, with the path's cycle and runtime fields
-  appended: ``C\Configuration\R\Resource\Start<TAB>0<TAB>0<TAB>SYSTEM<TAB>317``.
-
-The ids do not correspond between the two formats either - the IDE's 13 is ``Configuration``
-where this plugin's 13 is ``IO_Configuration`` - so any comparison has to go by NAME, not id.
-
-**What this explains.** The parser in ``tree.py`` reproduces the stream byte-for-byte and its
-spans tile the source, so reading is consistent with itself; but a node WRITTEN in the read
-format is not what the IDE expects, which is why it re-emits the affected nodes rather than
-accepting them. The damage is confined to nodes adjacent to the insert, and the ids it hits
-are the same three every time (13, 35, 40 by this plugin's numbering), independent of which
-program is being assigned and of the tree's size.
-
-**What is still missing: an IDE-written instance.** Every node the IDE wrote in these
-snapshots is one it was REWRITING, so its output shows the field layout but not a clean
-example of a program instance it created itself. That is the artifact that would settle the
-assignment, and the same request as before: add a program to a task in the MotionWorks
-Project Tree, save, and the tree will contain one.
-
-Until then ``mw_code_pou_assign`` stays refused. The evidence is committed rather than
-described, so the next attempt compares files instead of reconstructing them.
-
-
-### The resource grid, `Global_Variables.VGR` - a third layout
-
-A POU's grid is `<name>V.VGR`. The resource's is `Global_Variables.VGR`, so a check written as
-"ends with V.VGR" never matches it and this plugin had never read it. It is 22,893 bytes and its
-header says `count=161`, which is exactly the number of globals.
-
-**Header is THREE uint32**, not four:
-
-    magic = 524289      last_handle = 1438      count = 161
-
-and the fourth number at offset 12 is not a field - it is record 1's handle, so the first record
-starts there. Getting that wrong is what made the first attempt find one record.
-
-**A record is six uint32, four strings, then a VARIABLE-LENGTH trailing run:**
-
-    offset 12   record 1
-                head   = 1025, 6, 1, 0, 6, 0        handle, 6, 1, 0, <n>, 0
-                str 1  len=10   "DINT"
-                str 2  len=14   "%MD1.0"
-                str 3  len=2    ""                  the initial value
-                str 4  len=34   "PLC_SYS_TICK_CNT"
-                tail   16 bytes
-
-Strings are length-prefixed UTF-16LE with a NUL terminator, exactly as in a POU grid, and the
-four fields are the same four in the same order: type, address, initial value, name. So the
-*fields* are familiar; only the container differs.
-
-Fifteen records decode perfectly this way - real names, real types, real addresses, handles
-ascending 1025..1040:
-
-    @    12  h=1025  DINT             %MD1.0       PLC_SYS_TICK_CNT
-    @   128  h=1026  INT              %MW1.4       PLC_TASK_DEFINED
-    @   242  h=1027  BOOL             %MX1.2016.0  PLCMODE_ON
-    @  1662  h=1040  TASK_INFO_ECLR   %MB1.5000    PLC_TASK_1
-
-**The sixteenth is where a fixed tail stops working.** Record 15 is `PLC_TASK_1 : TASK_INFO_ECLR`,
-a struct, and its trailing run is SIX uint32 rather than four:
-
-    1780:  00000104  00040000  00000000  00000000  ffffffff  00000000
-    1804:  00000411 = 1041            <- record 16's handle
-
-So the tail carries per-type structure and its length varies, exactly as in a POU grid, where a
-scalar record's run is 16 bytes and `CamSegmentStruct`'s is far longer. Reading it needs the
-same extent-finding approach `parse_grid_records` uses for a POU grid - locate the next record
-by its shape rather than assuming a stride.
-
-**Consequence for the plugin.** `mw_code_var_add` writes `Global_Variables.VB` and nothing else.
-A global added that way is declared and readable, and it builds cleanly, but it cannot be USED:
-the chain a user would ask for is
-
-    add a global  ->  declare it VAR_EXTERNAL in a POU  ->  use it  ->  build
-
-and measured, the middle step stalls even when the variable is never used:
-
-    global + VAR_EXTERNAL + USE      stall
-    global + VAR_EXTERNAL, not used  stall      <- stalls WITHOUT being used
-    global only, then use            clean      <- the lint refuses the body, as designed
-
-Stalling while unused is the informative one: it is not about the use, so the missing half is
-the global's own record here. That is the next implementation, and it is now a known format
-with a known catch rather than an unknown one.
-
-
-### Verify your own writes with `mw_ide_variables`
-
-The most useful thing found by sweeping the tools that had never been exercised. `mw_ide_variables`
-reads the IDE's OWN live variable model over COM - not the files this plugin wrote - so it is an
-independent check rather than the plugin vouching for itself:
-
-    mw_ide_variables                      -> {"pous":[{"pou":"TopCutterFFCamSetup","count":24,...}]}
-    mw_ide_variables {pou:"TopCutterCamSetup"} -> count=12, each with data_type, initial_value,
-                                                  iec_address
-
-Measured: after `mw_code_var_add` declared a variable, asking the IDE reported it **present**.
-So the sequence an agent should use to be sure a write landed is:
-
-    write it       mw_code_var_add / mw_code_var_edit / mw_code_write_st
-    confirm it     mw_ide_variables, or mw_code_read_st for the file view
-    compile it     mw_ide_build, then mw_ide_errors
-
-A file read proves the bytes are there; `mw_ide_variables` proves the IDE agrees.
-
-### Also verified by the same sweep
-
-| tool | what it does |
-|---|---|
-| `mw_ide_pous` | 7 POUs from the live model, with language codes |
-| `mw_ide_make` | Make (Compile 1): `accepted=true, settled=true, is_compiled=true` |
-| `mw_ide_errors` | every pane works - Errors 19 lines, Warnings 8, Infos 8, Build 19 |
-| `mw_ide_variables` | the live model, whole project or one POU |
-
-`mw_code_pou_unassign` was exercised for the first time and REFUSES, like assign - writing a tree
-is what triggers the IDE to rewrite it. Its message now names the direction the caller asked for
-rather than always saying "assign"; before this it answered an unassign request with instructions
-for assigning, which is confusing in exactly the place an agent is already stuck.
-
-Removing a node renders cleanly (-9 lines for one instance, structurally valid) but the
-open-and-build check could not be completed when it was tried: the IDE's COM state returns
-"Internal error in OpenProject" after a force-kill and needs the environment restarted. So
-unassign stays refused on the evidence that ADDING damages the tree, not on evidence that
-removing does.
-
-
-### Both directions of tree editing break the project, and they break it differently
-
-Round 30 left this open: removing a node renders cleanly, so unassign might be safe even though
-assign is not. It is not, and the two failures are not even the same shape.
-
-On one restarted IDE, one staged project, with the tree the only variable:
-
-    C1  nothing changed       open OK,  build is_compiled=true
-    C2  one instance removed  OPEN FAILS: "Internal error in OpenProject"
-
-So a REMOVAL does not damage the tree on open the way an INSERT does - it stops the project
-opening at all. The insert path is the milder of the two: the project opens, and then three nodes
-have been rewritten and the build reports 125 unresolved-global errors. Removal is worse.
-
-**The structural check sees nothing wrong.** The removed tree is 563 lines, nine fewer, with no
-malformed node header anywhere - ``badIds=[]``. It looks valid by every test this plugin has, and
-the IDE will not open it. That is the same lesson the POU grid taught: a binary structure can
-satisfy every field that can be READ and still be refused, because the constraint that matters is
-in something that cannot be read.
-
-### Recovering a wedged IDE
-
-An "Internal error in OpenProject" that survives ``mw_ide_start`` is not permanent. What clears it:
-
-    1. mw_ide_close      the bridge's own close, which kills the process it knows about
-    2. taskkill          the remaining Mwt
-    3. mw_ide_start      returns already_running=false with a fresh window
-    4. mw_ide_open       succeeds
-
-Step 3 matters: ``mw_ide_start`` on an already-running process reports ``already_running`` and
-attaches to the stale one, so the COM state is never rebuilt. The close-then-start pair is what
-does it, and a force-kill ALONE leaves the bridge holding a dead COM object so every later
-OpenProject fails. This cost time twice before it was written down.
-
-``mw_code_pou_assign`` and ``mw_code_pou_unassign`` both stay refused, now on evidence for each
-direction rather than by analogy from one.
-
-
-### PLCopen XML export / import exists, and is LIVE
-
-Round 5 recorded import/export as a dead end. That was measured on `ExternalImportExportProviders`,
-which is EMPTY - the probe never reached the collection that matters.
-
-`Ade.Application.ImportExports` holds SIX operations, and enumerating them (1-BASED - index 0 is
-out of range) gives:
-
-    item  Direction  ImportExportType               Execute()
-    1     2 import   file_exchange_format_import    Not implemented
-    2     2 import   iec_61131-3_file_import        returns
-    3     1 export   iec_61131-3_file_export        returns
-    4     1 export   cross_references_export        Not implemented
-    5     1 export   plc_open_xml_export            One or more arguments are invalid
-    6     2 import   plc_open_xml_import            One or more arguments are invalid
-
-**"Arguments are invalid" is not "not implemented".** Items 5 and 6 are implemented code waiting
-for parameters, and item 6 matters more than anything else found in this project so far, because
-the PLCopen help states Task is exportable and importable, and the schema on disk
-(`TC6_XML_V10.xsd`) defines `<pouInstance name type>` INSIDE `<task>` - which is precisely the
-program assignment this plugin cannot otherwise write.
-
-The argument shape is still unknown: 0, 1 and 2 arguments all report "Number of parameters
-specified does not match the expected number", so the arity is fixed and hidden behind IDispatch
-late binding. `SetAttribute` and `GetAttribute` are stubs.
-
-### The route to an object: GetObjectByLogicalName
-
-    ActiveProject.GetObjectByLogicalName : IDispatch GetObjectByLogicalName (string, AdeObjectType)
-    ActiveProject.GetInstancePathForPou  : string   GetInstancePathForPou (string)      STUB
-    Application.ExportEvcObject          : void     ExportEvcObject (AdeEvcObject)
-    Application.ImportEvcObject          : void     ImportEvcObject (AdeEvcObject)
-
-The two-argument signature is why a first attempt failed on arity rather than on the name. With a
-project genuinely open, `GetObjectByLogicalName` answers **"Cannot find BG in Project."** for every
-name tried and every type value 0..24 - so it SEARCHES, the project IS reachable over COM, and the
-only missing piece is the logical name format. `GetInstancePathForPou` is a stub, so the
-assignment question cannot be asked that way.
-
-### Two traps worth recording
-
-**A standalone `New-Object -ComObject Ade.Application.550` is not the plugin's IDE.** With no IDE
-running it LAUNCHES one, bare, so `ActiveProject.Name` is empty and every call reports "There is
-no project open" - which reads like a missing feature and is really a missing project. Start the
-IDE and open a project through the plugin FIRST, then probe.
-
-**`[void](Function ...)` discards the function's whole output stream**, not just its return value,
-so a probe written that way prints nothing and looks like it hung. Probes should use Write-Host.
-
-
-### Never kill node or powershell by name on this machine
-
-The COM bridge needed restarting, so:
-
-    Get-Process node | Stop-Process -Force
-
-killed the harness running the command. The shell died mid-sentence, the call returned
-``[exit code: 4294967295]`` with no output, and every long test afterwards failed the same way
-until the environment recovered. **The DSH harness runs on node and spawns powershell**, so a blunt
-kill by process NAME takes out the thing doing the killing.
-
-The same mistake in miniature: stopping powershell from a child shell whose ``$PID`` was the
-CHILD's, which killed the parent and produced no output at all.
-
-The bridge has its own ``stop`` verb. Use it. Never match a process by name alone - filter on
-CommandLine, or let the tool that owns the process end it.
-
-### Closed: the stale-App fix does NOT cure create-then-declare
-
-Round 46 recorded this as open, because every create-then-declare test in rounds 40 to 44 ran
-through a long-lived bridge and the stale-App bug found in round 45 might have been the real cause.
-**It is not.** Tested with the bridge restarted at every step, so no cached COM object survives:
-
-    setup                staged and opened, 7 POUs
-    create ZzFresh47     .VB=1094B   .VGR=1565B
-    add a declaration    applied=true   .VB=1113B   .VGR=1645B
-    reopen               13 declarations   .VB=1113B   .VGR=1645B     <- SURVIVED
-    assign               assigned=true
-    BUILD                is_compiled=false  stalled=true
-      on disk            .VB=0B   .VGR=79,432,063B                   <- DESTROYED
-
-So the warning in ``mw_code_pou_create`` stays, and it describes a real problem in the format rather
-than a stale handle.
-
-**And the timing is sharper than every earlier round said.** The POU is VALID through the create,
-through the add, and through a full close-and-reopen - 13 declarations readable from disk. It is
-destroyed only when the assigned POU is COMPILED. Earlier rounds described this as "the IDE
-truncates the .VB on open"; **the reopen above disproves that directly.** The destruction is a
-property of the FAILED BUILD, which matches the round 24 finding that a failed build rewrites
-project files - it truncated ``NODES.LST`` from 802 to 499 bytes.
-
-**WHETHER THE POU SURVIVES IS NOT CONSISTENT, and both measurements are real.** Round 47, above, got
-``.VB=0B`` — destroyed. Round 57, five identical runs, got ``.VB=170`` every time — intact, with the
-stall and the survival both reproducible. So the destruction is not a reliable consequence of this
-stall, and an agent should not assume either outcome. What IS reliable is the stall itself: 28 of 29
-runs across every variation tried.
-
-Do not read the survival in round 57 as reassurance. The stall is the constant; whether the artefact
-comes through it is not, and a build that silently fails is worth avoiding on its own terms.
-
-An agent following the documented working path is safe. An agent adding a declaration gets a POU
-that looks perfect - reads back, reopens, shows every declaration - right up to the moment it is
-compiled, and ``mw_code_var_add`` now refuses to create that situation at all.
-
-
-### Adding a declaration to a POU this plugin created stalls its build
-
-**This is the one rule to know, and the tool now enforces it.**
-
-    add a declaration to a CREATED POU                 the build stalls. 28 of 29 runs, every body.
-    add the identical declaration to an EXISTING POU   works, and builds.
-
-**The declaration is not used by anything in the failing case.** Control H - an added declaration the
-body never mentions - stalled three times out of three, so this is not about how the body refers to
-it, and there is no way to write the body that avoids it. An earlier attempt to document it as "only
-reading stalls" was wrong and has been removed.
-
-**The failure is silent and delayed**, which is why it matters so much: the add reports success, the
-declaration reads back correctly, and the stall appears only at the NEXT BUILD with an **empty Errors
-pane**. Nothing connects the two. So `mw_code_var_add` **refuses outright** on a POU created by
-`mw_code_pou_create`, naming the three things that do work:
-
-1. choose a template that **already declares** what the POU needs - the supported path
-2. add the declaration to an **existing** POU
-3. add it once in the MotionWorks editor, then edit the POU from here
-
-**The POU survives.** `.VB=170` after a stalled build, not 0. Removing the offending declaration from
-an existing POU clears the stall. Nothing is destroyed by this.
-
-### A type error destroys the POU - and is now refused
-
-A **separate** failure with a separate remedy, and the one that earns the word "destroyed":
-
-    TopCutterCamReady := TopCutterCamTableID;      BOOL := UINT
-      -> the build stalls AND .VB goes to 0 bytes, the grid to 79,432,063 bytes
-
-    the same POU with a type-correct body
-      -> the build stalls, and the POU is INTACT at 1094 bytes
-
-The compiler does not report a type error, it takes the POU with it. `mw_code_write_st` now refuses
-one, through `check_assignment_types` in `stlint.py`:
-
-    REFUSED: line 1: assigning a INTEGER to 'TopCutterCamReady', which is BOOL - a type error
-             makes the build DESTROY this POU rather than report it, so the body is refused
-
-The check is deliberately narrow - only assignments whose right-hand side type can be established
-confidently, and only across family boundaries - because a false refusal blocks correct code.
-`INTEGER` to `REAL` is allowed; the reverse is caught; an unknown right-hand side is left alone.
-
-### Reading a VAR_EXTERNAL global stalls the build
-
-    xSelect := TopCutterCamReady;      a READ of a global        STALLED
-    TopCutterCamReady := TRUE;         a WRITE to a global       CLEAN
-    xSelect := TRUE; iState := iState + 1;   locals only         CLEAN
-
-Correctly declared, correctly typed, and it stalls. This is the third face of one rule: a global
-referenced without `VAR_EXTERNAL` stalls, a global ADDED by this plugin stalls until the resource
-grid carries it, and a global that is READ stalls even when it is declared properly.
-
-### The supported path for authoring a program
-
-    create from a template that ALREADY declares what the program needs
-    write the body over those INHERITED declarations
-    assign it to a task
-    build
-
-This is verified end to end on every run by the capability matrix, which adds and uses declarations
-on an existing POU and rebuilds after each of its 13 cases. **A created POU's inherited declarations
-are fully usable** - that has always worked.
+# MotionWorks IEC workspace editing
+
+Use the installed tools for discovery, staging, offline editing and IDE verification.
+The workflow below replaces historical workarounds based on incomplete grid parsing.
+A successful file write is offline evidence only. Report native IDE acceptance separately.
+Never download a project, start a controller, or command machine motion.
+
+## Select and bind the project
+
+1. Run `mw_project_find` first. Discovery is confined to the calling session workspace.
+2. If no project exists there, ask the user to provide the project in that workspace.
+   Do not search Desktop, Downloads, other chats, or remembered paths for a substitute.
+3. Select the intended `.mwt` and its expanded directory. If several exist and intent
+   cannot be determined from the request, clarify which one is intended.
+4. Call `mw_ide_stage`. It copies both into `<workspace>/.motionworks/stage/`, rewrites
+   the wrapper binding and records source identity. Edit this workspace copy.
+5. Pass the selected project explicitly when multiple staged copies exist. Opening
+   validates the wrapper's embedded directory and its digest before the bridge acts.
+
+The session header determines the workspace. The DSH profile and plugin installation
+folder are not project workspaces. Missing context is a refusal, not an invitation to
+fall back to the shell directory. Shared plugin-stage projects from older versions are
+not eligible. Another open IDE project is not authorization to edit, save or build it.
+Outside references may be inspected using explicitly read-only reference tools; they
+must never become the opened or edited target. Do not bypass these guards with COM,
+shell scripts, hard-coded project paths, or copied examples from reference documents.
+Exports and backups also belong inside the workspace.
+
+## Inspect before changing
+
+Inventory POUs, read the relevant declarations and bodies, and inspect globals and tasks.
+`mw_code_validate` checks readable containers, paired declaration/grid records, unique
+handles and worksheet rows, supported direct-address overlaps, and tree IDs/counts.
+It reports errors instead of silently repairing an unknown layout. Existing segmented
+runtime memory addresses are preserved; their aliasing is not proven by this validator.
+Static validation does not establish every task binding, external library, graphical
+connection, or machine behavior. Capture baseline errors before deciding what to change.
+
+The expanded directory is the source, not the small `.mwt` wrapper. A POU container
+holds `.VB` declarations and `.VGR` worksheet records as redundant stores. ST bodies
+are `.STB`; graphical LD/FBD bodies are `.GB`. Additional XML stores descriptions and
+worksheet identities. Never replace one redundant store and call the variable usable.
+Never edit generated `tmp.sto` as a substitute for changing the native source.
+
+## Close, preview, commit
+
+Use `mw_ide_close` before offline mutations. The bridge first proves the open project's
+workspace identity, saves it, and requests a graceful native close. It does not force
+kill the process. If a modal dialog prevents closing, inspect `mw_ide_state`, resolve
+only the relevant authorized dialog and verify closure before continuing. Write tools
+refuse a running IDE; environment flags cannot make them silently kill it.
+
+Write tools default to `dry_run: true`. A preview changes no project bytes and does not
+close the IDE. Read the plan and any refusal. Execute the intended change with
+`dry_run: false` once its scope matches the user's request; routine previews do not
+require a new human approval. Do not invent a project format to bypass a refusal.
+
+Actual dispatched mutations take a complete snapshot under
+`<workspace>/.motionworks/transactions/`, verify its hashes, and hold an exclusive
+per-project lock. The journal records changed files, before/after hashes and offline
+validation. A failed operation restores the previous file set and verifies it.
+Backups have unique names so successive operations cannot overwrite recovery evidence.
+A crash or failed rollback retains its lock and journal. Do not delete the lock to
+force another write: inspect the recorded state and recover the snapshot with the IDE
+closed. Automatic crash recovery is not implemented. Retain the journal path in the
+user-facing failure report when recovery is required.
+
+## Promoting the stage back, and the wrapper
+
+The release loop is close IDE -> edit the stage -> build -> copy back -> re-stage -> verify.
+`mw_code_sync_back` is the copy-back step, and it takes its destination from the source
+directory `mw_ide_stage` recorded rather than from a convention:
+
+- It carries SOURCE ONLY - POU containers (`src.st1`), declaration and grid streams, the
+  project tree, the type list, the resource files. It never carries the `.mwt` wrapper, whose
+  stored path is bound to the stage and would point the real project at a temporary copy of
+  itself, and it never carries compiler output (`.DLL`, `.pdb`) or scratch files. An inclusion
+  rule, not an exclusion list: an unlisted new build artifact is simply not carried.
+- Every file is verified by sha256 after the copy. A non-empty `failures` means the release is
+  NOT synced even though the call returned.
+- `dry_run` defaults to true. Read `would_copy` before applying.
+
+If `mw_ide_open` refuses a wrapper as not bound to the staged project, do NOT re-stage: that
+overwrites the stage and takes any POU created since with it. Call `mw_code_wrapper_binding` to
+see which wrapper is stale and whether re-binding clears it, then `mw_code_rebind_wrapper`. That
+is idempotent, so it is safe to call when already bound; it reports `would_change: false` and
+leaves the file digest unchanged.
+
+A POU that is assigned to no task never runs, and a clean build does not prove otherwise - a POU
+containing an undeclared variable compiled cleanly while unassigned. `mw_code_tasks` lists the
+unassigned set; `mw_code_write_st` and `mw_code_pou_create` attach an `unassigned_warning` when
+their target is in it. Assign the program in the MotionWorks Project Tree, then re-run
+`mw_code_tasks` to confirm. A build attempted while a POU is unassigned can stall for ~90 s and
+end with an empty Errors pane, which is not a clean result.
+
+To ask whether an interface has room for another status value, use `mw_code_eip_map` rather than
+reconstructing the address arithmetic: it reads the declared assembly size from the L5X and the
+used range from the project's own `%I`/`%Q` addresses. `next_free_word_address` is arithmetic over
+what was read, not a claim that the peer program leaves that word alone - confirm the offset on
+the CompactLogix side before writing it.
+
+## Variables and descriptions
+
+Declaring several variables at once: use `mw_code_var_add_many` rather than repeating
+`mw_code_var_add`. It takes an array of `{name, type, section?, address?, initial_value?,
+description?}` and applies each item on its own, so a bad item does not discard the good ones:
+read `failures`, which names each rejected item by index and reason, and re-issue only those.
+A partial batch is a normal outcome, not an error.
+
+`mw_code_var_add`, `mw_code_var_edit` and `mw_code_var_delete` update `.VB` and `.VGR`
+together and verify all replaced streams and untouched siblings. The last record ends
+after its fixed native tail; the following group trailer must stay in place. Worksheet
+row IDs are native identifiers, not declaration text line numbers.
+
+Use an existing native variable as donor. The donor must match type, usage, group and
+addressed versus unaddressed layout. Specify `donor` when hidden record fields differ.
+For an empty local worksheet, `donor_pou` can supply a compatible Default-group donor
+from the same project. Supported usages are local VAR, VAR_EXTERNAL and VAR_GLOBAL;
+unknown usages/layouts are refused. Function-block instances retain native usage flags.
+An omitted initializer inherits the donor initializer explicitly in both stores; set
+`initial_value` when another value is intended. Do not assume the donor was initialized
+to zero. Global variables use the resource grid too and are no longer text-only edits.
+
+Descriptions update the declaration comment, a fresh native translation ID, and the
+matching translation XML. Existing translation items are retained because they may be
+shared. New variables do not reuse another variable's description ID. Type or address
+layout changes need a compatible donor; unsupported segmented address edits are refused.
+Known existing system memory bindings are preserved. Referenced renames/deletions are
+refused even with the legacy force argument. Remove or safely restructure references
+first; there is no automatic whole-project symbol rename.
+
+## POUs and graphical code
+
+`mw_code_pou_create` clones a compatible native template in the same staged project.
+It preserves local, external and function-block declaration semantics, renames streams,
+allocates GUIDs and node IDs, and updates tree counts, registry and view entries.
+It does not convert external variables into unrelated local variables. Compatible
+variable additions to cloned POUs use the same paired-store editing path as originals.
+There is no blanket rule that a cloned POU must never receive another declaration.
+
+For ST, `mw_code_write_st` preserves native leading control markers and checks source
+read-back plus sibling streams. Lint is useful but is not the MotionWorks compiler.
+For LD/FBD, clone a known native graphical POU and preserve the complete donor layout.
+Arbitrary graphical rung generation is not implemented. The supplied five-object rung
+example was specific to one binary profile and must not be generalized to unknown FBs.
+The internal donor transplant helper is not a public supported tool. Offline task-node
+and library creation are not generalized from fixed-record examples; use existing
+supported IDE operations and report format refusals. Never claim unsupported edits ran.
+
+## IDE acceptance after edits
+
+1. Validate the changed project offline and open the exact staged wrapper.
+2. Use `mw_ide_build` for Compile(2), which is Build. Make is Compile(1).
+   Native Rebuild is a separate command and was not accepted on the installed 1.19 IDE.
+3. Inspect the returned verdict, `mw_ide_state`, and `mw_ide_errors`. A posted command
+   or cached IsCompiled flag alone does not prove this invocation completed. The bridge
+   requires an observed pending-to-compiled transition. If completion cannot be observed,
+   it reports unverified; inspect the IDE instead of fabricating a clean verdict.
+4. Run Make, inspect errors and warnings, save, close gracefully, reopen the same
+   wrapper and inspect the changed declarations/body, task bindings and project state.
+   Repeat Rebuild/Make when establishing persistence acceptance for a completed change.
+5. Report exactly which checks completed, their evidence and any remaining errors.
+
+Native menu automation is version-dependent and can be blocked by dialogs. The bridge
+checks the Rebuild command ID before posting it. A failed compile does not trigger disk
+repair underneath the running IDE. Close safely before restoring a verified backup.
+Empty Errors output is not proof of a successful compile. Compiler acceptance is not
+machine commissioning, safety validation, or proof that hardware motion is correct.
+
+## Programming references and review
+
+Use `mw_code_reference` before choosing unfamiliar FB pins, variable scope, startup
+semantics or task behavior. Omit query to list the reviewed sources; `block` retrieves
+one of six reviewed historical interfaces. Return the source revision and page with
+advice. Confirm installed IDE, controller and library versions before treating an old
+manual interface as authoritative. Native project FB declarations take precedence.
+Do not infer pin direction from a caller declaration or guess an unknown interface.
+
+`mw_code_reference_sync` optionally downloads the official catalog PDFs into this
+workspace's `.motionworks/references`; it sends no project data. It requires pypdf
+and network access. Curated search remains available offline. A source-hash mismatch
+requires catalog review, not bypassing the check. Installed legacy manual extraction
+is heuristic and must not be presented as a verified source revision.
+
+Call `mw_code_check_program` for existing ST or pass `pou` and proposed `body` before
+writing. Check scope/type/range findings, named FB arguments and task candidates.
+Read coverage and unresolved interfaces as well as error counts. A missing instance
+name match does not prove a program never runs. Preserve native task execution order;
+inspect actual bindings, startup/cyclic context and timing in the IDE. The ST writer
+also includes this advisory review in preview and commit responses. It supplements
+existing validation and compiler acceptance, and performs no automatic repairs.
+
+Pass exact diagnostic text to `mw_code_diagnose`. Its documented causes are candidates,
+not diagnoses proven by the message alone. Correlate with source locations, types,
+library versions and current IDE state. Unknown diagnostics remain unresolved.
+
+Use `mw_code_pattern` for initialization, request edges, nonblocking cyclic sequencing
+and Enable/Valid position feedback. Read its assumptions and adaptation checks before
+using declarations or ST. These are illustrative examples requiring native compilation;
+they do not assign tasks or establish safe machine behavior. Consult
+`docs/PROGRAMMING_KNOWLEDGE.md` for versions, supported checks and limitations.
+
+## Delivery report
+
+Summarize the changed workspace project and files, transaction journal, offline checks,
+IDE acceptance actually observed, and remaining limitations. The staged copy is the editable
+deliverable; promote it to the source project only when the user asks, and do it with
+`mw_code_sync_back` so the promotion carries source only and is verified by hash - not with a
+blanket directory copy, which drags compiled output over the real project. Reload the AryaAI DSH
+plugin after changing its installed code so updated tool schemas and bridge logic are used.
+Restart a stale bridge when its protocol version is refused; never weaken the workspace checks
+to retain an old bridge.
