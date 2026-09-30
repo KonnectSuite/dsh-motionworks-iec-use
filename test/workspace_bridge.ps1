@@ -6,7 +6,7 @@ $ast = [System.Management.Automation.Language.Parser]::ParseFile(
 if ($errors.Count) { throw ($errors | Out-String) }
 $names = @('Normalize-MwPath', 'Set-RequestScope', 'Assert-NoLinkedPath',
     'Test-InsideWorkspace', 'Test-InsideStage', 'Test-SameProject', 'Assert-ProvenCopy',
-    'Get-OpenProjectPath', 'Assert-StagedOpen')
+    'Get-OpenProjectPath', 'Assert-StagedOpen', 'Assert-CloseConsent')
 foreach ($fn in $ast.FindAll({param($node) $node -is [System.Management.Automation.Language.FunctionDefinitionAst]}, $true)) {
     if ($names -contains $fn.Name) { . ([scriptblock]::Create($fn.Extent.Text)) }
 }
@@ -44,7 +44,12 @@ try {
     $fakeApp = [pscustomobject]@{ ActiveProject = [pscustomobject]@{ FullName = $project } }
     $fakeApp | Add-Member ScriptMethod IsProjectOpen { return $true }
     Refuses { Assert-StagedOpen $fakeApp 'save' }
-    Write-Output '6 bridge workspace checks passed; no IDE started'
+    Refuses { Assert-CloseConsent @{ user_approved = $false; expected_project = $project } $project 'closing the IDE' }
+    Refuses { Assert-CloseConsent @{ user_approved = $true; expected_project = (Join-Path $other 'Other.mwt') } $project 'closing the IDE' }
+    Refuses { Assert-CloseConsent @{ user_approved = $true; expected_project = $project } $null 'closing the IDE' }
+    Assert-CloseConsent @{ user_approved = $true; expected_project = $project } $project 'closing the IDE'
+    Assert-CloseConsent @{ user_approved = $true } $null 'closing the IDE'
+    Write-Output '11 bridge workspace and consent checks passed; no IDE started'
 } finally {
     $resolved = [IO.Path]::GetFullPath($testRoot)
     if (-not $resolved.StartsWith([IO.Path]::GetFullPath($tempBase), [StringComparison]::OrdinalIgnoreCase)) { throw 'Invalid cleanup target' }

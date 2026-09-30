@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.4.2
+
+- Require an explicit user-approved close request tied to the exact open project path.
+- Allow the agent to save and close a user-approved project outside the stage so editing
+  can proceed without waiting for a manual IDE close.
+- Stop automatically dismissing projects restored at startup or replaced during open.
+  Opening a staged project now requires approval to save and close the named current one.
+
 ## 0.4.1
 
 - Promoted the Arya-installed 0.4 engine and 50-tool surface into this repository.

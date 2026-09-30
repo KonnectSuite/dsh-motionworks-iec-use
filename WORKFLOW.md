@@ -5,7 +5,8 @@ Format provenance and verification limitations are in [docs/RELIABILITY.md](docs
 
 1. Discover and select the workspace project; stage its wrapper and expanded directory.
 2. Inspect native source and run offline validation.
-3. Close the workspace-bound IDE project gracefully, preview and commit the intended edits.
+3. If the IDE is running, ask the user whether the agent may save and close the named
+   open project. After approval, close it gracefully, preview and commit the edits.
 4. Retain the verified transaction journal and full before snapshot.
 5. Validate, reopen the exact staged wrapper, run Build, and inspect diagnostics.
 6. Save, close/reopen, inspect persistence and repeat acceptance checks as needed.

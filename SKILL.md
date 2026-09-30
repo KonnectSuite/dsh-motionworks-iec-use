@@ -50,11 +50,20 @@ Never edit generated `tmp.sto` as a substitute for changing the native source.
 
 ## Close, preview, commit
 
-Use `mw_ide_close` before offline mutations. The bridge first proves the open project's
-workspace identity, saves it, and requests a graceful native close. It does not force
-kill the process. If a modal dialog prevents closing, inspect `mw_ide_state`, resolve
-only the relevant authorized dialog and verify closure before continuing. Write tools
-refuse a running IDE; environment flags cannot make them silently kill it.
+If MotionWorks is running, call `mw_ide_status` and tell the user the exact project it
+has open. Before closing the IDE or replacing its open project, ask whether the agent
+may **save and close** that named project. Wait for a clear yes. A request to edit code
+does not by itself authorize closing the user's IDE. After approval, pass
+`user_approved: true` and the approved path as `expected_project` to `mw_ide_close` or
+`mw_ide_open`. The bridge refuses if a different project is now open. If no project is
+open, ask before closing the IDE and omit `expected_project`.
+
+Use `mw_ide_close` before offline mutations. It saves the approved open project and
+requests a graceful native close; it does not force kill the process. If a modal dialog
+prevents closing, inspect `mw_ide_state`, resolve only the relevant authorized dialog
+and verify closure before continuing. Write tools refuse a running IDE; environment
+flags cannot make them silently kill it. Read-only inspection and dry-run previews can
+proceed without closing the IDE.
 
 Write tools default to `dry_run: true`. A preview changes no project bytes and does not
 close the IDE. Read the plan and any refusal. Execute the intended change with

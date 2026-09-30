@@ -17,6 +17,8 @@ stay inside that workspace too.
 - Real edits use complete verified snapshots, project locks and rollback on failure.
 - `mw_code_validate` reports offline consistency errors; unsupported layouts fail closed.
 - IDE close is graceful and workspace-checked. Failed builds never repair live disk files.
+- Closing the IDE or replacing its open project requires user approval tied to the exact
+  project path. The bridge saves that project, then closes it; a changed project is refused.
 - `mw_ide_rebuild` requests native Rebuild; Build and Make remain distinct operations.
 - Compile completion is reported unverified when only a cached success flag is available.
 

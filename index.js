@@ -1225,7 +1225,8 @@ function defineTools() {
             return text(
               `MotionWorks IEC ${v.version} has '${v.active_project}' open. `
               + 'That project is NOT the staged workspace copy, so it will not be compiled, '
-              + 'saved, or edited. Stage the workspace project and open that copy. '
+              + 'saved, or edited. Ask the user whether the agent may save and close this named '
+              + 'project before opening the staged copy. '
               + 'A project outside the workspace can be read with reference: true.',
             );
           }
@@ -1473,17 +1474,22 @@ function defineTools() {
       name: 'mw_ide_open',
       description:
         'Open a staged project inside the running MotionWorks IDE. The path must be inside this '
-        + 'plugin\'s stage directory; use mw_ide_stage first. After the IDE loads, the project it '
-        + 'actually has open is compared with the path that was asked for. A different project — '
-        + 'including one the .mwt wrapper still pointed at, or one MotionWorks restored on '
-        + 'startup — is closed without saving and the call fails. Success means the staged '
+        + 'plugin\'s stage directory; use mw_ide_stage first. If another project is already open, '
+        + 'ask the user whether the agent may save and close it, then pass user_approved=true '
+        + 'and its exact path as expected_project. A changed project is refused. After the IDE loads, the project it '
+        + 'actually has open is compared with the path that was asked for. A mismatched project '
+        + 'is left open and the call fails. Success means the staged '
         + 'workspace copy is the project in the window, and the result names where it was staged '
         + 'from.',
       parameters: {
         type: 'object',
         additionalProperties: false,
         required: ['path'],
-        properties: { path: { type: 'string', description: 'Staged .mwt path.' } },
+        properties: {
+          path: { type: 'string', description: 'Staged .mwt path.' },
+          user_approved: { type: 'boolean', description: 'True only after the user approved saving and closing the named current project.' },
+          expected_project: { type: 'string', description: 'Exact current project path named in the user approval; checked again immediately before closing it.' },
+        },
       },
       output: {
         schema: {
@@ -1506,7 +1512,7 @@ function defineTools() {
           v.is_project_open && v.matches_request
             ? `The IDE now has '${v.identity_name ?? v.active_project}' open`
               + (v.identity_source ? `, staged from ${v.identity_source}` : '')
-              + (v.dismissed_project ? `. Closed the other project (${v.dismissed_project}) without saving.` : '.')
+              + (v.dismissed_project ? `. Saved and closed the approved previous project (${v.dismissed_project}).` : '.')
             : 'OpenProject returned but the staged project is not what the IDE has open.',
         ),
       },
@@ -1520,7 +1526,11 @@ function defineTools() {
       execute: async (args) => {
         const path = assertProven(String(args.path));
         const binding = await runCode('check_mwt', { project: path });
-        const opened = await verb('open', { path, wrapper_sha256: binding.wrapper_sha256 }, 300000);
+        const opened = await verb('open', {
+          path, wrapper_sha256: binding.wrapper_sha256,
+          user_approved: args?.user_approved === true,
+          ...(args?.expected_project ? { expected_project: String(args.expected_project) } : {}),
+        }, 300000);
         const id = identityMatching(opened.active_project) ?? identityMatching(path);
         return { ...opened, ...identityFields(id) };
       },
@@ -1893,7 +1903,8 @@ function defineTools() {
       description:
         'Start MotionWorks IEC (a bare Mwt.exe launch, no project). Needed after mw_ide_close, '
         + 'which is required before code writes. Follow it with mw_ide_open to load a project: a '
-        + 'freshly launched IDE has no project services until one is opened.',
+        + 'freshly launched IDE has no project services until one is opened. If MotionWorks '
+        + 'restores another project, it is left open until the user approves saving and closing it.',
       parameters: {
         type: 'object',
         additionalProperties: false,
@@ -1924,11 +1935,8 @@ function defineTools() {
         render: (_a, v) => text(
           `MotionWorks IEC ${v.version} running at ${v.ide_window}`
           + (v.already_running ? ' (was already up)' : ' (launched)')
-          + (v.dismissed_project
-            ? `. Closed an auto-opened project without saving: ${v.dismissed_project}`
-            : '')
           + (v.foreign_project
-            ? `. A project outside the staged copy is already open (${v.foreign_project}) and was left untouched. Do not build or save it.`
+            ? `. Another project is open (${v.foreign_project}). Ask the user before saving and closing it; do not build it.`
             : ''),
         ),
       },
@@ -2165,8 +2173,18 @@ function defineTools() {
       description:
         'Close MotionWorks IEC and wait until it is really gone. Required before writing code: '
         + 'the write engine refuses while the IDE holds the project, because the IDE caches '
-        + 'project state and rewrites whole files, which would discard an external edit.',
-      parameters: { type: 'object', additionalProperties: false, properties: {} },
+        + 'project state and rewrites whole files, which would discard an external edit. '
+        + 'Ask the user whether the agent may save and close MotionWorks first. Pass '
+        + 'user_approved=true and the exact open project path as expected_project. '
+        + 'If the project changed, the close is refused.',
+      parameters: {
+        type: 'object', additionalProperties: false,
+        required: ['user_approved'],
+        properties: {
+          user_approved: { type: 'boolean', description: 'True only after the user approved saving and closing MotionWorks.' },
+          expected_project: { type: 'string', description: 'Exact open project path named in the approval. Omit only if no project is open.' },
+        },
+      },
       output: {
         schema: {
           type: 'object',
@@ -2183,7 +2201,15 @@ function defineTools() {
           : 'MotionWorks is STILL running Ã¢â‚¬â€ do not write code yet.'),
       },
       presentCall: () => ({ card: 'generic', title: 'Close MotionWorks IEC', kind: 'execute' }),
-      execute: () => verb('close_ide', {}, 60000),
+      execute: (args) => {
+        if (args?.user_approved !== true) {
+          throw new Error('Ask the user whether the agent may save and close MotionWorks, then pass user_approved:true.');
+        }
+        return verb('close_ide', {
+          user_approved: true,
+          ...(args?.expected_project ? { expected_project: String(args.expected_project) } : {}),
+        }, 60000);
+      },
     },
 
     // Ã¢â€â‚¬Ã¢â€â‚¬ code Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬

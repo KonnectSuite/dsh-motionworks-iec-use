@@ -680,6 +680,21 @@ function Assert-StagedOpen($app, [string]$what) {
     return $path
 }
 
+function Assert-CloseConsent($request, [string]$current, [string]$what) {
+    if (-not [bool]$request.user_approved) {
+        throw "REFUSED: $what requires the user's approval to close MotionWorks. Ask first, then pass user_approved=true."
+    }
+    $expected = [string]$request.expected_project
+    if (-not $current -and $expected) {
+        throw "REFUSED: MotionWorks no longer has the approved project '$expected' open. Check IDE status and ask again before closing it."
+    }
+    if ($current) {
+        if (-not $expected -or -not (Test-SameProject $expected $current)) {
+            throw "REFUSED: MotionWorks now has '$current' open, which does not match the approved project '$expected'. Ask the user again before closing it."
+        }
+    }
+}
+
 Log "bridge started pid=$PID bits=$([IntPtr]::Size * 8) stage=$StageRoot"
 
 while ($true) {
@@ -756,18 +771,15 @@ while ($true) {
                     throw 'REFUSED: wrapper binding must be verified by mw_ide_open before opening.'
                 }
                 $app = Connect-App
-                # A project already in the window is not the one this call asked for until
-                # it is. An unmodified foreign project is closed without saving so the staged
-                # copy can take its place. Unsaved changes on that other project are left alone.
+                # A project already in the window may belong to the user. Never replace it
+                # without approval tied to its exact path, even when it is unmodified.
                 $dismissed = $null
                 $prior = Get-OpenProjectPath $app
                 if ($prior -and -not (Test-SameProject $prior $full)) {
-                    $modified = $false
-                    try { $modified = [bool]$app.ActiveProject.IsModified } catch { }
-                    if ($modified) {
-                        throw "REFUSED: the IDE already has '$prior' open with unsaved changes. That project was left untouched. Save or close it in MotionWorks before opening the staged project '$full'."
-                    }
+                    Assert-CloseConsent $req $prior 'opening another project'
                     try {
+                        # Consent covers saving and closing the named current project.
+                        $app.ActiveProject.Save()
                         $app.ActiveProject.Close($false)
                         $dismissed = $prior
                         Log "closed other project before open: $prior"
@@ -877,10 +889,7 @@ while ($true) {
                 $inStage = Test-InsideStage $activeName
                 Log "open loaded active=$activeName matches=$matches inStage=$inStage"
                 if ($verified -and (-not $matches -or -not $inStage)) {
-                    try { $app.ActiveProject.Close($false); Log "closed mismatched project $activeName" } catch {
-                        Log "could not close mismatched project: $($_.Exception.Message)"
-                    }
-                    throw "REFUSED: asked to open '$full' but the IDE loaded '$activeName'. That is not the staged workspace copy, so it was closed without saving."
+                    throw "REFUSED: asked to open '$full' but the IDE loaded '$activeName'. It was left open; ask the user before saving or closing it."
                 }
                 $ok = [bool]$verified -and $matches -and $inStage
                 $data = [ordered]@{
@@ -1336,32 +1345,17 @@ while ($true) {
                 # Force a fresh connection: the previous one pointed at the old process.
                 $script:App = $null
                 $app = Connect-App
-                # A bare Mwt.exe launch restores the last project. That project is
-                # often outside the workspace. When WE just launched the IDE, close
-                # it without saving so the window is not left on it. An IDE that was
-                # already running is left as the user had it, and named so the caller
-                # can see it is not the staged copy.
+                # A bare Mwt.exe launch can restore the last project. Leave it open
+                # until the user authorizes saving and closing that exact project.
                 $dismissed = $null
                 $foreign = $null
                 $openPath = Get-OpenProjectPath $app
                 Log "start_ide already=$already openPath=$openPath"
-                # A bare launch restores the last project. That is how an outside
-                # project appeared in the window and then got built. When WE just
-                # launched, close whatever came up, in stage or not.
-                if ($openPath -and -not $already -and -not (Test-SameProject $openPath $launchProject)) {
-                    try {
-                        $app.ActiveProject.Close($false)
-                        $dismissed = $openPath
-                        Log "dismissed auto-opened project $openPath"
-                    } catch {
-                        $foreign = $openPath
-                        Log "could not dismiss auto-opened project: $($_.Exception.Message)"
-                    }
-                } elseif ($openPath -and -not (Test-InsideStage $openPath)) {
+                if ($openPath -and -not (Test-SameProject $openPath $launchProject)) {
                     $foreign = $openPath
                 }
                 if ($foreign) {
-                    throw "REFUSED: MotionWorks has an unrelated project open: $foreign. Save or close it manually; no project operation was performed."
+                    throw "REFUSED: MotionWorks has '$foreign' open. Ask the user whether the agent may save and close that project, then call mw_ide_open with user_approved=true and expected_project='$foreign'. No project operation was performed."
                 }
                 $ok = $true
                 $data = [ordered]@{
@@ -1655,8 +1649,9 @@ while ($true) {
                     $ok = $true; $data = @{ closed = $true; window_remaining = $false }
                 } else {
                     $app = Connect-App
-                    [void](Assert-StagedOpen $app 'close_ide')
-                    $app.ActiveProject.Save()
+                    $current = Get-OpenProjectPath $app
+                    Assert-CloseConsent $req $current 'closing the IDE'
+                    if ($current) { $app.ActiveProject.Save() }
                     # WM_CLOSE permits native save/modal handling; never kill the process.
                     [void][MWW]::PostMessage([IntPtr](Get-IdeWindow), 0x0010, [IntPtr]::Zero, [IntPtr]::Zero)
                     $deadline = (Get-Date).AddSeconds(15)

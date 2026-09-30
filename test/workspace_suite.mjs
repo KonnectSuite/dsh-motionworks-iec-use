@@ -8,6 +8,7 @@ const commands = [
   [process.execPath, ['test/skill_delivery.mjs', root]],
   [process.execPath, ['test/workspace_session.mjs']],
   [process.execPath, ['test/workspace_boundary.mjs']],
+  [process.execPath, ['test/close_consent.mjs']],
   [i.pythonExe(), ['-B', 'test/workspace_engine.py']],
   [i.pythonExe(), ['-B', 'test/reliability_test.py']],
   [i.pythonExe(), ['-B', 'test/knowledge_test.py']],
