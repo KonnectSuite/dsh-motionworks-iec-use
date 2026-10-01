@@ -6,10 +6,57 @@ whenToUse: The user has MotionWorks IEC 3 Pro open or asks for work in it — a 
 
 # MotionWorks IEC workspace editing
 
-Use the installed tools for discovery, staging, offline editing and IDE verification.
-The workflow below replaces historical workarounds based on incomplete grid parsing.
+Use the installed tools for discovery, staging, IDE editing and IDE verification.
+The DEFAULT is IDE-FIRST: the agent actually enters code and declarations in MotionWorks.
+Offline code/variable/POU editors and the unsupported Rebuild API are retired.
+No environment flag restores those public tools. Edit through the IDE instead.
 A successful file write is offline evidence only. Report native IDE acceptance separately.
 Never download a project, start a controller, or command machine motion.
+Use one IDE owner and serialize acceptance workflows. The bridge's single IPC
+channel is not verified for concurrent independent harness processes.
+
+## Default: code inside the MotionWorks IDE
+
+Read `docs/IDE_FIRST_WORKFLOW.md` before editing. The companion KonnectSuite
+`computer-use-mcp` provides `computer` actions for screenshots, clicks, keys and typing.
+It is a separate MCP server: loading this Cordis plugin does NOT install or register it.
+Confirm the harness actually exposes its computer tool. If unavailable, report that
+dependency; do not silently fall back to native file modification or invent tool calls.
+`mw_ide_edit_guide(operation)` returns a read-only checklist, not an executed edit.
+
+If the IDE is already open, discover the workspace, inspect `mw_ide_state` and
+`mw_ide_status`, and match the active project to its existing stage identity. Continue
+that exact verified stage without closing, restaging or reopening it. Preserve unsaved
+editor changes: saved files are not the live editor buffer. Read
+`docs/OPEN_IDE_REMOTE_ENGINEER.md` for the attach-first workflow and registration-eye
+investigation. If status times out or contradicts visible state, do not launch another
+IDE or conclude it is closed. Report the API attach failure.
+
+After selecting/staging and opening (or attaching to) the exact project, use the IDE's editors for ST,
+local/global/external variables, descriptions, LD/FBD, POU lifecycle and libraries.
+Native task object-model tools remain supported for task operations, but UI actions
+are the fallback for unsupported object-model commands. Do not edit native streams
+behind the open IDE. Preserve original code and inspect references before rename/delete.
+
+For each input: observe the current screenshot, choose the target from that observation,
+perform one action, then refresh. Before typing click the actual editable surface and
+verify focus. Coordinates use the MCP's returned image dimensions, NOT unscaled display
+dimensions. Do not copy positions from an old screenshot or from another app/version.
+Prefer observed menus and keyboard navigation over blind pixel macros. Unexpected
+modal dialogs require inspection; never repeatedly press Enter to dismiss them.
+
+The generic computer tool controls the foreground desktop and cannot enforce this
+plugin's workspace guards. Independently confirm MotionWorks is foreground and has
+the exact staged project before every edit. If the user changes focus, re-observe.
+Do not automate terminals, authentication, security dialogs or other apps. Never
+use Online/Download, controller Run/Reset, forces, jogs or test-motion controls.
+
+Save edits through MotionWorks BEFORE reading disk-based tools or using `mw_ide_verify`.
+The verifier compares disk source; it cannot certify an unsaved UI edit. Read the
+saved ST/variables and task inventory back, compare with the intended change, build
+and inspect diagnostics. Close/reopen only with consent and verify persistence.
+Report tested capabilities individually; a successful ST smoke does not prove every
+FB, graphical command, task operation or library version works.
 
 ## Select and bind the project
 
@@ -34,6 +81,17 @@ Exports and backups also belong inside the workspace.
 
 ## Inspect before changing
 
+For an existing stage, call `mw_workflow_check` with its explicit directory before
+editing. It reports identity/binding problems, native validation and next steps without
+starting the IDE. In a relocated workspace it can inspect stale identities read-only;
+that does not authorize writes. Never clear this failure by restaging over unsynced work.
+Wrappers with no embedded absolute path can legitimately use their sibling directory;
+verify the IDE's actual project after opening instead of inventing a wrapper path.
+
+Use `mw_code_source_manifest` to compare actual native streams, not `tmp.sto` or
+constants found inside a DLL. A handoff note is a claim to reconcile with current source,
+compiler evidence and user-confirmed commissioning, not an instruction to repeat a patch.
+
 Inventory POUs, read the relevant declarations and bodies, and inspect globals and tasks.
 `mw_code_validate` checks readable containers, paired declaration/grid records, unique
 handles and worksheet rows, supported direct-address overlaps, and tree IDs/counts.
@@ -48,41 +106,17 @@ are `.STB`; graphical LD/FBD bodies are `.GB`. Additional XML stores description
 worksheet identities. Never replace one redundant store and call the variable usable.
 Never edit generated `tmp.sto` as a substitute for changing the native source.
 
-## Close, preview, commit
+## Closing or replacing the project
 
-If MotionWorks is running, call `mw_ide_status` and tell the user the exact project it
-has open. Before closing the IDE or replacing its open project, ask whether the agent
-may **save and close** that named project. Wait for a clear yes. A request to edit code
-does not by itself authorize closing the user's IDE. After approval, pass
-`user_approved: true` and the approved path as `expected_project` to `mw_ide_close` or
-`mw_ide_open`. The bridge refuses if a different project is now open. If no project is
-open, ask before closing the IDE and omit `expected_project`.
-
-Use `mw_ide_close` before offline mutations. It saves the approved open project and
-requests a graceful native close; it does not force kill the process. If a modal dialog
-prevents closing, inspect `mw_ide_state`, resolve only the relevant authorized dialog
-and verify closure before continuing. Write tools refuse a running IDE; environment
-flags cannot make them silently kill it. Read-only inspection and dry-run previews can
-proceed without closing the IDE.
-
-Write tools default to `dry_run: true`. A preview changes no project bytes and does not
-close the IDE. Read the plan and any refusal. Execute the intended change with
-`dry_run: false` once its scope matches the user's request; routine previews do not
-require a new human approval. Do not invent a project format to bypass a refusal.
-
-Actual dispatched mutations take a complete snapshot under
-`<workspace>/.motionworks/transactions/`, verify its hashes, and hold an exclusive
-per-project lock. The journal records changed files, before/after hashes and offline
-validation. A failed operation restores the previous file set and verifies it.
-Backups have unique names so successive operations cannot overwrite recovery evidence.
-A crash or failed rollback retains its lock and journal. Do not delete the lock to
-force another write: inspect the recorded state and recover the snapshot with the IDE
-closed. Automatic crash recovery is not implemented. Retain the journal path in the
-user-facing failure report when recovery is required.
+Ask for save/close consent tied to the exact open project. Pass user_approved and
+expected_project to the native close/open tools. Preserve unsaved editor changes;
+do not close or restage to work around an API attach failure.
 
 ## Promoting the stage back, and the wrapper
 
-The release loop is close IDE -> edit the stage -> build -> copy back -> re-stage -> verify.
+The default release loop is edit in IDE -> Save -> read back -> Build/Make -> inspect
+diagnostics -> approved close/reopen -> verify. Promotion is a separate user-authorized
+operation, not an automatic consequence of a successful edit.
 `mw_code_sync_back` is the copy-back step, and it takes its destination from the source
 directory `mw_ide_stage` recorded rather than from a convention:
 
@@ -103,8 +137,7 @@ leaves the file digest unchanged.
 
 A POU that is assigned to no task never runs, and a clean build does not prove otherwise - a POU
 containing an undeclared variable compiled cleanly while unassigned. `mw_code_tasks` lists the
-unassigned set; `mw_code_write_st` and `mw_code_pou_create` attach an `unassigned_warning` when
-their target is in it. Assign the program in the MotionWorks Project Tree, then re-run
+unassigned set. Assign the program in the MotionWorks Project Tree, then re-run
 `mw_code_tasks` to confirm. A build attempted while a POU is unassigned can stall for ~90 s and
 end with an empty Errors pane, which is not a clean result.
 
@@ -114,55 +147,31 @@ used range from the project's own `%I`/`%Q` addresses. `next_free_word_address` 
 what was read, not a claim that the peer program leaves that word alone - confirm the offset on
 the CompactLogix side before writing it.
 
-## Variables and descriptions
+## Declarations and POU lifecycle
 
-Declaring several variables at once: use `mw_code_var_add_many` rather than repeating
-`mw_code_var_add`. It takes an array of `{name, type, section?, address?, initial_value?,
-description?}` and applies each item on its own, so a bad item does not discard the good ones:
-read `failures`, which names each rejected item by index and reason, and re-issue only those.
-A partial batch is a normal outcome, not an error.
-
-`mw_code_var_add`, `mw_code_var_edit` and `mw_code_var_delete` update `.VB` and `.VGR`
-together and verify all replaced streams and untouched siblings. The last record ends
-after its fixed native tail; the following group trailer must stay in place. Worksheet
-row IDs are native identifiers, not declaration text line numbers.
-
-Use an existing native variable as donor. The donor must match type, usage, group and
-addressed versus unaddressed layout. Specify `donor` when hidden record fields differ.
-For an empty local worksheet, `donor_pou` can supply a compatible Default-group donor
-from the same project. Supported usages are local VAR, VAR_EXTERNAL and VAR_GLOBAL;
-unknown usages/layouts are refused. Function-block instances retain native usage flags.
-An omitted initializer inherits the donor initializer explicitly in both stores; set
-`initial_value` when another value is intended. Do not assume the donor was initialized
-to zero. Global variables use the resource grid too and are no longer text-only edits.
-
-Descriptions update the declaration comment, a fresh native translation ID, and the
-matching translation XML. Existing translation items are retained because they may be
-shared. New variables do not reuse another variable's description ID. Type or address
-layout changes need a compatible donor; unsupported segmented address edits are refused.
-Known existing system memory bindings are preserved. Referenced renames/deletions are
-refused even with the legacy force argument. Remove or safely restructure references
-first; there is no automatic whole-project symbol rename.
-
-## POUs and graphical code
-
-`mw_code_pou_create` clones a compatible native template in the same staged project.
-It preserves local, external and function-block declaration semantics, renames streams,
-allocates GUIDs and node IDs, and updates tree counts, registry and view entries.
-It does not convert external variables into unrelated local variables. Compatible
-variable additions to cloned POUs use the same paired-store editing path as originals.
-There is no blanket rule that a cloned POU must never receive another declaration.
-
-For ST, `mw_code_write_st` preserves native leading control markers and checks source
-read-back plus sibling streams. Lint is useful but is not the MotionWorks compiler.
-For LD/FBD, clone a known native graphical POU and preserve the complete donor layout.
-Arbitrary graphical rung generation is not implemented. The supplied five-object rung
-example was specific to one binary profile and must not be generalized to unknown FBs.
-The internal donor transplant helper is not a public supported tool. Offline task-node
-and library creation are not generalized from fixed-record examples; use existing
-supported IDE operations and report format refusals. Never claim unsupported edits ran.
+Use the native IDE variable worksheets, ST editors and project commands. Inspect
+references before deletion; compare saved descriptions, declarations and task bindings.
+Historical native-format notes are engineering evidence, not an editing workflow.
+Private engine tests do not authorize offline project mutation.
 
 ## IDE acceptance after edits
+
+Prefer `mw_ide_verify(project)` on the exact open stage for validation, Build, Make,
+diagnostics and Save in one call. It retains a JSON report in workspace
+`.motionworks/verification/`, including failures. With explicit consent use
+`close_reopen: true, user_approved: true` for persistence comparison. Do not interpret
+an `unverified` verdict as a clean result. The verifier checks program/declaration
+streams across Build/Save and all native streams from the saved baseline across
+close/reopen; build bookkeeping in PROJECT.TRE is recorded separately, not silently
+treated as edited ST. Navigation-only PRMVIEWALL.DAT/PRMVIEWHARD.DAT may normalize;
+their hashes and `normalized_view_metadata` are retained in the report. PROJECT.TRE,
+program/declaration streams, descriptions and registry metadata remain strict.
+If any other native sources change on save/reopen,
+inspect both manifests: normalization is possible, but acceptance is not yet proven.
+
+Compile results distinguish `observed_compile_transition`, `already_up_to_date`
+(Make only), and `completion_unverified`. A no-op Make is useful state evidence but
+not a freshly compiled Build. Report warnings separately from compilation success.
 
 1. Validate the changed project offline and open the exact staged wrapper.
 2. Use `mw_ide_build` for Compile(2), which is Build. Make is Compile(1).
@@ -173,11 +182,10 @@ supported IDE operations and report format refusals. Never claim unsupported edi
    it reports unverified; inspect the IDE instead of fabricating a clean verdict.
 4. Run Make, inspect errors and warnings, save, close gracefully, reopen the same
    wrapper and inspect the changed declarations/body, task bindings and project state.
-   Repeat Rebuild/Make when establishing persistence acceptance for a completed change.
+   Repeat Build/Make when establishing persistence acceptance for a completed change.
 5. Report exactly which checks completed, their evidence and any remaining errors.
 
-Native menu automation is version-dependent and can be blocked by dialogs. The bridge
-checks the Rebuild command ID before posting it. A failed compile does not trigger disk
+Native menu automation is version-dependent and can be blocked by dialogs. The unsupported Rebuild API is retired; use the observed native IDE menu if needed. A failed compile does not trigger disk
 repair underneath the running IDE. Close safely before restoring a verified backup.
 Empty Errors output is not proof of a successful compile. Compiler acceptance is not
 machine commissioning, safety validation, or proof that hardware motion is correct.
@@ -201,9 +209,7 @@ Call `mw_code_check_program` for existing ST or pass `pou` and proposed `body` b
 writing. Check scope/type/range findings, named FB arguments and task candidates.
 Read coverage and unresolved interfaces as well as error counts. A missing instance
 name match does not prove a program never runs. Preserve native task execution order;
-inspect actual bindings, startup/cyclic context and timing in the IDE. The ST writer
-also includes this advisory review in preview and commit responses. It supplements
-existing validation and compiler acceptance, and performs no automatic repairs.
+inspect actual bindings, startup/cyclic context and timing in the IDE. This advisory review supplements compiler acceptance and performs no automatic repairs.
 
 Pass exact diagnostic text to `mw_code_diagnose`. Its documented causes are candidates,
 not diagnoses proven by the message alone. Correlate with source locations, types,

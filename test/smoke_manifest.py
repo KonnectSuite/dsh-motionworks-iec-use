@@ -12,7 +12,7 @@ import json
 import sys
 from pathlib import Path
 
-ENGINE = Path(r"C:\Users\KNPhu\profiles\desktop\node_modules\dsh-motionworks-iec-use\code\engine")
+ENGINE = Path(__file__).resolve().parents[1] / "code" / "engine"
 sys.path.insert(0, str(ENGINE))
 
 from motionworks_iec_mcp.cfb import CompoundFile  # noqa: E402

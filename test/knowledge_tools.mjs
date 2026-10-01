@@ -20,7 +20,7 @@ async function call(name, args = {}) {
   return response.result;
 }
 try {
-  assert.equal(definitions.length, 50);
+  assert.equal(definitions.length, 45);
   assert.ok((await call('mw_code_reference')).sources.length >= 6);
   assert.ok((await call('mw_code_reference', { query: 'VAR_EXTERNAL' })).topics.length);
   assert.equal((await call('mw_code_reference', { block: 'MC_Power' })).signature.outputs.Status, 'BOOL');
@@ -32,7 +32,7 @@ try {
   const review = definitions.find(d => d.name === 'mw_code_check_program');
   await assert.rejects(() => review.execute({ project: join(tmpdir(), 'outside-project') }, context), /workspace|stage|REFUSED/i);
   assert.ok(!readdirSync(workspace).some(n => n.endsWith('.pdf')), 'curated queries do not download manuals');
-  console.log('10 knowledge tool integration checks passed; 50 tools registered.');
+  console.log(`10 knowledge tool integration checks passed; ${definitions.length} tools registered.`);
 } finally {
   rmSync(workspace, { recursive: true, force: true });
 }

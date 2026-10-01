@@ -57,6 +57,8 @@ check('the description says to stay in the workspace',
   /inside the workspace/i.test(desc), '');
 check('the description warns against a project elsewhere',
   /never one from elsewhere|elsewhere on the machine/i.test(desc), '');
+check('the summary supports native IDE editing, not the old click prohibition',
+  /companion computer-use MCP/.test(desc) && !/Do not click MotionWorks/.test(desc), '');
 check('whenToUse fires on merely mentioning a project',
   /mentioned at all/i.test(when), when.slice(0, 60) + '...');
 check('it is model-invocable so the agent can load it',

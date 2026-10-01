@@ -25,11 +25,12 @@
  * importable from here, the schemas below are written in JSON Schema directly:
  * `required` is an ARRAY of property names, never an inline boolean.
  *
- * WHY THE EFFECTOR IS COM, NOT CLICKS
+ * IDE-FIRST EDITING AND THE COM VERIFICATION BRIDGE
  * -----------------------------------
  * MotionWorks registers an out-of-process COM automation server
- * (`Ade.Application.550`). Driving that is more reliable than synthetic input and
- * is unaffected both by the harness sandbox and by any computer-use DRY_RUN gate.
+ * (`Ade.Application.550`). The bridge handles guarded inspection, project operations
+ * and compilation. Coding defaults to visible native editors via the companion
+ * computer-use MCP. Offline code editor tools are retired, not a UI fallback.
  * It must be driven from a 32-bit client, so the work is delegated to a 32-bit
  * Windows PowerShell bridge process that speaks req.json/res.json with this file.
  *
@@ -41,7 +42,7 @@
  *  - `mw_ide_stage` only ever copies; it never moves or deletes a source project.
  *  - The bridge refuses to instantiate COM unless an IDE is already running,
  *    because instantiating it would launch a second IDE.
- *  - Nothing here calls Quit: the user's IDE is left as it was found.
+ *  - Graceful close/replacement requires explicit consent tied to the open project.
  */
 
 import { spawn } from 'node:child_process';
@@ -786,11 +787,10 @@ function diagnoseBuild(verdict) {
       explain:
         `A POU container is not a plausible size: ${names}. Real containers on this project run ` +
         '1.5 KB to 60 KB. This is the signature of the compiler DESTROYING a POU - the .VB goes to ' +
-        '0 bytes and the resource grid grows to 79,432,063 bytes - and the usual cause is a TYPE ' +
-        'ERROR in the body that was written before this build. mw_code_write_st now refuses a type ' +
-        'error, so a body that reached here has something the check does not cover. Restore the ' +
-        'POU with mw_code_restore_pou, then re-examine the body that preceded this build.',
-      next: 'call mw_code_restore_pou with this POU, then check the body it was written with',
+        '0 bytes and the resource grid grows to 79,432,063 bytes. This is historical evidence, ' +
+        'not proof of the cause in this project. Inspect the current native sources and IDE ' +
+        'diagnostics before considering approved recovery from a verified backup.',
+      next: 'inspect the named POU in the IDE; obtain approval before restoring a verified backup',
     };
   }
 
@@ -913,6 +913,8 @@ const BUILD_SCHEMA = {
     is_compiled: { oneOf: [{ type: 'boolean' }, { type: 'null' }] },
     is_modified: { oneOf: [{ type: 'boolean' }, { type: 'null' }] },
     elapsed_s: { type: 'number' },
+    evidence_kind: { type: 'string', enum: ['already_up_to_date', 'observed_compile_transition', 'completion_unverified'] },
+    fresh_compile: { type: 'boolean' },
     active_project: { oneOf: [{ type: 'string' }, { type: 'null' }] },
     identity_name: { oneOf: [{ type: 'string' }, { type: 'null' }] },
     identity_source: { oneOf: [{ type: 'string' }, { type: 'null' }] },
@@ -947,13 +949,16 @@ function projectLine(v) {
 function renderBuild(_a, v) {
   const where = projectLine(v);
   if (!v.accepted) return text(`${v.mode}: the IDE never accepted the compile request.${where}`);
+  if (v.evidence_kind === 'already_up_to_date') {
+    return text(`${v.mode}: already up to date; no fresh compilation was observed.${where}`);
+  }
   if (v.stalled) {
     return text(`${v.mode}: completion unverified after ${v.elapsed_s}s.${where} Inspect mw_ide_state and mw_ide_errors before proceeding.`);
   }
 
   return text(
     v.is_compiled
-      ? `${v.mode}: compiled cleanly (is_compiled=true, ${v.elapsed_s}s).${where}`
+      ? `${v.mode}: compiled (is_compiled=true, ${v.elapsed_s}s); inspect Errors/Warnings separately.${where}`
       : `${v.mode}: COMPILE FAILED (is_compiled=false, ${v.elapsed_s}s).${where} `
         + 'The automation API returns the verdict but never the messages — call mw_ide_errors to '
         + 'bring the IDE Errors pane up and capture it.',
@@ -1017,9 +1022,8 @@ function renderWrite(_a, v) {
 /**
  * Report a batch declaration in the terms a batch actually has: how many landed, and WHICH failed.
  *
- * A partial batch is the normal outcome rather than an error - the engine applies what it can and
- * names the items it could not - so the render leads with the split and then names each failure
- * with its index, because "3 of 20 failed" without the names is a caller re-reading its own input.
+ * Write batches are atomic by default. Partial results occur on dry runs or only when the caller
+ * explicitly requests allow_partial; name every rejected item so it can be corrected.
  */
 function renderBatch(_a, v) {
   const applied = v.applied ?? 0;
@@ -1029,7 +1033,7 @@ function renderBatch(_a, v) {
     + `${v.dry_run ? 'planned' : 'applied'}${v.pou ? ` in ${v.pou}` : ' (global)'}`;
   if (!failed) return text(`${head}. All of them.`);
   const lines = (v.failures ?? []).map((f) => `  [${f.index}] ${f.name ?? '(unnamed)'}: ${f.error}`);
-  return text(`${head}; ${failed} FAILED and the rest were left in place. Re-issue only these:\n`
+  return text(`${head}; ${failed} FAILED${v.dry_run ? ' in preview' : ' with explicit partial mode'}. Re-issue only these:\n`
     + lines.join('\n')
     + `\n${v.note ?? ''}`);
 }
@@ -1206,6 +1210,38 @@ function projectOf(args) {
 
 function defineTools() {
   return [
+    {
+      name: 'mw_ide_edit_guide',
+      description: 'IDE-first editing checklist for ST, variables, POUs, LD/FBD, tasks or libraries. Read-only: does not type or edit anything. Use the connected computer tool for actual observed MotionWorks editor actions; never fabricate coordinates or report this checklist as completed work.',
+      parameters: { type: 'object', additionalProperties: false, properties: {
+        operation: { type: 'string', enum: ['st', 'variables', 'pou', 'graphical', 'tasks', 'libraries'] },
+      }, required: ['operation'] },
+      output: {
+        schema: { type: 'object', properties: {
+          mode: { type: 'string' }, operation: { type: 'string' },
+          steps: { type: 'array', items: { type: 'string' } },
+          action_performed: { type: 'boolean' },
+        }, required: ['mode', 'operation', 'steps', 'action_performed'], additionalProperties: false },
+        render: (_a, v) => text(JSON.stringify(v, null, 2)),
+      },
+      execute: args => {
+        const instructions = {
+          st: ['Open the exact POU body in the IDE and observe its language and existing text.', 'Click inside the ST editor, verify focus, then select only the intended text and type the reviewed ST.', 'Multiline input requires explicit line-break support in the computer server; Enter can submit a dialog, so use it only in a confirmed multiline editor. Inspect indentation, line count and the entire saved body.', 'Inspect the resulting text before Save; do not type into a terminal or variable-name cell.'],
+          variables: ['Open the correct POU variable worksheet or Global_Variables resource worksheet.', 'Use the native insert/edit command visible in the current UI; set name, type, usage, address, initializer and description.', 'Verify cell edit mode and full committed name: typing may append to NewVar1 instead of replacing it, and Ctrl+A may select worksheet rows rather than cell text.', 'Check the row in the IDE; globals referenced by a POU also need native VAR_EXTERNAL declarations.'],
+          pou: ['Select Logical POUs and use the observed native create/edit command; choose PROGRAM, FUNCTION or FUNCTION_BLOCK and the required language.', 'For rename/delete, inspect references and task instances first. Obtain required deletion confirmation.', 'Verify both the logical POU and its task assignment after Save; never patch PROJECT.TRE to complete a UI operation.'],
+          graphical: ['Open the LD/FBD worksheet and inspect the actual Edit Wizard and installed library interface.', 'Insert contacts, coils, branches or FBs through native editor commands; observe pin names/directions before wiring.', 'Confirm connections and declarations visually; no arbitrary GB binary generation.'],
+          tasks: ['Inspect native task properties and current instance order before editing.', 'Create/assign/unassign through the observed Project Tree commands, or supported guarded IDE object-model tools.', 'Confirm exact resource, task, instance, cycle/priority and order; a clean compile does not prove an unassigned POU executes.'],
+          libraries: ['Inspect current library versions and dependent POUs first.', 'Use the native Libraries command to select the operator-approved local library and observe the imported interface.', 'Do not remove a referenced library or silently substitute another version; compile all consumers.'],
+        };
+        if (!instructions[args.operation]) throw new Error('Unknown IDE editing operation');
+        return { mode: 'ide-first', operation: args.operation, action_performed: false, steps: [
+          'Run mw_project_find and inspect mw_ide_state/mw_ide_status. If the requested verified stage is already open, continue it without restaging, closing or reopening. Otherwise stage/open only with the required exact-project consent. Preserve unsaved IDE changes before relying on disk reads.',
+          'Observe MotionWorks with the computer tool. One action, then a fresh screenshot; confirm focus before typing. Stop on unexpected dialogs or project identity changes.',
+          ...instructions[args.operation],
+          'Use observed File > Save All before whole-project read-back; Ctrl+S may save only the active worksheet. Inspect native read-back, run a fresh Build and Make, capture Errors/Warnings, and test save/close/reopen only with consent.',
+        ] };
+      },
+    },
     {
       name: 'mw_ide_status',
       description:
@@ -1664,27 +1700,8 @@ function defineTools() {
     },
 
     {
-      name: 'mw_ide_rebuild',
-      description: 'Request the actual native Rebuild Project menu command, distinct from Compile(2) Build. Verifies the command ID and staged workspace identity. A posted request is not completion; unobserved completion is reported as unverified. Follow with Errors, Make, save and close/reopen checks. '
-        // The limitation, stated where a caller will read it rather than left to be discovered.
-        // Measured: on IDE build 1.19 the command lookup fails outright, so this tool cannot work
-        // there and a caller that reaches for it loses a turn. mw_ide_build does work and is the
-        // one to use; this is kept because a build where the ID resolves does support it.
-        + 'KNOWN LIMITATION: measured on IDE build 1.19 this fails with "Command '
-        + '\'adeCmdBuildRebuildProject\' not found" - the command is not in that build\'s command '
-        + 'table. USE mw_ide_build INSTEAD; it is Build (Compile(2)) and it works. Rebuild is only '
-        + 'better than Build if you specifically need stale objects discarded.',
-      parameters: { type: 'object', additionalProperties: false, properties: {} },
-      output: { schema: BUILD_SCHEMA, render: renderBuild },
-      presentCall: () => ({ card: 'generic', title: 'Rebuild (may be unsupported)', kind: 'execute' }),
-      execute: async () => {
-        const status = await assertIdeProjectProven();
-        return tagProject(await verb('rebuild', {}, 400000), status);
-      },
-    },
-    {
       name: 'mw_ide_build',
-      description: 'Run Compile(2), which is Build, not Rebuild. Completion requires an observed pending-to-compiled transition; otherwise reports unverified. Use mw_ide_rebuild for the native Rebuild command.',
+      description: 'Run Compile(2), which is Build, not Rebuild. Completion requires an observed pending-to-compiled transition; otherwise reports unverified. Use the observed IDE menu for Rebuild; the API is unsupported on the tested IDE.',
       parameters: { type: 'object', additionalProperties: false, properties: {} },
       output: { schema: BUILD_SCHEMA, render: renderBuild },
       presentCall: () => ({ card: 'generic', title: 'Build in MotionWorks IEC', kind: 'execute' }),
@@ -1729,16 +1746,11 @@ function defineTools() {
     {
       name: 'mw_ide_save',
       description:
-        'Save the project open in the IDE (ActiveProject.Save). The agent could already '
-        + 'modify a project file by file, but not persist the state the IDE itself holds - '
-        + 'and that matters most for the one step only the user can perform: after they add '
-        + 'a program to a task in the Project Tree (mw_code_pou_assign explains why that '
-        + 'cannot be automated), a save is what makes it stick. Also worth calling after a '
-        + 'build when the user wants the compiled state written back. Reports elapsed_s and '
-        + 'the project is_modified and is_compiled afterwards, so the caller confirms rather '
-        + 'than assumes. Refuses when no project is open. This is the one operation here '
-        + 'that needs the IDE RUNNING, because it is the IDE own save rather than a file '
-        + 'write.',
+        'Save the verified staged project already open in the IDE through ActiveProject.Save. '
+        + 'No offline source writes. Useful after visible editor changes and native task assignment. '
+        + 'Reports elapsed_s and modified/compiled flags; read saved ST/declarations back to prove '
+        + 'the intended worksheets persisted. Do not assume this equals File > Save All on every '
+        + 'IDE version. Requires a running IDE and refuses an unverified project.',
       parameters: { type: 'object', additionalProperties: false, properties: {} },
       output: {
         schema: {
@@ -1824,7 +1836,7 @@ function defineTools() {
                 + `project did not compile, which is a STALL or a DESTROYED POU, not success.\n`
                 + `Do not treat this as a pass.  ${v.empty_means}\n`
                 + `Next: mw_ide_state (is the IDE blocked on a dialog?), then mw_ide_build to retry,\n`
-                + `and mw_code_restore_pou if the build names a damaged POU.` + shot);
+                + `and an approved verified backup if the build names a damaged POU.` + shot);
             }
             if (v.compiles === true && v.is_modified === true) {
               return text(`${head}\n`
@@ -2592,7 +2604,7 @@ function defineTools() {
         + 'take no arguments and are driven by IDE dialogs only, so they cannot be called '
         + 'headlessly (see docs/import-export.md). Use this to hand a POU to the user, to '
         + 'keep a copy before rewriting it, or to diff two versions. The inverse is '
-        + 'mw_code_pou_create + mw_code_var_add + mw_code_write_st.',
+        + 'the native IDE editors/import dialogs; this readable export is not an import format.',
       parameters: {
         type: 'object',
         additionalProperties: false,
@@ -2828,196 +2840,113 @@ function defineTools() {
     },
 
     {
-      name: 'mw_code_write_st',
-      description:
-        'Replace a POU\'s Structured Text body Ã¢â‚¬â€ this is how the agent writes code. Backs the '
-        + 'file up first and verifies the untouched sibling streams are byte-identical. '
-        + '**dry_run defaults to true**: the first call returns a preview and changes nothing. '
-        + 'The IDE must be closed (mw_ide_close), because the IDE\'s cached state would '
-        + 'otherwise discard the edit. After writing, reopen the project and call mw_ide_build.',
-      parameters: {
-        type: 'object',
-        additionalProperties: false,
-        required: ['pou', 'body'],
-        properties: {
-          pou: { type: 'string', description: 'POU name (must be a Structured Text POU).' },
-          body: { type: 'string', description: 'The complete new ST body.' },
-          project: { type: 'string', description: 'Project directory; defaults to the staged project.' },
-          dry_run: { type: 'boolean', description: 'Preview only. Defaults to true.' },
-          run_lint: { type: 'boolean', description: 'Lint the body first. Defaults to true.' },
-        },
-      },
-      output: { schema: WRITE_SCHEMA, render: renderWrite },
-      presentCall: (a) => ({ card: 'generic', title: `Write ${a.pou}`, kind: 'edit' }),
+      name: 'mw_workflow_check',
+      description: 'Read-only readiness report for an explicit staged project, including stale or relocated identities that other tools refuse. Reports native validation, wrapper binding, source hashes, blockers and the next safe action. Does not repair, overwrite, start the IDE or download.',
+      parameters: { type: 'object', additionalProperties: false, required: ['project'], properties: { project: { type: 'string' } } },
+      output: { schema: { type: 'object', additionalProperties: true }, render: (_a, v) => text([
+        `Project: ${v.project}`, `Evidence: ${v.evidence_level}; ready for IDE open: ${v.ready_for_ide_open}`,
+        ...(v.blockers ?? []).map(b => `BLOCKED ${b.code}: ${typeof b.detail === 'string' ? b.detail : JSON.stringify(b.detail)}`),
+        ...(v.warnings ?? []).map(w => `WARNING ${w.pou ?? ''}: ${w.detail}`),
+        `Next: ${v.next_step}`,
+      ].join('\n')) },
+      execute: (args) => runCode('workflow_check', { project: assertStaged(resolve(workspaceRoot(), args.project)) }),
+    },
+
+    {
+      name: 'mw_code_source_manifest',
+      description: 'Read-only native source stream hashes for before/after and persistence comparisons. Excludes generated compiler output. A DLL constant or IsCompiled flag is not proof these sources were compiled or downloaded.',
+      parameters: { type: 'object', additionalProperties: false, properties: { project: { type: 'string' } } },
+      output: { schema: { type: 'object', additionalProperties: true }, render: (_a, v) => text(`Native source: ${v.source_digest}\n${Object.keys(v.files ?? {}).length} files; ${v.note}`) },
+      execute: (args) => runCode('source_manifest', { project: projectOf(args) }),
+    },
+
+    {
+      name: 'mw_ide_verify',
+      description: 'Acceptance workflow on the exact open staged project: native validation, source manifest, Build, Make, compiler messages and Save. Optionally save/close/reopen that named project with explicit consent and compare source streams. Saves a JSON evidence report even on failure. Never force-closes, repairs files, downloads or commands motion. A cached Make is not a fresh Build.',
+      parameters: { type: 'object', additionalProperties: false, required: ['project'], properties: {
+        project: { type: 'string' }, close_reopen: { type: 'boolean', default: false },
+        user_approved: { type: 'boolean', description: 'Explicit consent to save/close/reopen this disposable or named project. Required when close_reopen is true.' },
+      } },
+      output: { schema: { type: 'object', additionalProperties: true }, render: (_a, v) => text(`Acceptance: ${v.verdict}\nEvidence: ${v.report_path}\n${v.next_step}`) },
       execute: async (args) => {
         const project = projectOf(args);
-        const out = await runCode('write_st', {
-          ...(args ?? {}), project, dry_run: args?.dry_run !== false,
-        });
-        // Writing the body of a POU that no task runs is work the compiler never checks. Named
-        // here rather than after a build, because this is the last point at which the caller still
-        // knows what it was trying to do.
-        const warn = args?.dry_run === false
-          ? await unassignedWarning(project, [args?.pou])
-          : null;
-        return warn ? { ...out, unassigned_warning: warn } : out;
+        if (args.close_reopen && args.user_approved !== true) throw new Error('REFUSED: ask for consent to save/close/reopen this exact project.');
+        const reportDir = join(workspaceRoot(), '.motionworks', 'verification');
+        if (!isInside(reportDir, workspaceRoot())) throw new Error('REFUSED: verification directory escapes workspace.');
+        const reportPath = join(reportDir, `${Date.now()}-${randomUUID()}.json`);
+        const report = { project, started_at: new Date().toISOString(), verdict: 'unverified',
+          report_path: reportPath, steps: [], controller_downloaded: false, motion_tested: false,
+          next_step: 'Inspect the retained evidence; do not download on an unverified result.' };
+        const definitions = new Map(defineTools().map(t => [t.name, t]));
+        const step = async (name, input = {}) => {
+          const value = await definitions.get(name).execute(input);
+          report.steps.push({ tool: name, value });
+          return value;
+        };
+        try {
+          const status = await assertIdeProjectProven();
+          const active = resolve(String(status.active_project)).replace(/\.mwt$/i, '');
+          if (active.toLowerCase() !== resolve(project).toLowerCase()) throw new Error('REFUSED: the open IDE project differs from the requested verification project.');
+          const validation = await step('mw_code_validate', { project });
+          if (validation.result?.ok === false) throw new Error('Offline validation failed; stop before compiling.');
+          const before = await step('mw_code_source_manifest', { project });
+          const build = await step('mw_ide_build');
+          await step('mw_ide_errors', { pane: 'Errors' });
+          await step('mw_ide_errors', { pane: 'Warnings' });
+          if (build.fresh_compile !== true || build.is_compiled !== true) {
+            report.next_step = 'Build completion was not freshly observed. Inspect the IDE; cached flags are insufficient.';
+            return report;
+          }
+          const make = await step('mw_ide_make');
+          await step('mw_ide_errors', { pane: 'Errors' });
+          await step('mw_ide_errors', { pane: 'Warnings' });
+          if (!make.settled || !make.is_compiled) return report;
+          await step('mw_ide_save');
+          const saved = await step('mw_code_source_manifest', { project });
+          report.compile_source_integrity = { program_streams_unchanged: before.program_digest === saved.program_digest,
+            native_bookkeeping_changed: before.source_digest !== saved.source_digest };
+          if (!report.compile_source_integrity.program_streams_unchanged) {
+            report.next_step = 'Build/save changed program or declaration streams. Inspect before/saved manifests before accepting.';
+            return report;
+          }
+          if (args.close_reopen) {
+            await step('mw_ide_close', { user_approved: true, expected_project: status.active_project });
+            await step('mw_ide_start');
+            await step('mw_ide_open', { path: project + '.mwt' });
+            const after = await step('mw_code_source_manifest', { project });
+            report.persistence = { identical_native_streams: saved.source_digest === after.source_digest,
+              identical_source_streams: saved.persistence_digest === after.persistence_digest,
+              normalized_view_metadata: saved.source_digest !== after.source_digest
+                && saved.persistence_digest === after.persistence_digest,
+              before: saved.source_digest, after: after.source_digest };
+            if (!report.persistence.identical_source_streams) {
+              report.next_step = 'IDE normalized or changed native source streams. Inspect the manifest diff before claiming persistence acceptance.';
+              return report;
+            }
+            const reopenedValidation = await step('mw_code_validate', { project });
+            if (reopenedValidation.result?.ok === false) return report;
+          }
+          report.verdict = args.close_reopen ? 'ide_acceptance_and_persistence_verified' : 'ide_compile_verified_persistence_not_tested';
+          report.next_step = 'Compiler acceptance only: controller download and machine behavior remain untested.';
+          return report;
+        } catch (error) {
+          report.error = error.message;
+          report.next_step = 'Inspect this report and current IDE state. Do not retry mutations or delete locks blindly.';
+          return report;
+        } finally {
+          report.finished_at = new Date().toISOString();
+          mkdirSync(reportDir, { recursive: true });
+          const temp = reportPath + '.tmp';
+          writeFileSync(temp, JSON.stringify(report, null, 2), 'utf8');
+          renameSync(temp, reportPath);
+        }
       },
     },
 
-    {
-      name: 'mw_code_var_add',
-      description: "Add a local, external or global variable by updating both native VB and VGR stores. Omit pou for globals. Requires a compatible existing native donor; specify donor when ambiguous, or donor_pou for an empty local worksheet. An omitted initializer inherits the donor initializer explicitly. Descriptions update translation XML too. Preserves trailers and allocates unique handles and worksheet rows. Dry-run defaults to true; real changes require the IDE closed and use a full-project rollback transaction. IDE Rebuild/Make acceptance remains required.",
-      parameters: {
-        type: 'object',
-        additionalProperties: false,
-        required: ['name', 'type'],
-        properties: {
-          name: { type: 'string' },
-          type: { type: 'string', description: 'IEC data type, e.g. BOOL, INT, AXIS_REF.' },
-          pou: { type: 'string', description: 'Owning POU; omit for a global variable.' },
-          section: { type: 'string', description: 'Supported donor usages: VAR, VAR_EXTERNAL, VAR_GLOBAL.' },
-          address: { type: 'string', description: 'IEC address, e.g. %IX0.0.' },
-          initial_value: { type: 'string' },
-          description: { type: 'string' },
-          donor: { type: 'string', description: 'Native variable donor with the required type, usage and address layout.' },
-          donor_pou: { type: 'string', description: 'POU containing a native donor, for an empty target worksheet.' },
-          project: { type: 'string' },
-          dry_run: { type: 'boolean', description: 'Defaults to true.' },
-        },
-      },
-      output: { schema: WRITE_SCHEMA, render: renderWrite },
-      presentCall: (a) => ({ card: 'generic', title: `Add variable ${a.name}`, kind: 'edit' }),
-      execute: (args) => {
 
-        return runCode('var_add', {
-          ...(args ?? {}), project: projectOf(args), dry_run: args?.dry_run !== false,
-        });
-      },
-    },
 
-    {
-      name: 'mw_code_var_edit',
-      description: "Edit both the declaration and native variable grid, including variable-length names, initializers and addresses. Descriptions also update translation XML. Type or address-layout changes require a compatible donor. Renames with remaining references are refused even with force. Dry-run defaults to true.",
-      parameters: {
-        type: 'object',
-        additionalProperties: false,
-        required: ['name'],
-        properties: {
-          name: { type: 'string', description: 'Current variable name.' },
-          pou: { type: 'string', description: 'Owning POU; omit for a global variable.' },
-          new_name: { type: 'string' },
-          type: { type: 'string', description: 'New IEC data type.' },
-          address: { type: 'string' },
-          initial_value: { type: 'string' },
-          description: { type: 'string' },
-          clear_address: { type: 'boolean', description: 'Remove the IEC address.' },
-          force: { type: 'boolean', description: 'Legacy parameter; does not bypass dangling-reference protection.' },
-          donor: { type: 'string', description: 'Native variable donor with the required type, usage and address layout.' },
-          project: { type: 'string' },
-          dry_run: { type: 'boolean', description: 'Defaults to true.' },
-        },
-      },
-      output: { schema: WRITE_SCHEMA, render: renderWrite },
-      presentCall: (a) => ({ card: 'generic', title: `Edit variable ${a.name}`, kind: 'edit' }),
-      execute: (args) => runCode('var_edit', {
-        ...(args ?? {}), project: projectOf(args), dry_run: args?.dry_run !== false,
-      }),
-    },
 
-    {
-      name: 'mw_code_var_delete',
-      description: "Delete a variable from both declaration and native grid, preserving the native group trailer. Refuses remaining references even with force. Dry-run defaults to true. Requires IDE Rebuild/Make verification after committing.",
-      parameters: {
-        type: 'object',
-        additionalProperties: false,
-        required: ['name'],
-        properties: {
-          name: { type: 'string' },
-          pou: { type: 'string', description: 'Owning POU; omit for a global variable.' },
-          force: { type: 'boolean' },
-          project: { type: 'string' },
-          dry_run: { type: 'boolean', description: 'Defaults to true.' },
-        },
-      },
-      output: { schema: WRITE_SCHEMA, render: renderWrite },
-      presentCall: (a) => ({ card: 'generic', title: `Delete variable ${a.name}`, kind: 'delete' }),
-      execute: (args) => runCode('var_delete', {
-        ...(args ?? {}), project: projectOf(args), dry_run: args?.dry_run !== false,
-      }),
-    },
 
-    {
-      name: 'mw_code_var_add_many',
-      description:
-        'Declare MANY variables in one call. Use this instead of repeating mw_code_var_add: a port '
-        + 'with twenty signals is twenty calls otherwise, and the caller has to sequence them and '
-        + 'keep track of which landed. Each item takes the same fields mw_code_var_add does - name, '
-        + 'type, section, address, initial_value, description, plus per-item pou/donor overrides - '
-        + 'and each is planned and applied on its own. '
-        + 'IT DOES NOT FAIL WHOLE: an item the planner refuses is reported in `failures` with its '
-        + 'index and reason, and the other items still apply, so a partial batch is a normal '
-        + 'outcome rather than an error. Read `failures` and re-issue only those. '
-        + '**dry_run defaults to true**, and plans every item while applying none.',
-      parameters: {
-        type: 'object',
-        additionalProperties: false,
-        required: ['variables'],
-        properties: {
-          variables: {
-            type: 'array',
-            minItems: 1,
-            description: 'One object per variable: {name, type, section?, address?, initial_value?, description?}.',
-            items: {
-              type: 'object',
-              additionalProperties: true,
-              required: ['name', 'type'],
-              properties: {
-                name: { type: 'string' },
-                type: { type: 'string', description: 'IEC data type, e.g. BOOL, INT, AXIS_REF.' },
-                section: { type: 'string', description: 'VAR (default), VAR_EXTERNAL or VAR_GLOBAL.' },
-                address: { type: 'string', description: 'IEC address, e.g. %IX0.0.' },
-                initial_value: { type: 'string' },
-                description: { type: 'string' },
-                pou: { type: 'string', description: 'Owning POU, overriding the call-level `pou`.' },
-                donor: { type: 'string', description: 'Native variable donor with a matching type.' },
-                donor_pou: { type: 'string' },
-              },
-            },
-          },
-          pou: { type: 'string', description: 'Owning POU for every item; omit for globals.' },
-          section: { type: 'string', description: 'Section for every item that does not set its own.' },
-          donor: { type: 'string' },
-          donor_pou: { type: 'string' },
-          project: { type: 'string', description: 'Project directory; defaults to the staged project.' },
-          dry_run: { type: 'boolean', description: 'Defaults to true.' },
-        },
-      },
-      output: {
-        schema: {
-          type: 'object',
-          additionalProperties: true,
-          properties: {
-            dry_run: { type: 'boolean' },
-            pou: { oneOf: [{ type: 'string' }, { type: 'null' }] },
-            requested: { type: 'integer' },
-            applied: { type: 'integer' },
-            failed: { type: 'integer' },
-            results: { type: 'array', items: { type: 'object', additionalProperties: true } },
-            failures: { type: 'array', items: { type: 'object', additionalProperties: true } },
-            note: { type: 'string' },
-          },
-        },
-        render: renderBatch,
-      },
-      presentCall: (a) => ({
-        card: 'generic',
-        title: `Declare ${(a.variables ?? []).length} variable(s)`,
-        kind: 'edit',
-      }),
-      execute: (args) => runCode('var_add_many', {
-        ...(args ?? {}), project: projectOf(args), dry_run: args?.dry_run !== false,
-      }, 600000),
-    },
 
     {
       name: 'mw_code_sync_back',
@@ -3176,105 +3105,7 @@ function defineTools() {
       }, 120000),
     },
 
-    {
-      name: 'mw_code_pou_create',
-      description: "Clone a native POU in the selected staged workspace project. Preserves native external/local/FB declarations, updates tree counts, GUIDs, registry and view entries. Use compatible native donors for later variable additions. Dry-run defaults to true. Actual edits use a full-project snapshot transaction; success reports offline verification only, pending IDE Rebuild, Make, save and close/reopen.",
-      parameters: {
-        type: 'object',
-        additionalProperties: false,
-        required: ['name', 'template'],
-        properties: {
-          name: { type: 'string', description: 'Name for the new POU.' },
-          template: {
-            type: 'string',
-            description: 'Existing POU to clone. Use an ST POU (e.g. Instructions) for an ST POU.',
-          },
-          project: { type: 'string' },
-          dry_run: { type: 'boolean', description: 'Defaults to true.' },
-        },
-      },
-      output: { schema: WRITE_SCHEMA, render: renderWrite },
-      presentCall: (a) => ({ card: 'generic', title: `Create POU ${a.name}`, kind: 'edit' }),
-      // Track created POUs for diagnostics.
-      execute: async (args) => {
-        const project = projectOf(args);
-        const out = await runCode('pou_create', {
-          ...(args ?? {}), project, dry_run: args?.dry_run !== false,
-        });
-        if (args?.dry_run === false && out?.result?.pou) rememberCreated(out.result.pou);
-        // A NEW POU IS UNASSIGNED BY CONSTRUCTION - nothing calls it, so it never runs and the
-        // compiler does not check it. Warning here means the caller hears it before spending a
-        // build rather than after one that stalled for 90 seconds.
-        const warn = await unassignedWarning(project, [out?.result?.pou ?? out?.plan?.pou_name ?? args?.name]);
-        return warn ? { ...out, unassigned_warning: warn } : out;
-      },
-    },
 
-    {
-      name: 'mw_code_restore_pou',
-      description:
-        'Put a POU back from a snapshot. This is the remedy for the damage mw_ide_build detects: '
-        + 'when the IDE compiler meets a TYPE ERROR it does not merely fail, it DESTROYS the POU - '
-        + 'the .VB goes to 0 bytes and the resource grid to 79,432,063 bytes - and the build verdict '
-        + 'now says so and names the POU. Until this tool existed there was no way to act on that. '
-        + 'Omit `pou` to be told which POUs can be restored and which look damaged right now. '
-        + 'A POU can only be restored if this plugin has written it at some point, because the '
-        + 'backup is taken by the write - which matches the risk exactly, since a POU the plugin '
-        + 'never touched is one it cannot have broken. Restoring the container restores the .VB text '
-        + 'and the .VGR grid together, because both are streams inside that one file. '
-        + '**dry_run defaults to true**, so the first call reports which snapshot it would use and '
-        + 'changes nothing; the file it replaces is kept as <name>.before-restore so a restore is '
-        + 'itself undoable.',
-      parameters: {
-        type: 'object',
-        additionalProperties: false,
-        properties: {
-          pou: {
-            type: 'string',
-            description: 'POU to restore. Omit to list what is restorable and what looks damaged.',
-          },
-          which: {
-            type: 'integer',
-            description: 'Which snapshot to use, 0 being the newest. Defaults to 0.',
-          },
-          project: { type: 'string' },
-          dry_run: { type: 'boolean', description: 'Defaults to true.' },
-        },
-      },
-      output: { schema: RESTORE_SCHEMA, render: renderRestore },
-      presentCall: (a) => ({
-        card: 'generic',
-        title: a?.pou ? `Restore ${a.pou}` : 'Restorable POUs',
-        kind: 'edit',
-      }),
-      execute: (args) => runCode('restore_pou', {
-        ...(args ?? {}), project: projectOf(args), dry_run: args?.dry_run !== false,
-      }),
-    },
-    {
-      name: 'mw_code_pou_delete',
-      description:
-        'Delete a POU together with its task assignments and registry entries. The POU directory '
-        + 'is moved to an archive rather than removed, so the deletion is recoverable. Refuses '
-        + 'when another POU still calls it unless `force` is set. '
-        + '**dry_run defaults to true** and returns the plan without changing anything.',
-      parameters: {
-        type: 'object',
-        additionalProperties: false,
-        required: ['name'],
-        properties: {
-          name: { type: 'string' },
-          force: { type: 'boolean', description: 'Delete even if another POU references it.' },
-          project: { type: 'string' },
-          dry_run: { type: 'boolean', description: 'Defaults to true.' },
-        },
-      },
-      output: { schema: WRITE_SCHEMA, render: renderWrite },
-      presentCall: (a) => ({ card: 'generic', title: `Delete POU ${a.name}`, kind: 'delete' }),
-      execute: (args) => runCode('pou_delete', {
-        ...(args ?? {}), project: projectOf(args), dry_run: args?.dry_run !== false,
-      }),
-    },
 
     {
       name: 'mw_code_task_create',
@@ -3331,7 +3162,7 @@ function defineTools() {
         'Delete a task, through the IDE\'s own object model - Task.Delete() then Save(). Refuses '
         + 'while programs are still assigned to it, and names them, because deleting a task that '
         + 'is running code should be deliberate. Unassign first with mw_code_pou_unassign, or use '
-        + 'mw_code_pou_delete to remove the programs themselves. **dry_run defaults to true.**',
+        + 'the IDE POU delete command to remove the programs themselves. **dry_run defaults to true.**',
       parameters: {
         type: 'object',
         additionalProperties: false,
@@ -3508,7 +3339,7 @@ function defineTools() {
         'Remove a program\'s assignment from a task, through the IDE\'s own object model - '
         + 'ProgramInstances.Delete() then Save() - so the IDE writes the project tree itself and '
         + 'nothing here edits a file. The program itself is NOT deleted; it stays in Logical POUs '
-        + 'and simply stops running. Compare with mw_code_pou_delete, which removes the POU. '
+        + 'and simply stops running. Compare with the IDE POU delete command, which removes the POU. '
         + '**dry_run defaults to true.**',
       parameters: {
         type: 'object',
@@ -3546,10 +3377,7 @@ function defineTools() {
 
     {
       name: 'mw_code_unsupported',
-      description:
-        'Name the POUs whose bodies cannot be edited safely Ã¢â‚¬â€ graphical LD/FBD (proprietary '
-        + 'binary) and compressed declaration streams. Call this before promising a change, so '
-        + 'the agent never claims work it cannot do.',
+      description: 'Inspect offline-reader limitations for graphical LD/FBD and compressed declaration streams. These limits do not prohibit native IDE editing; use mw_ide_edit_guide and the companion computer tool.',
       parameters: {
         type: 'object',
         additionalProperties: false,
@@ -3614,6 +3442,8 @@ function defineTools() {
  *
  * @param ctx - registrant context carrying the tool registry.
  */
+
+
 export function apply(ctx) {
   // ── WHY THIS PLUGIN LOADS ON macOS AND LINUX, AND IMMEDIATELY STOPS ────────────────────────
   //
@@ -3683,9 +3513,7 @@ export function apply(ctx) {
           + 'START HERE: run mw_project_find before anything else, and work only on a project inside '
           + 'the workspace — never one from elsewhere on the machine, even if you know where it is. '
           + 'Another program may be read with reference: true; that does not stage or open it. '
-          + 'Do not click MotionWorks, even when windows_computer_use_mcp_DRY_RUN is false. '
-          + 'A click opens the last project. A plugin result with dry_run true changed nothing: '
-          + 'call the same tool with dry_run false.',
+          + 'Edit through the companion computer-use MCP after verifying the staged IDE project. Preserve unsaved changes.',
         whenToUse: 'The user has MotionWorks IEC 3 Pro open or asks for work in it — a real build, a '
           + 'compile verdict, the live project model, reading or changing POU Structured Text, or '
           + 'the IDE error list. ALSO USE WHEN a MotionWorks project is mentioned at all, even to '
@@ -3711,6 +3539,7 @@ export function apply(ctx) {
     // escapes the tool pipeline instead of surfacing as a tool error.
     ctx.tools.register({
       ...definition,
+
       async execute(args, exec) {
         return toolContext.run(exec ?? {}, () => definition.execute(args, exec));
       },

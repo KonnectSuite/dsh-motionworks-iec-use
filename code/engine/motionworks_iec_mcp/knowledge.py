@@ -175,6 +175,9 @@ def sync(source_ids=None):
 def diagnose(message):
     if not message.strip(): raise ValueError('Supply the compiler/runtime diagnostic text')
     patterns = [
+        (r'file error.*(?:\.vbc|src\.st1)|MSILv2ResManager|variable.*not found', 'diagnostics', 'compiler_or_native_format', ['Preserve the exact project, error text and transaction journal.', 'Compare paired VB/VGR declarations and source stream hashes with the last verified snapshot.', 'Do not patch generated cache files, replace a binary container as text, or restore underneath an open IDE.']),
+        (r'division by zero|divide.by.zero', 'diagnostics', 'runtime', ['Inspect denominators and cam-generation segment lengths at the faulting operation.', 'Zero compiler errors do not exclude runtime arithmetic faults. Capture runtime values before proposing a change.']),
+        (r'identity.*workspace|outside.*stag|ENOTDIR', 'diagnostics', 'workspace_state', ['Read the calling session workspace and mw_workflow_check for the explicit stage.', 'Check relocated identity paths and wrappers. Do not weaken guards or restage over unsynced source edits.']),
         (r'error\s+in\s+native\s+code\s+generation', 'native-code-error', 'compiler', ['Read the first underlying compiler diagnostic.', 'Compare IDE, controller target and library versions before changing declarations.']),
         (r'operand\s+not\s+implemented|area\s+exceeded', 'address-range', 'runtime_or_debug', ['Inspect IO_Configuration address ranges.', 'Compare the located variable address with the configured driver.']),
         (r'no\s+matching\s+global|global-not-declared-external|external.*(?:missing|mismatch)', 'scope', 'compiler', ['Compare the resource global with the POU external name and type.', 'Inspect both VB and VGR consistency; do not convert an external to a local just to hide the error.']),

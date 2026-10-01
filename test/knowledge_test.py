@@ -95,6 +95,15 @@ class References(unittest.TestCase):
 
 
 class Programming(unittest.TestCase):
+    def test_session_failures_are_candidates_not_repairs(self):
+        for message in ['File error!: (POE\\Main\\MainV.vbc)',
+                        'Internal error! MSILv2ResManager.cpp(1048)',
+                        'Runtime exception! Division by zero', 'ENOTDIR workspace']:
+            result = K.diagnose(message)
+            self.assertTrue(result['matched'])
+            self.assertFalse(result['automatic_changes'])
+            self.assertTrue(all(x['confidence'] == 'candidate_not_confirmed' for x in result['matches']))
+
     def codes(self, body, declarations, globals_text=None, **kwargs):
         return {f['code']: f for f in C.review(body, declarations, globals_text, **kwargs)['findings']}
 

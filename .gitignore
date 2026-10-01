@@ -29,6 +29,7 @@ __pycache__/
 
 # Node / tooling
 node_modules/
+.test-tmp/
 *.log
 .DS_Store
 Thumbs.db

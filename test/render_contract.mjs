@@ -58,3 +58,16 @@ if (offenders.length > 0) {
 }
 
 console.log(`render contract: ${definitions.length} tool(s) return content blocks`)
+
+const make = definitions.find(t => t.name === 'mw_ide_make')
+const cached = make.output.render({}, { mode: 'Make', accepted: true,
+  is_compiled: true, evidence_kind: 'already_up_to_date', fresh_compile: false })
+assert.match(cached[0].text, /no fresh compilation/)
+assert.doesNotMatch(cached[0].text, /compiled cleanly/)
+const stalled = make.output.render({}, { mode: 'Make', accepted: true,
+  stalled: true, is_compiled: true, elapsed_s: 30 })
+assert.match(stalled[0].text, /completion unverified/)
+const verified = definitions.find(t => t.name === 'mw_ide_verify')
+assert.match(verified.output.render({}, { verdict: 'unverified',
+  report_path: 'evidence.json', next_step: 'Inspect evidence' })[0].text, /unverified/)
+console.log('compile evidence render checks passed')

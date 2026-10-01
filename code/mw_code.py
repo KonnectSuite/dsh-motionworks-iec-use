@@ -12,7 +12,7 @@ tried and all closed:
 So code is edited where it actually lives: the CFB container of the expanded
 project. This module is a thin JSON-driven wrapper over the already-proven
 engine in the sibling package (motionworks_iec_mcp.writer / .project), which
-writes only the textual streams and leaves the binary grid alone.
+updates paired declaration and native worksheet-grid streams together.
 
 PROTOCOL
 --------
@@ -193,17 +193,16 @@ def verb_var_add(req):
 
 
 def verb_var_add_many(req):
-    """Declare many variables in one call, applying what it can.
+    """Declare many variables in one call, atomically by default.
 
     WHY THIS EXISTS: a port with twenty signals took twenty tool calls, and a caller declaring a
     twenty-field structure has to sequence them by hand. Every item here goes through exactly the
     per-item machinery verb_var_add uses - the same planner, the same donor matching, the same
     grid update - so this is a loop and not a second implementation.
 
-    IT DOES NOT FAIL WHOLE. An item that the planner refuses is recorded with its reason and the
-    rest still apply, because the usual cause is one name that is already declared or one type the
-    donor cannot supply, and discarding nineteen correct declarations over the twentieth is not a
-    safe default for a caller that then has to work out which of the twenty landed.
+    A failed write item raises with its index and name. The surrounding project transaction then
+    restores every file, including earlier items in this batch. Explicit allow_partial=True keeps
+    the old best-effort behavior, but still executes within one recoverable transaction.
 
     dry_run defaults to True, and is all-or-nothing in the other direction: a dry run plans every
     item and applies none, so the report shows what WOULD happen without changing the project.
@@ -212,6 +211,7 @@ def verb_var_add_many(req):
 
     root = Path(req["project"])
     dry = bool(req.get("dry_run", True))
+    allow_partial = req.get("allow_partial", False) is True
     items = req.get("variables")
     if not isinstance(items, list) or not items:
         raise ValueError("variables must be a non-empty array of {name, type, ...} objects")
@@ -222,6 +222,8 @@ def verb_var_add_many(req):
 
     for index, raw in enumerate(items):
         if not isinstance(raw, dict):
+            if not dry and not allow_partial:
+                raise ValueError(f"variable batch item [{index}] is not an object")
             failed.append({"index": index, "name": None,
                            "error": "not an object; expected {name, type, section, ...}"})
             continue
@@ -235,6 +237,11 @@ def verb_var_add_many(req):
         # to be about the item.
         missing = [field for field, value in (("name", name), ("type", type_name)) if not value]
         if missing:
+            if not dry and not allow_partial:
+                raise ValueError(
+                    f"variable batch item [{index}] {name or '(unnamed)'} missing required "
+                    f"field(s): {', '.join(missing)}"
+                )
             failed.append({"index": index, "name": name,
                            "error": f"missing required field(s): {', '.join(missing)}"})
             continue
@@ -258,7 +265,11 @@ def verb_var_add_many(req):
                 result = _jsonable(W.apply_declaration(plan, root, dry_run=False))
                 applied.append({"index": index, "name": name, "applied": True, "result": result})
         except Exception as exc:
-            # One bad item must not take the batch with it - see the docstring.
+            if not dry and not allow_partial:
+                raise ValueError(
+                    f"variable batch item [{index}] {name or '(unnamed)'} failed: "
+                    f"{type(exc).__name__}: {exc}"
+                ) from exc
             failed.append({"index": index, "name": name,
                            "error": f"{type(exc).__name__}: {exc}"})
 
@@ -270,11 +281,9 @@ def verb_var_add_many(req):
         failed=len(failed),
         results=applied,
         failures=failed,
-        # Stated because it is the thing a caller must not assume: a partial batch is normal.
-        note=(
-            "each item is planned and applied on its own, so a failure does not roll back the "
-            "items that succeeded - read `failures` and re-issue only those"
-        ),
+        note=("partial application was explicitly requested; read failures and re-issue only "
+              "those items" if allow_partial else "write batches are atomic; any failure "
+              "rolls back the whole batch"),
     )
 
 
@@ -937,11 +946,11 @@ def verb_wrapper_binding(req):
             "wrapper": str(mwt),
             "should_name": str(directory),
             "stores": paths,
-            "bound": bool(paths) and not stale,
+            "bound": not stale,
+            "binding_mode": "embedded_path" if paths else "native_sibling_directory",
             "stale_paths": stale,
             "note": (
-                "no path is stored in this wrapper, so nothing points anywhere and mw_ide_open "
-                "will refuse it" if not paths
+                "native sibling-directory wrapper; verify the IDE active project after opening" if not paths
                 else ("re-binding is enough: mw_ide_stage would overwrite the staged project and "
                       "take any POU created since with it" if stale else "")
             ),
@@ -1038,6 +1047,8 @@ def verb_check_program(req):
 
 
 VERBS = {
+    "workflow_check": lambda req: _ok(**__import__("motionworks_iec_mcp.workflow", fromlist=["check"]).check(req["project"])),
+    "source_manifest": lambda req: _ok(**__import__("motionworks_iec_mcp.workflow", fromlist=["source_manifest"]).source_manifest(Path(req["project"]))),
     "reference": verb_reference,
     "reference_sync": verb_reference_sync,
     "diagnose": verb_diagnose,
@@ -1145,13 +1156,14 @@ def main(argv):
                 from engine.motionworks_iec_mcp.staging import assert_proven
             except ImportError:
                 from motionworks_iec_mcp.staging import assert_proven
-            assert_proven(req["project"])
+            if verb != "workflow_check":
+                assert_proven(req["project"])
         except StagingRefused as exc:
             _write(res, _fail(str(exc), refused_by="staging guard", verb=verb))
             return 1
 
     try:
-        if verb in {"write_st", "var_add", "var_edit", "var_delete", "pou_create", "pou_delete", "restore_pou"} and req.get("dry_run", True) is False:
+        if verb in {"write_st", "var_add", "var_add_many", "var_edit", "var_delete", "pou_create", "pou_delete", "restore_pou"} and req.get("dry_run", True) is False:
             from motionworks_iec_mcp.transaction import run
             payload = run(Path(req["project"]), lambda: handler(req))
         else:

@@ -1795,7 +1795,7 @@ while ($true) {
                     # "completion unverified" while the project was in fact compiled and unmodified.
                     # Holding the condition for two seconds separates a genuine no-op from the
                     # instant before a real compile flips the flag.
-                    if ($currentCompiled -and $compiledBefore -and -not [bool]$app.ActiveProject.IsModified) {
+                    if ($verb -eq 'make' -and $currentCompiled -and $compiledBefore -and -not [bool]$app.ActiveProject.IsModified) {
                         if ($settle.Elapsed.TotalSeconds -ge 2) {
                             $isCompiled = $true; $alreadyUpToDate = $true; break
                         }
@@ -1818,6 +1818,8 @@ while ($true) {
                 is_compiled     = $isCompiled
                 is_modified     = $(try { [bool]$app.ActiveProject.IsModified } catch { $null })
                 elapsed_s       = [Math]::Round($sw.Elapsed.TotalSeconds, 1)
+                evidence_kind   = $(if ($alreadyUpToDate) { 'already_up_to_date' } elseif ($isCompiled -and $observedPending) { 'observed_compile_transition' } else { 'completion_unverified' })
+                fresh_compile   = ($isCompiled -and $observedPending -and -not $alreadyUpToDate)
             }
         }
     }

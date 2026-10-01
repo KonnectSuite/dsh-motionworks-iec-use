@@ -8,6 +8,8 @@ from pathlib import Path
 from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'code' / 'engine'))
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'code'))
+import mw_code
 from motionworks_iec_mcp import grid, transaction
 from motionworks_iec_mcp.errors import MotionWorksError, UnsupportedFormat
 
@@ -167,6 +169,43 @@ class TransactionTests(unittest.TestCase):
             return {'ok': False, 'error': 'injected failure response'}
         with self.assertRaises(MotionWorksError): transaction.run(self.root, operation)
         self.assertEqual(generated.read_bytes(), b'original-cache')
+
+    def test_atomic_variable_batch_rolls_back_prior_success(self):
+        from motionworks_iec_mcp import writer
+        def plan(_root, _pou, name, _type, **_kwargs):
+            if name == 'Broken':
+                raise ValueError('native donor unavailable')
+            return name
+        def apply(name, _root, **_kwargs):
+            self.file.write_bytes(name.encode())
+            return {'applied': True}
+        request = {'project': str(self.root), 'dry_run': False,
+                   'variables': [{'name': 'Good', 'type': 'BOOL'},
+                                 {'name': 'Broken', 'type': 'BOOL'}]}
+        with patch.object(writer, 'plan_variable_add', side_effect=plan), \
+             patch.object(writer, 'apply_declaration', side_effect=apply):
+            with self.assertRaisesRegex(MotionWorksError, r'item \[1\] Broken'):
+                transaction.run(self.root, lambda: mw_code.verb_var_add_many(request))
+        self.assertEqual(self.file.read_bytes(), b'original')
+
+    def test_partial_variable_batch_requires_explicit_opt_in(self):
+        from motionworks_iec_mcp import writer
+        def plan(_root, _pou, name, _type, **_kwargs):
+            if name == 'Broken':
+                raise ValueError('native donor unavailable')
+            return name
+        def apply(name, _root, **_kwargs):
+            self.file.write_bytes(name.encode())
+            return {'applied': True}
+        request = {'project': str(self.root), 'dry_run': False, 'allow_partial': True,
+                   'variables': [{'name': 'Good', 'type': 'BOOL'},
+                                 {'name': 'Broken', 'type': 'BOOL'}]}
+        with patch.object(writer, 'plan_variable_add', side_effect=plan), \
+             patch.object(writer, 'apply_declaration', side_effect=apply):
+            result = transaction.run(self.root, lambda: mw_code.verb_var_add_many(request))
+        self.assertEqual(self.file.read_bytes(), b'Good')
+        self.assertEqual((result['applied'], result['failed']), (1, 1))
+        self.assertEqual(result['result']['transaction']['state'], 'committed')
 
 
 if __name__ == '__main__': unittest.main()

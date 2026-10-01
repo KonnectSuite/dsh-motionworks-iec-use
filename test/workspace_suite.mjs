@@ -5,12 +5,16 @@ import { __internals as i } from '../index.js';
 const root = resolve(import.meta.dirname, '..');
 const commands = [
   [process.execPath, ['preflight.mjs']],
+  [process.execPath, ['test/render_contract.mjs']],
+  [process.execPath, ['test/ide_first.mjs']],
   [process.execPath, ['test/skill_delivery.mjs', root]],
   [process.execPath, ['test/workspace_session.mjs']],
   [process.execPath, ['test/workspace_boundary.mjs']],
   [process.execPath, ['test/close_consent.mjs']],
   [i.pythonExe(), ['-B', 'test/workspace_engine.py']],
   [i.pythonExe(), ['-B', 'test/reliability_test.py']],
+  [i.pythonExe(), ['-B', 'test/workflow_test.py']],
+  [i.pythonExe(), ['-B', 'test/pou_deletion_test.py']],
   [i.pythonExe(), ['-B', 'test/knowledge_test.py']],
   [process.execPath, ['test/knowledge_tools.mjs']],
   [join(process.env.SystemRoot ?? 'C:\\Windows', 'System32/WindowsPowerShell/v1.0/powershell.exe'),

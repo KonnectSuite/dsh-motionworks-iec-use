@@ -5,7 +5,7 @@
 # the running MotionWorks IDE.
 #
 # There is deliberately NO config here: the plugin needs no settings, and its
-# staging root is derived from its own location rather than configured, so a
+# staging root is derived from the calling session workspace rather than configured, so a
 # mistaken config value cannot point the tools at a real project tree.
 - insert:
     - id: motionworks-iec-use

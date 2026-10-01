@@ -85,13 +85,9 @@ def run(project: Path, operation, *, validate=None) -> dict:
     lock = home / 'locks' / (key + '.lock')
     if not lock.resolve().is_relative_to(workspace_root()):
         raise MotionWorksError('Transaction lock escapes the workspace')
-    if not lock.resolve().is_relative_to(workspace_root()):
-        raise MotionWorksError('Transaction lock escapes the workspace')
     lock.parent.mkdir(parents=True, exist_ok=True)
     transaction_id = datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S.%fZ-') + uuid4().hex[:8]
     folder = home / 'transactions' / key / transaction_id
-    if not folder.resolve().is_relative_to(workspace_root()):
-        raise MotionWorksError('Transaction journal escapes the workspace')
     if not folder.resolve().is_relative_to(workspace_root()):
         raise MotionWorksError('Transaction journal escapes the workspace')
     try:
@@ -146,7 +142,6 @@ def run(project: Path, operation, *, validate=None) -> dict:
         if journal['state'] in ('applying', 'committed'):
             try:
                 ensure_ide_closed(auto_close=False)
-                assert_proven(root)
                 assert_proven(root)
                 _restore(root, folder / 'before', before)
                 journal.update(state='rolled_back', error=str(exc))

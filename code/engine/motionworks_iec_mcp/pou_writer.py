@@ -313,17 +313,31 @@ def plan_pou_deletion(
     )
 
     # A task instance is a child of a task named after the POU.
-    for node, _ in document.walk_with_ancestors():
+    instance_ancestor_decrements: dict[int, tuple[TreeNode, int]] = {}
+    for node, ancestors in document.walk_with_ancestors():
         if node.params[1] != 5:
             continue
         for child in node.children:
             if child.name == pou_name:
+                if child.children:
+                    raise PouPlanError('Task instance has nested records; deletion layout is unsupported')
                 plan.instances.append((node.name, child.span))
                 plan.assigned_to.append(node.name)
+                # Measured after live COM assignment: Physical Hardware,
+                # Configuration, Resource, Tasks and task counts all include
+                # the instance. The parser may nest Hardware under Logical
+                # POUs, so use the physical branch boundary, not that artifact.
+                physical_branch = False
+                for ancestor in [*ancestors, node]:
+                    physical_branch = physical_branch or ancestor.name == 'Physical Hardware'
+                    if physical_branch:
+                        prior = instance_ancestor_decrements.get(ancestor.line, (ancestor, 0))
+                        instance_ancestor_decrements[ancestor.line] = (ancestor, prior[1] + 1)
 
-    # Counts to decrement: the container that held it, and the root.  The
-    # intermediate containers deliberately do not move -- they do not track program
-    # instances, the same reason task assignment edits only two fields.
+    plan.total_after -= len(plan.instances)
+
+    # The logical container loses four POU nodes. The root additionally loses
+    # every removed task instance; physical-branch ancestor decrements follow.
     container = next(
         node
         for node, _ in document.walk_with_ancestors()
@@ -339,20 +353,15 @@ def plan_pou_deletion(
     plan.count_edits.append(
         (
             (root.line, root.line + 1),
-            [_params_with(root.params, 2, root.params[2] - POU_NODE_COUNT)],
+            [_params_with(root.params, 2, root.params[2] - POU_NODE_COUNT - len(plan.instances))],
         )
     )
-    # Each removed instance also shrinks the task that held it.
-    for task_name, _ in plan.instances:
-        task = next(
-            node
-            for node, _ in document.walk_with_ancestors()
-            if node.params[1] == 5 and node.name == task_name
-        )
+    # Aggregate instance decrements once per physical ancestor/task.
+    for task, removed_instances in instance_ancestor_decrements.values():
         plan.count_edits.append(
             (
                 (task.line, task.line + 1),
-                [_params_with(task.params, 2, task.params[2] - 1)],
+                [_params_with(task.params, 2, task.params[2] - removed_instances)],
             )
         )
 
@@ -403,10 +412,11 @@ def _verify_deletion(
         ):
             problems.append(f"a task instance of {plan.pou_name!r} remains")
             break
-    if int(document.lines[1]) != previous_total - POU_NODE_COUNT:
+    expected_total = previous_total - POU_NODE_COUNT - len(plan.instances)
+    if int(document.lines[1]) != expected_total:
         problems.append(
             f"node total is {document.lines[1]}, expected "
-            f"{previous_total - POU_NODE_COUNT}"
+            f"{expected_total}"
         )
     remaining = [
         node.name
@@ -959,9 +969,8 @@ def apply_pou_creation(
         "files_created": created,
         "files_written": [str(path) for path, _, _ in writes],
         "backups": backups,
-        # Reported so a caller can see that the clone's externals were localized. If
-        # grid_skipped is 1 the layout was unexpected and externals may remain, which
-        # is exactly the state that makes a later assign fail to compile.
+        # Cloning preserves native declaration usages; unlike a transplant it
+        # must not silently turn global bindings into unrelated local storage.
         "localization": localization,
     }
 
@@ -1315,7 +1324,9 @@ def plan_pou_creation(
         raise PouPlanError(
             f"template {template_name!r} records {len(template_guids)} GUID(s) in "
             f"NodeProperties.xml but a POU needs {POU_NODE_COUNT}; it cannot be "
-            f"cloned safely"
+            f"cloned safely. Do not remove historical records to force a clone. "
+            f"Four-GUID template candidates (still require plan validation): "
+            f"{[p.name for p in sorted(pou_root.iterdir()) if p.is_dir() and len(_template_guids(p)) == POU_NODE_COUNT]}"
         )
 
     physical = _physical_hardware(document)
