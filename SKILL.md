@@ -8,7 +8,22 @@ whenToUse: The user has MotionWorks IEC 3 Pro open or asks for work in it — a 
 
 Use the installed tools for discovery, staging, IDE editing and IDE verification.
 The DEFAULT is IDE-FIRST: the agent actually enters code and declarations in MotionWorks.
+Prefer a verified native IDE operation over mouse/grid input. Use known keyboard
+commands when the native API does not support the operation; inspect the resulting
+state before further input. A retired offline editor is not a native IDE operation.
+At startup use `mw_ide_trial` and `mw_ide_state` to distinguish a licence prompt,
+loading process, blocked frame and ready IDE. `mw_ide_start` answers the exact Use
+Trial control through the native control API and verifies closure. Do not start
+another IDE or begin coordinate clicking while that operation is running.
 Offline code/variable/POU editors and the unsupported Rebuild API are retired.
+For declarations use `mw_ide_variable_change` with the staged project, exact POU
+(omit for resource globals), operation, and `baseline_saved:true` only after
+reconciling saved edits. Add/edit requires all seven declaration fields and an
+existing writable group. Inspect `verification.accepted` before continuing;
+failure means stop and inspect evidence, never retry automatically. Delete
+requires explicit user approval and reference review; renames require review.
+Run fresh Build/Make after the intended edits. This API does not require opening
+a worksheet and does not establish automatic navigation support.
 No environment flag restores those public tools. Edit through the IDE instead.
 For any motion-logic design, diagnosis or review, read `docs/ENGINEERING_WORKFLOW.md`
 before proposing code. It supplies the requirements, evidence, timing, FB lifecycle,

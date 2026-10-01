@@ -10,6 +10,13 @@
 
 ## 0.5.5
 
+- Follow-up patch: isolate mwctVerify trial dialogs and their exact Use Trial
+  button, check blocked/already-running IDEs, and verify a single native action.
+- Add guarded native variable add/edit/delete with saved/live baseline checks,
+  complete declaration read-back and native flag preservation. Group moves remain
+  refused; automatic worksheet navigation is still unverified.
+- Package the native variable module and add lifecycle and trial regressions.
+
 - Deploy the corrected Hardware/resource global worksheet identity and native
   Create Variable Set instructions together. Clear inherited metadata before
   switching to VAR_EXTERNAL, which disables fields without clearing them.

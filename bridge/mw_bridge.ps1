@@ -281,25 +281,69 @@ function Get-IdeWindow {
 function Get-TrialDialog {
     $script:trialDlg = $null
     $script:trialBtn = $null
+    $script:trialCandidates = @()
     $cb = [MWW+EnumWindowsProc]{
         param($h, $l)
         if ([MWW]::IsWindowVisible($h)) {
+            $ownerPid = [uint32]0
+            [void][MWW]::GetWindowThreadProcessId($h, [ref]$ownerPid)
+            $owner = Get-Process -Id $ownerPid -ErrorAction SilentlyContinue
+            if (-not $owner -or $owner.ProcessName -ine 'mwctVerify') { return $true }
             $cls = New-Object System.Text.StringBuilder 256
             [void][MWW]::GetClassNameW($h, $cls, 256)
             if ($cls.ToString() -like 'WindowsForms10.Window*') {
-                $script:trialDlg = $h
+                $script:candidateTrialButton = $null
                 $cb2 = [MWW+EnumWindowsProc]{
                     param($k, $l2)
-                    if ([MWW]::ReadText($k) -eq 'Use Trial') { $script:trialBtn = $k }
+                    if (([MWW]::ReadText($k) -replace '&','').Trim() -ieq 'Use Trial' -and [MWW]::IsWindowVisible($k)) {
+                        $script:candidateTrialButton = $k
+                    }
                     return $true
                 }
                 [void][MWW]::EnumChildWindows($h, $cb2, [IntPtr]::Zero)
+                if ($script:candidateTrialButton) {
+                    $script:trialCandidates += [pscustomobject]@{ dialog = $h; button = $script:candidateTrialButton }
+                }
             }
         }
         return $true
     }
     [void][MWW]::EnumWindows($cb, [IntPtr]::Zero)
+    if ($script:trialCandidates.Count -gt 1) { throw 'Multiple MotionWorks trial dialogs found; refusing an ambiguous action' }
+    if ($script:trialCandidates.Count -eq 1) {
+        $script:trialDlg = $script:trialCandidates[0].dialog
+        $script:trialBtn = $script:trialCandidates[0].button
+    }
     return @($script:trialDlg, $script:trialBtn)
+}
+
+function Answer-TrialDialog {
+    $pair = Get-TrialDialog
+    $dialog = $pair[0]; $button = $pair[1]
+    if (-not $dialog) { return [ordered]@{ dialog_present = $false; dismissed = $true; method = 'none-needed'; seconds = 0; strategies_tried = @() } }
+    if (-not [MWW]::IsWindowEnabled($button)) { throw 'Use Trial is disabled; no licence action was submitted' }
+    # Prefer the control's semantic Invoke API. Only fall back if Invoke is not
+    # available BEFORE input; an ambiguous submitted action is never retried.
+    $pattern = $null
+    try {
+        Add-Type -AssemblyName UIAutomationClient
+        Add-Type -AssemblyName UIAutomationTypes
+        $element = [System.Windows.Automation.AutomationElement]::FromHandle($button)
+        [void]$element.TryGetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern, [ref]$pattern)
+    } catch { $pattern = $null }
+    if ($pattern) {
+        $pattern.Invoke()
+        $method = 'uia_invoke'
+    } else {
+        Invoke-TrialClick $button $dialog
+        if (-not [MWW]::PostMessage($button, 0x00F5, [IntPtr]::Zero, [IntPtr]::Zero)) {
+            throw 'Use Trial native button command was refused'
+        }
+        $method = 'posted_bm_click'
+    }
+    $seconds = Test-TrialGone $dialog 10
+    $gone = -not [MWW]::IsWindow($dialog) -or -not [MWW]::IsWindowVisible($dialog)
+    return [ordered]@{ dialog_present = $true; dismissed = $gone; method = $method; seconds = $seconds; strategies_tried = @($method) }
 }
 
 function Invoke-TrialClick([IntPtr]$target, [IntPtr]$dialog) {
@@ -324,7 +368,7 @@ function Invoke-TrialClick([IntPtr]$target, [IntPtr]$dialog) {
 function Test-TrialGone([IntPtr]$dialog, [int]$seconds = 20) {
     for ($i = 0; $i -lt ($seconds / 2); $i++) {
         Start-Sleep -Seconds 2
-        if (-not [MWW]::IsWindow($dialog)) { return [int](($i * 2) + 2) }
+        if (-not [MWW]::IsWindow($dialog) -or -not [MWW]::IsWindowVisible($dialog)) { return [int](($i * 2) + 2) }
     }
     return 0
 }
@@ -545,6 +589,44 @@ function Connect-App {
     return $script:App
 }
 
+function Get-VariableSheet($app,[string]$pou) {
+    if ($pou) {
+        $matches=@()
+        for($i=1;$i -le $app.ActiveProject.Pous.Count;$i++) {
+            $p=$app.ActiveProject.Pous.Item($i)
+            if([string]$p.Name -ieq $pou){$matches+=,$p}
+        }
+        if($matches.Count -ne 1){throw 'REFUSED: exact POU not found'}
+        return ,($matches[0].Variables)
+    }
+    $resource=$app.ActiveProject.GetObjectByLogicalName('Hardware/Configuration/Resource',10)
+    if(-not $resource){throw 'REFUSED: exact resource not found'}
+    return ,($resource.Variables)
+}
+function Get-VariableRows($vars) {
+    $sections=@{1='VAR';2='VAR_INPUT';3='VAR_OUTPUT';4='VAR_IN_OUT';5='VAR_EXTERNAL';6='VAR_GLOBAL'}
+    $rows=@()
+    for($i=1;$i -le $vars.Count;$i++) {
+        $v=$vars.Item($i); $section=$sections[[int]$v.BlockType]
+        if(-not $section){throw 'Unsupported native declaration usage; no mutation allowed'}
+        $row=[ordered]@{name=[string]$v.Name;type=[string]$v.DataType;section=$section;group=[string]$v.Group.Name;
+            address=[string]$v.IecAddress;initial_value=[string]$v.InitialValue;description=[string]$v.Comment;
+            retain=[bool]$v.Retain;pdd=[bool]$v.PDD;opc=[bool]$v.OPC;disabled=[bool]$v.Disabled;not_on_plc=[bool]$v.NotOnPlc;redundant=[bool]$v.Redundant}
+        foreach($field in @('address','initial_value','description')){if($row[$field] -eq ''){$row[$field]=$null}}
+        $rows+=,$row
+    }
+    return ,$rows
+}
+function Assert-VariableBaseline($expected,$actual) {
+    if($null -eq $expected -or $expected.Count -ne $actual.Count){throw 'REFUSED: native declaration baseline changed'}
+    foreach($row in $expected) {
+        $match=@($actual | Where-Object {$_.name -ieq $row.name})
+        if($match.Count -ne 1){throw 'REFUSED: native declaration baseline changed'}
+        foreach($field in @('name','type','section','group','address','initial_value','description','retain','pdd','opc','disabled','not_on_plc','redundant')) {
+            if($row.$field -cne $match[0].$field){throw "REFUSED: native baseline changed: $($row.name).$field"}
+        }
+    }
+}
 function Normalize-MwPath([string]$path) {
     if ([string]::IsNullOrWhiteSpace($path)) { return '' }
     try { return [IO.Path]::GetFullPath($path).TrimEnd('\') } catch { return $path.Trim().TrimEnd('\') }
@@ -1253,6 +1335,63 @@ while ($true) {
             # IDE possible: reading variables from the running project avoids
             # hand-maintaining .VGR/.VB/PROJECT.TRE consistency entirely.
             # Optional "pou" narrows to one POU; omitted reads all of them.
+            'variable_snapshot' {
+                $app=Connect-App
+                [void](Assert-StagedOpen $app $verb)
+                $vars=Get-VariableSheet $app ([string]$req.pou)
+                $groups=@()
+                for($i=1;$i -le $vars.Groups.Count;$i++) {
+                    $g=$vars.Groups.Item($i)
+                    $groups+=@{name=[string]$g.Name;read_only=[bool]$g.ReadOnly}
+                }
+                $data=[ordered]@{variables=(Get-VariableRows $vars);groups=$groups}
+                $ok=$true
+            }
+            'variable_mutate' {
+                $app=Connect-App
+                [void](Assert-StagedOpen $app $verb)
+                if([IO.Path]::GetFullPath($app.ActiveProject.FullName) -ine [IO.Path]::GetFullPath([string]$req.project+'.mwt')) {throw 'REFUSED: wrong native project'}
+                if([bool]$app.ActiveProject.IsModified){throw 'REFUSED: reconcile/save unsaved native edits first'}
+                $vars=Get-VariableSheet $app ([string]$req.pou)
+                Assert-VariableBaseline $req.before_native (Get-VariableRows $vars)
+                $op=[string]$req.operation; $decl=$req.declaration
+                if($op -notin @('add','edit','delete')){throw 'Unknown native variable operation'}
+                $target=$null
+                for($i=1;$i -le $vars.Count;$i++) {if([string]$vars.Item($i).Name -ieq [string]$req.name){$target=$vars.Item($i)}}
+                if($op -ne 'add' -and -not $target){throw 'REFUSED: exact variable not found'}
+                $groupName=if($op -eq 'delete'){[string]$target.Group.Name}else{[string]$decl.group}
+                $group=$null
+                for($i=1;$i -le $vars.Groups.Count;$i++){if([string]$vars.Groups.Item($i).Name -ceq $groupName){$group=$vars.Groups.Item($i)}}
+                if(-not $group -or [bool]$group.ReadOnly){throw 'REFUSED: target variable group absent or read-only'}
+                if($op -eq 'delete') {
+                    if($req.user_approved -ne $true -or $req.references_reviewed -ne $true){throw 'REFUSED: deletion approval and reference review required'}
+                    $target.Delete()
+                } else {
+                    $sections=@{VAR=1;VAR_INPUT=2;VAR_OUTPUT=3;VAR_IN_OUT=4;VAR_EXTERNAL=5;VAR_GLOBAL=6}
+                    $block=$sections[[string]$decl.section]
+                    if(-not $block -or ($req.pou -and $block -eq 6) -or (-not $req.pou -and $block -ne 6)){throw 'REFUSED: declaration usage does not match native scope'}
+                    if([string]$decl.name -notmatch '^[A-Za-z_][A-Za-z0-9_]{0,29}$'){throw 'REFUSED: invalid IEC name'}
+                    if($block -eq 5 -and ($decl.address -or $decl.initial_value)){throw 'REFUSED: external address/initializer forbidden'}
+                    for($i=1;$i -le $vars.Count;$i++) {
+                        if([string]$vars.Item($i).Name -ieq [string]$decl.name -and ($op -eq 'add' -or [string]$target.Name -ine [string]$decl.name)){throw 'REFUSED: duplicate declaration name'}
+                    }
+                    if($op -eq 'add') {
+                        $group.Variables.Create([string]$decl.name,[string]$decl.type,[int]$block,[string]$decl.description,[string]$decl.initial_value,[string]$decl.address,$false) | Out-Null
+                    } else {
+                        if([string]$target.Group.Name -cne $groupName){throw 'REFUSED: native group move has not been verified'}
+                        if([string]$target.Name -ine [string]$decl.name -and $req.rename_reviewed -ne $true){throw 'REFUSED: rename reference review required'}
+                        $target.Name=[string]$decl.name
+                        $target.DataType=[string]$decl.type
+                        $target.BlockType=[int]$block
+                        $target.Comment=[string]$decl.description
+                        $target.InitialValue=[string]$decl.initial_value
+                        $target.IecAddress=[string]$decl.address
+                    }
+                }
+                $app.ActiveProject.Save()
+                $data=[ordered]@{operation=$op;saved=$true;variables=(Get-VariableRows $vars);is_modified=[bool]$app.ActiveProject.IsModified;method='native_com'}
+                $ok=$true
+            }
             'variables' {
                 $app = Connect-App
                 [void](Assert-StagedOpen $app $verb)
@@ -1314,36 +1453,28 @@ while ($true) {
                 if ([string]::IsNullOrWhiteSpace($exe)) {
                     $exe = 'C:\Program Files (x86)\Yaskawa\MotionWorks IEC 3 Pro\Mwt.exe'
                 }
-                $already = [bool](Get-IdeWindow)
+                $already = [bool](Get-Process -Name Mwt -ErrorAction SilentlyContinue)
                 $trialAnswered = $null
                 $trialSeen = $false
                 if (-not $already) {
                     if (-not (Test-Path $exe)) { throw "Mwt.exe not found at $exe" }
                     Start-Process -FilePath $exe -ArgumentList ('"' + $launchProject + '"') -WindowStyle Hidden | Out-Null
-                    # 300s, not 120s: measured on this machine the IDE can take
-                    # well over two minutes to show its window (licence check and
-                    # CodeMeter are part of startup). A shorter wait made a merely
-                    # slow start look like a failure to launch.
-                    $deadline = (Get-Date).AddSeconds(300)
-                    while (-not (Get-IdeWindow) -and (Get-Date) -lt $deadline) {
-                        Start-Sleep -Milliseconds 1000
-                        # An UNLICENSED build shows the licence dialog FIRST and will
-                        # never produce an IDE window until it is answered. Waiting
-                        # blindly therefore looks exactly like a hang. Detect it and
-                        # answer it with "Use Trial".
-                        if (-not $trialSeen) {
-                            $pair = Get-TrialDialog
-                            if ($pair[0] -and $pair[1]) {
-                                $trialSeen = $true
-                                Log 'licence dialog detected during start_ide; answering it'
-                                Invoke-TrialClick $pair[1] $pair[0]
-                                [void][MWW]::SendMessage($pair[1], 0x00F5, [IntPtr]::Zero, [IntPtr]::Zero)
-                                $gone = Test-TrialGone $pair[0] 30
-                                $trialAnswered = [bool]$gone
-                                Log "licence dialog answered=$($trialAnswered) after ${gone}s"
-                            }
-                        }
+                }
+                # A running process or blocked frame is not a ready IDE. Inspect
+                # the licence owner before COM and never start a duplicate instance.
+                $deadline = (Get-Date).AddSeconds(300)
+                while ((Get-Date) -lt $deadline) {
+                    $pair = Get-TrialDialog
+                    if ($pair[0]) {
+                        if ($trialSeen) { throw 'Trial action was submitted but the dialog remains; no automatic retry or duplicate IDE launch' }
+                        $trialSeen = $true
+                        $answer = Answer-TrialDialog
+                        $trialAnswered = [bool]$answer.dismissed
+                        if (-not $trialAnswered) { throw 'Use Trial was submitted but closure was not verified; inspect mw_ide_trial before further input' }
                     }
+                    $readyWindow = Get-IdeWindow
+                    if ($readyWindow -and [MWW]::IsWindowEnabled($readyWindow)) { break }
+                    Start-Sleep -Milliseconds 500
                 }
                 $w = Get-IdeWindow
                 if (-not $w) {
@@ -1477,52 +1608,9 @@ while ($true) {
             # The dialog is a .NET WinForms window in ANOTHER process; from an
             # automated process, clicking it is best-effort, not guaranteed.
             'dismiss_trial' {
-                $pair = Get-TrialDialog
-                $d = $pair[0]; $b = $pair[1]
-                if (-not $d) {
-                    $ok = $true
-                    $data = [ordered]@{ dialog_present = $false; dismissed = $true; method = 'none-needed' }
-                } elseif (-not $b) {
-                    throw 'a licence dialog is up but it contains no "Use Trial" button'
-                } else {
-                    $tried = @(); $method = $null; $secs = 0
-
-                    Invoke-TrialClick $b $d
-                    [void][MWW]::SendMessage($b, 0x00F5, [IntPtr]::Zero, [IntPtr]::Zero)   # BM_CLICK
-                    $secs = Test-TrialGone $d 20; $tried += 'bm_click'
-                    if ($secs) { $method = 'bm_click' }
-
-                    if (-not $method) {
-                        Invoke-TrialClick $b $d
-                        $lp = [IntPtr](5 -bor (5 -shl 16))
-                        [void][MWW]::SendMessage($b, 0x0201, [IntPtr]1, $lp)   # WM_LBUTTONDOWN
-                        [void][MWW]::SendMessage($b, 0x0202, [IntPtr]0, $lp)   # WM_LBUTTONUP
-                        $secs = Test-TrialGone $d 20; $tried += 'mouse_messages'
-                        if ($secs) { $method = 'mouse_messages' }
-                    }
-
-                    if (-not $method) {
-                        Invoke-TrialClick $b $d
-                        $lp = [IntPtr](5 -bor (5 -shl 16))
-                        [void][MWW]::PostMessage($b, 0x0201, [IntPtr]1, $lp)
-                        [void][MWW]::PostMessage($b, 0x0202, [IntPtr]0, $lp)
-                        $secs = Test-TrialGone $d 20; $tried += 'posted_mouse'
-                        if ($secs) { $method = 'posted_mouse' }
-                    }
-
-                    $still = [bool]((Get-TrialDialog)[0])
-                    $ok = (-not $still)
-                    $data = [ordered]@{
-                        dialog_present   = $true
-                        dismissed        = (-not $still)
-                        method           = $method
-                        seconds          = $secs
-                        strategies_tried = $tried
-                    }
-                    if ($still) {
-                        $err = 'the licence dialog is still up and could not be answered from this process. Click "Use Trial" once by hand, or activate a licence. NOTE: this only affects the mw_ide_* tools - the mw_code_* tools (read code, write ST, create/delete POUs, edit variables) do NOT need the IDE or a licence and work right now.'
-                    }
-                }
+                $data = Answer-TrialDialog
+                $ok = [bool]$data.dismissed
+                if (-not $ok) { $err = 'Use Trial action was submitted but the dialog remains. No automatic retry was sent. Inspect the exact dialog before further action.' }
             }
 
             # List the IDE's output windows (Build/Errors/Warnings/Infos/...).

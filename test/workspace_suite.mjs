@@ -11,6 +11,7 @@ const commands = [
   [process.execPath, ['test/guidance_contract.mjs']],
   [process.execPath, ['test/variable_audit.mjs']],
   [process.execPath, ['test/edit_session.mjs']],
+  [process.execPath, ['test/native_variables.mjs']],
   [process.execPath, ['test/skill_delivery.mjs', root]],
   [process.execPath, ['test/workspace_session.mjs']],
   [process.execPath, ['test/workspace_boundary.mjs']],
@@ -24,6 +25,8 @@ const commands = [
   [process.execPath, ['test/knowledge_tools.mjs']],
   [join(process.env.SystemRoot ?? 'C:\\Windows', 'System32/WindowsPowerShell/v1.0/powershell.exe'),
     ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', 'test/workspace_bridge.ps1']],
+  [join(process.env.SystemRoot ?? 'C:\\Windows', 'System32/WindowsPowerShell/v1.0/powershell.exe'),
+    ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', 'test/trial_dialog.ps1']],
 ];
 for (const [command, args] of commands) {
   const result = spawnSync(command, args, { cwd: root, stdio: 'inherit', windowsHide: true });

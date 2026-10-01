@@ -3,7 +3,7 @@ import { randomUUID } from 'node:crypto';
 const fields = ['name','type','section','group','address','initial_value','description'];
 const plans = new Map();
 const ttl = 30 * 60 * 1000;
-export function variableExpectation(baseline, declaration, pou) {
+export function variableExpectation(baseline, declaration, pou, existingGroups = baseline.map(v=>v.group)) {
   if (!Array.isArray(baseline)) throw new Error('Missing saved declaration baseline');
   if (!declaration || fields.some(f => !Object.hasOwn(declaration, f)
       || (declaration[f] !== null && typeof declaration[f] !== 'string')))
@@ -11,14 +11,14 @@ export function variableExpectation(baseline, declaration, pou) {
   if (!/^[A-Za-z_][A-Za-z0-9_]{0,29}$/.test(declaration.name ?? ''))
     throw new Error('Use an IEC identifier of at most 30 characters; never silently truncate or rename');
   if (!declaration.type || /[;\r\n]/.test(declaration.type)) throw new Error('Invalid data type');
-  if (!(pou ? ['VAR','VAR_EXTERNAL'] : ['VAR_GLOBAL']).includes(declaration.section))
+  if (!(pou ? ['VAR','VAR_INPUT','VAR_OUTPUT','VAR_IN_OUT','VAR_EXTERNAL'] : ['VAR_GLOBAL']).includes(declaration.section))
     throw new Error('Usage does not match worksheet scope');
   if (!declaration.group) throw new Error('An explicit existing variable group is required');
   if (declaration.section === 'VAR_EXTERNAL' && (declaration.address || declaration.initial_value))
     throw new Error('Externals must not duplicate a global physical address or initializer');
   if (baseline.some(v => v.name.toUpperCase() === declaration.name.toUpperCase()))
     throw new Error('Variable already exists; addition refused');
-  if (!baseline.some(v => v.group === declaration.group))
+  if (!existingGroups.includes(declaration.group))
     throw new Error('Group is not in the saved baseline; create/verify it separately');
   if (declaration.address && baseline.some(v => v.address?.toUpperCase() === declaration.address.toUpperCase()))
     throw new Error('Exact IEC address already used; addition refused');

@@ -57,6 +57,7 @@ import { fileURLToPath } from 'node:url';
 import { tmpdir } from 'node:os';
 import { verifyAcceptance } from './verification.js';
 import { retainPlan, lookupPlan, requireVariableView } from './edit-session.js';
+import { nativeVariableChange } from './native-variables.js';
 
 export const name = 'motionworks-iec-use';
 export const inject = ['tools'];
@@ -1264,6 +1265,21 @@ function compareVariables(expected, actual) {
 function defineTools() {
   return [
     {
+      name:'mw_ide_variable_change',
+      description:'Add, edit or delete ONE declaration through the native MotionWorks COM API by exact POU/resource, without grid input or worksheet navigation. Requires reconciled saved edits; compares the complete live/saved baseline before changing and verifies all saved declarations afterward. Uses the selected existing writable group. Externals require the matching global name/type. Edit accepts the complete desired seven-field declaration. Delete requires explicit approval and reference review. Does not download, compile automatically, move groups or repair/retry partial failures.',
+      parameters:{type:'object',additionalProperties:false,required:['project','operation','baseline_saved'],properties:{project:{type:'string'},pou:{type:'string'},operation:{type:'string',enum:['add','edit','delete']},baseline_saved:{type:'boolean'},name:{type:'string',description:'Existing exact name for edit/delete'},declaration:VARIABLE_SCHEMA,user_approved:{type:'boolean'},references_reviewed:{type:'boolean'},rename_reviewed:{type:'boolean'}}},
+      output:{schema:{type:'object',additionalProperties:true,required:['operation','action_performed','native_result','verification','baseline','expected_variables','next_step']},render:(_a,v)=>text(JSON.stringify(v,null,2))},
+      execute:async args=>{
+        const project=projectOf(args),identity=await assertIdeProjectProven();
+        if(resolve(identity.active_project).replace(/\.mwt$/i,'').toLowerCase()!==project.toLowerCase())throw new Error('REFUSED: wrong open project');
+        const saved=()=>runCode(args.pou?'read_st':'globals',{project,...(args.pou?{pou:args.pou}:{})});
+        return nativeVariableChange(args,{status:()=>verb('compile_state',{},30000),saved,
+          snapshot:()=>verb('variable_snapshot',{pou:args.pou},30000),
+          mutate:request=>verb('variable_mutate',{...request,project},60000),
+          compare:compareVariables,globals:()=>runCode('globals',{project})});
+      },
+    },
+    {
       name: 'mw_ide_active_view',
       description: 'Read the exact active worksheet logical name from the live IDE. Use after native navigation instead of trusting a clipped tab or guessed tree row. Does not open, focus, edit or save a worksheet. No active editor returns an explicit error field, never a guessed target.',
       parameters: {type:'object',additionalProperties:false,properties:{}},
@@ -2071,10 +2087,11 @@ function defineTools() {
         + 'unlicensed build shows a modal dialog ("Use Trial" / "Activate Online" / '
         + '"Activate by Phone") BEFORE the IDE creates any window of its own, and until '
         + 'it is answered the IDE has no project services, so every OpenProject fails '
-        + 'with "Internal error". mw_ide_start already answers it when it appears; call '
-        + 'this to inspect the state or to retry. It reports honestly when the dialog '
-        + 'could not be dismissed: the dialog belongs to another process (mwctVerify.exe), '
-        + 'so clicking it is best-effort and may need one manual click.',
+        + 'with "Internal error". mw_ide_start checks it even when a blocked IDE frame exists. '
+        + 'This tool selects only mwctVerify-owned dialogs and the exact Use Trial control. '
+        + 'An attempt uses native UI Automation Invoke, or a posted native button command '
+        + 'if Invoke is unavailable, and verifies closure. Never retry an ambiguous action '
+        + 'or start another IDE while the existing process is waiting.',
       parameters: {
         type: 'object',
         additionalProperties: false,
@@ -2102,9 +2119,9 @@ function defineTools() {
           v.dialog_present
             ? (v.dismissed
               ? `Licence dialog was present and is now answered (via ${v.method}).`
-              : 'LICENCE DIALOG IS UP and could not be dismissed automatically. Click '
-                + '"Use Trial" once by hand, or activate a licence. This affects only the '
-                + 'mw_ide_* tools Ã¢â‚¬â€ the mw_code_* tools work without the IDE and without a licence.')
+              : 'LICENCE DIALOG IS UP. Inspect its exact Use Trial control; '
+                + 'mw_ide_trial(attempt:true) submits one native action and verifies closure. '
+                + 'No declaration/code editor is usable through the IDE until it is answered.')
             : 'No licence dialog is present.',
         ),
       },

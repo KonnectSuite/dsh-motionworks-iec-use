@@ -22,6 +22,7 @@
     "index.js",
     "verification.js",
     "edit-session.js",
+    "native-variables.js",
     "preflight.mjs",
     "SKILL.md",
     "README.md",
@@ -66,6 +67,8 @@
     "test/guidance_contract.mjs",
     "test/variable_audit.mjs",
     "test/edit_session.mjs",
+    "test/native_variables.mjs",
+    "test/trial_dialog.ps1",
     "test/ide_ui_session.mjs",
     "!bridge/*.lock"
   ],
