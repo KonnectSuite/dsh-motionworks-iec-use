@@ -1393,6 +1393,19 @@ while ($true) {
                 $data=[ordered]@{variables=(Get-VariableRows $vars);groups=$groups}
                 $ok=$true
             }
+            'library_snapshot' {
+                $app=Connect-App
+                [void](Assert-StagedOpen $app $verb)
+                $modified=[bool]$app.ActiveProject.IsModified
+                $libraries=@()
+                for($i=1;$i -le $app.ActiveProject.Libraries.Count;$i++){
+                    $library=$app.ActiveProject.Libraries.Item($i)
+                    $libraries+=,[ordered]@{name=[string]$library.Name;full_name=[string]$library.FullName;logical_name=[string]$library.LogicalName}
+                }
+                if([bool]$app.ActiveProject.IsModified -ne $modified){throw 'Native library inspection changed modified state'}
+                $data=[ordered]@{libraries=$libraries;is_modified=$modified;action_performed=$false}
+                $ok=$true
+            }
             'structure_snapshot' {
                 $app=Connect-App
                 [void](Assert-StagedOpen $app $verb)

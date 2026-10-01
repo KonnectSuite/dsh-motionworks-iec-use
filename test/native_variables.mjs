@@ -15,6 +15,18 @@ async function run(input=args,override={}) {
   try{return await nativeVariableChange(input,deps);}finally{if(override.noMutation)assert.equal(mutated,0);}
 }
 assert.equal((await run()).verification.accepted,true);
+{
+  let reads=0,mutations=0;
+  const emptyDeps={status:async()=>({is_modified:false}),saved:async()=>({variables:reads++?[addition]:[]}),snapshot:async()=>({variables:[],groups:[{name:'Default',read_only:false}]}),mutate:async()=>{mutations++;return {saved:true,is_modified:false,variables:[{...addition,...flags}]};},compare:__internals.compareVariables,globals:async()=>({variables:[]})};
+  assert.equal((await nativeVariableChange(args,emptyDeps)).verification.accepted,true);
+  assert.equal(mutations,1);
+  reads=0;mutations=0;
+  await assert.rejects(nativeVariableChange(args,{...emptyDeps,snapshot:async()=>({variables:[],groups:[{name:'Default',read_only:true}]})}),/read-only/);
+  assert.equal(mutations,0);
+  reads=0;
+  await assert.rejects(nativeVariableChange(args,{...emptyDeps,snapshot:async()=>({variables:[],groups:[]})}),/Group/);
+  assert.equal(mutations,0);
+}
 const padded={...row,description:'Comment '};
 let paddingReads=0;
 assert.equal((await run(args,{

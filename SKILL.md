@@ -29,6 +29,14 @@ globals). Require `accepted:true` before editor input. The tool resolves the
 internal document URN from the saved tree and verifies the active view; never
 send a slash-style logical name directly to OpenDocument or navigate by guessed
 tree coordinates. Code editors report the POU logical name as their active view.
+For ST function-block insertion, inspect `mw_code_block_interface` with an exact
+block name and library when ambiguous. Use `mw_ide_fb_insert` with a new instance,
+exact saved `expected_body`, `baseline_saved:true` and explicit pin bindings.
+Outputs and in-out pins require existing direct variables of matching types;
+all in-out pins must be bound. The tool declares the instance and inserts the
+call through native APIs, retaining completed phases on failure. Inspect that
+evidence before another action; never retry blindly. Require accepted read-back
+and fresh Build/Make. Graphical insertion remains outside this tool's scope.
 For POU structure use `mw_ide_pou_change`: create blank ST PROGRAM/FUNCTION_BLOCK/
 FUNCTION (explicit return_type for FUNCTION), copy, rename or delete. Copy/rename
 uses `new_name`. Reconcile saved edits and require `verification.accepted`.

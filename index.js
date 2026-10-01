@@ -60,6 +60,7 @@ import { retainPlan, lookupPlan, requireVariableView } from './edit-session.js';
 import { nativeVariableChange } from './native-variables.js';
 import { nativeStructureChange } from './native-structure.js';
 import { nativeCodeChange } from './native-code.js';
+import { fbInsertionPlan } from './fb-insertion.js';
 
 export const name = 'motionworks-iec-use';
 export const inject = ['tools'];
@@ -1303,6 +1304,52 @@ async function executeNativeStructure(scope,args) {
 }
 function defineTools() {
   return [
+    {
+      name:'mw_ide_fb_insert',
+      description:'Insert ONE new FB instance and ST call using its installed declared interface. Requires exact expected_body, saved baseline, explicit pin bindings and optional line-boundary offset (default append). Resolves block/library through live-bound parameter/declaration tables; rejects hidden/non-FB blocks, unknown/duplicate pins, missing in-out pins, instance collisions and direct-variable type mismatches. Outputs/in-outs currently require existing direct local/external variables. Inputs allow single expressions; compiler validation remains required. Adds the instance via guarded native variable API, then imports/verifies the code via native DDE. Retains plan/phase evidence; a partial failure reports completed phases and never retries or silently rolls back. No graphical insertion or controller action. Require verification.accepted then fresh Build/Make.',
+      parameters:{type:'object',additionalProperties:false,required:['project','pou','block','instance','expected_body','baseline_saved','bindings'],properties:{project:{type:'string'},pou:{type:'string'},block:{type:'string'},library:{type:'string'},instance:{type:'string'},expected_body:{type:'string'},baseline_saved:{type:'boolean'},group:{type:'string'},offset:{type:'integer',minimum:0},bindings:{type:'object',additionalProperties:{type:'string'}}}},
+      output:{schema:{type:'object',additionalProperties:true,required:['verification','completed_phases','evidence_path']},render:(_a,v)=>text(JSON.stringify(v,null,2))},
+      execute:async args=>{
+        const project=projectOf(args),definitions=defineTools(),tool=name=>definitions.find(t=>t.name===name);
+        const block=await tool('mw_code_block_interface').execute({project,name:args.block,library:args.library});
+        const read=await runCode('read_st',{project,pou:args.pou}),plan=fbInsertionPlan(args,block,read);
+        const directory=join(workspaceRoot(),'.motionworks','verification');
+        if(!isInsideWorkspace(directory))throw new Error('REFUSED: linked evidence directory');
+        mkdirSync(directory,{recursive:true});
+        const evidence_path=join(directory,'native-fb-'+randomUUID()+'.json');
+        const record={plan,args,completed_phases:[],phase:'plan_retained'};
+        writeFileSync(evidence_path,JSON.stringify(record,null,2),{encoding:'utf8',flag:'wx'});
+        const retain=()=>{if(!isInsideWorkspace(evidence_path))throw new Error('REFUSED: linked evidence file');writeFileSync(evidence_path,JSON.stringify(record,null,2),'utf8');};
+        try{
+          if(args.baseline_saved!==true||(await verb('compile_state',{},30000)).is_modified!==false)throw new Error('Reconcile/save native edits before FB insertion');
+          record.phase='declaring_instance';retain();
+          const variable=await tool('mw_ide_variable_change').execute({project,pou:args.pou,baseline_saved:true,operation:'add',declaration:plan.declaration});
+          record.variable_result=variable;
+          if(!variable.verification.accepted)throw new Error('FB instance declaration verification failed');
+          record.completed_phases.push('instance_declared');record.phase='instance_declared';retain();
+          const current=await tool('mw_code_block_interface').execute({project,name:args.block,library:args.library});
+          if(current.source_sha256!==block.source_sha256||current.registry_sha256!==block.registry_sha256||current.source_file!==block.source_file)throw new Error('Block interface changed after declaration; inspect retained phase before another action');
+          record.phase='inserting_call';retain();
+          const code=await tool('mw_ide_code_change').execute({project,pou:args.pou,baseline_saved:true,expected_body:args.expected_body,code:plan.code});
+          record.code_result=code;
+          if(!code.verification.accepted)throw new Error('FB call code verification failed');
+          record.completed_phases.push('call_inserted');record.phase='verified';retain();
+          return {verification:{accepted:true,errors:[],warnings:plan.warnings},completed_phases:record.completed_phases,evidence_path,call:plan.call,instance:args.instance,interface:block,next_step:'Fresh Build/Make; an inserted call is not machine acceptance.'};
+        }catch(error){record.failed_phase=record.phase;record.phase='incomplete';record.error=error.message;retain();return {verification:{accepted:false,errors:[error.message]},completed_phases:record.completed_phases,failed_phase:record.failed_phase,evidence_path,next_step:'Inspect live/saved state and retained phase evidence before another action; no automatic retry.'};}
+      },
+    },
+    {
+      name:'mw_code_block_interface',
+      description:'List bound project/toolbox/firmware blocks, or read one exact block interface with pin names, declared types and input/output/in-out directions. Matches saved references against the live IDE library paths. Reads native firmware .PT tables or project/library declarations, with source/registry hashes; does not infer directions from compiled identifier names. Omit name for catalog, specify library to resolve duplicates. IEC/eCLR implicit references are separately identified; controller firmware profile still requires verification. Read-only: no IDE input, library edits or controller action.',
+      parameters:{type:'object',additionalProperties:false,required:['project'],properties:{project:{type:'string'},name:{type:'string'},library:{type:'string'}}},
+      output:{schema:{type:'object',additionalProperties:true,required:['evidence_kind','action_performed']},render:(_a,v)=>text(JSON.stringify(v,null,2))},
+      execute:async args=>{
+        const project=projectOf(args),identity=await assertIdeProjectProven();
+        if(resolve(identity.active_project).replace(/\.mwt$/i,'').toLowerCase()!==project.toLowerCase())throw new Error('REFUSED: wrong open project');
+        const snapshot=await verb('library_snapshot',{},30000);
+        return runCode('block_interface',{project,name:args.name,library:args.library,native_libraries:snapshot.libraries});
+      },
+    },
     {
       name:'mw_ide_code_change',
       description:'Replace an existing writable ST worksheet through MotionWorks native ChangeCodeWS API. Requires exact expected_body from mw_code_read_st, reconciled saved baseline, and printable ASCII code. Retains the plan, guards complete saved/native source baselines, imports once, saves and verifies full code including comments, unchanged declarations/native flags, tasks, globals and other POUs. No mouse input, clipboard, disk source editing, controller action or automatic retry. Check verification.accepted, then fresh Build/Make. Graphical/IL edits are not supported by this tool.',

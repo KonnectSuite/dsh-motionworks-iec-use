@@ -2,17 +2,11 @@
 
 WHY THIS EXISTS
 ---------------
-MotionWorks' COM automation API cannot touch POU code. Measured, three routes
-tried and all closed:
-  * no body accessor exists (->_Pou has 35 members, none is Source/Body/Text);
-  * ExecuteCommand() is a stub ("The method or operation is not implemented");
-  * the import/export providers are untyped IDispatch and Execute() is a no-op
-    from automation (returned OK, wrote 0 files).
-
-So code is edited where it actually lives: the CFB container of the expanded
-project. This module is a thin JSON-driven wrapper over the already-proven
-engine in the sibling package (motionworks_iec_mcp.writer / .project), which
-updates paired declaration and native worksheet-grid streams together.
+The public plugin edits code through native ExecuteDdeCommand/ChangeCodeWS in
+the IDE bridge. This engine independently reads saved source, declarations,
+library interfaces and verification evidence. Legacy private format writers
+remain only for regression coverage; they are retired public operations and
+are not an alternative to native IDE editing.
 
 PROTOCOL
 --------
@@ -24,9 +18,8 @@ place, and carries no BOM so the Node half can JSON.parse it.
 
 SAFETY
 ------
-* Writes default to dry_run=True: the first call is a preview, never a change.
-* Every write goes through the engine's own require_ide_closed() gate, so a
-  project held open by the IDE is refused rather than corrupted.
+* Session/stage provenance is checked before project access.
+* Retired offline writes are not callable public editing tools.
 * This module never downloads to a controller and never commands motion.
 """
 
@@ -72,6 +65,10 @@ def verb_worksheet_target(req):
 def verb_structure_snapshot(req):
     from motionworks_iec_mcp.structure import snapshot
     return _ok(**snapshot(Path(req['project'])))
+
+def verb_block_interface(req):
+    from motionworks_iec_mcp.block_interfaces import inspect
+    return _ok(**inspect(Path(req['project']),req['native_libraries'],req.get('name'),req.get('library')))
 
 
 # â”€â”€ read â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -704,7 +701,7 @@ def verb_check_mwt(req):
 #: sets reference=true. Everything else still has to be a staged copy.
 READ_VERBS = frozenset({
     "worksheet_target",
-    "structure_snapshot",
+    "structure_snapshot", "block_interface",
     "pous", "read_st", "unsupported", "globals", "tasks", "types", "library",
 })
 
@@ -1076,6 +1073,7 @@ VERBS = {
     "read_st": verb_read_st,
     "worksheet_target": verb_worksheet_target,
     "structure_snapshot": verb_structure_snapshot,
+    "block_interface": verb_block_interface,
     "unsupported": verb_unsupported,
     "write_st": verb_write_st,
     "var_add": verb_var_add,

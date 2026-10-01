@@ -12,6 +12,10 @@ machine behavior, motion performance or functional safety.
 Use `mw_ide_code_change` for native ST body replacement with an exact saved
 body precondition, full code/comment read-back and collateral source checks.
 Follow its accepted verdict with fresh Build/Make.
+Use `mw_code_block_interface` to inspect installed block pins and directions,
+then `mw_ide_fb_insert` to declare a new instance and insert its ST call with
+explicit bindings. Check the retained phase evidence on partial failure and
+compile after successful insertion.
 Use `mw_ide_variable_change` for native local/global/external add/edit/delete,
 with complete saved/native read-back checks. Use `mw_ide_open_worksheet` to open
 code or variables by exact saved tree identity and verify the active view. These

@@ -31,8 +31,9 @@ names that matter::
 WHAT THIS CANNOT TELL YOU, and it matters: **the heap does not record input/output
 direction.** ``Execute`` and ``Done`` are distinguishable by convention, not by evidence
 here, and this module does not guess. It reports the names the assembly defines and says
-plainly that direction is not among them - the declaration in the calling POU (read with
-``mw_code_read_st``) is what settles direction, and it is the authoritative source.
+plainly that direction is not among them. The block's own declarations/native parameter
+table (``mw_code_block_interface``) establish direction; caller instance declarations
+do not establish a block's pin directions.
 
 The heap also carries compiler temporaries - ``__temp_1`` through ``__temp_50``, ``s1``
 through ``s7`` - which are noise here, so they are filtered out rather than reported as if

@@ -3,7 +3,7 @@ const fields=['name','type','section','group','address','initial_value','descrip
 const equalName=(a,b)=>a.toUpperCase()===b.toUpperCase();
 // The saved reader trims comment padding; raw native rows remain the mutation guard.
 const savedProjection=rows=>rows.map(v=>Object.fromEntries(fields.map(f=>[f,f==='description'?(v[f]?.trim()||null):v[f]??null])));
-export function variableChangePlan(baseline,args) {
+export function variableChangePlan(baseline,args,existingGroups=baseline.map(v=>v.group)) {
   if(!['add','edit','delete'].includes(args.operation))throw new Error('Unknown variable operation');
   let old;
   if(args.operation!=='add') {
@@ -19,7 +19,7 @@ export function variableChangePlan(baseline,args) {
     throw new Error('Review all code/external references before renaming a declaration');
   const rest=old?baseline.filter(v=>v!==old):baseline;
   // Retain original group evidence even when editing its sole declaration.
-  const expected=variableExpectation(rest,declaration,args.pou,baseline.map(v=>v.group));
+  const expected=variableExpectation(rest,declaration,args.pou,existingGroups);
   return {expected,old};
 }
 export async function nativeVariableChange(args,{status,saved,snapshot,mutate,compare,globals}) {
@@ -32,7 +32,7 @@ export async function nativeVariableChange(args,{status,saved,snapshot,mutate,co
   const nativeRows=savedProjection(live.variables);
   const aligned=compare(before.variables,nativeRows);
   if(!aligned.accepted)throw new Error('Live declarations disagree with saved baseline; no native action performed');
-  const plan=variableChangePlan(before.variables,args);
+  const plan=variableChangePlan(before.variables,args,live.groups.map(g=>g.name));
   if(args.declaration?.section==='VAR_EXTERNAL') {
     const global=await globals();
     const match=global.variables.find(v=>equalName(v.name,args.declaration.name));

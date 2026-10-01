@@ -10,6 +10,12 @@
 
 ## 0.5.5
 
+- Read installed function-block pin types and directions from live-bound library
+  declarations and firmware parameter tables. Add guarded ST instance/call
+  insertion with retained phase evidence and exact native read-back.
+- Allow the first variable in an existing empty native group; use null for absent
+  FB declaration metadata so saved and native declarations agree.
+
 - Add guarded native ST code import with exact expected-body preconditions,
   whole-source baseline checks, native save and independent code/comment and
   collateral read-back. Resolve ST comment references through worksheet
