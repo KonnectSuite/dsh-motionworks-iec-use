@@ -26,6 +26,7 @@ const commands = [
   [i.pythonExe(), ['-B', 'test/structure_reader.py']],
   [i.pythonExe(), ['-B', 'test/st_comments.py']],
   [i.pythonExe(), ['-B', 'test/block_interfaces.py']],
+  [i.pythonExe(), ['-B', 'test/installed_help.py']],
   [i.pythonExe(), ['-B', 'test/reliability_test.py']],
   [i.pythonExe(), ['-B', 'test/workflow_test.py']],
   [i.pythonExe(), ['-B', 'test/pou_deletion_test.py']],

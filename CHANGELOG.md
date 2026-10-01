@@ -10,6 +10,9 @@
 
 ## 0.5.5
 
+- Add inert-text search of installed English CHM help with exact module/topic
+  selection, source hashes, native help links and workspace-local cache integrity
+  checks. Resolve shortcuts from installed help rather than guessing key behavior.
 - Read installed function-block pin types and directions from live-bound library
   declarations and firmware parameter tables. Add guarded ST instance/call
   insertion with retained phase evidence and exact native read-back.

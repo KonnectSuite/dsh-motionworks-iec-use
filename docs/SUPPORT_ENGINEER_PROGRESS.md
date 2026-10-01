@@ -102,3 +102,56 @@ in the disposable workspace's `.motionworks/verification` directory.
 Next implementation: populated POU workflows and toolbox/FB insertion, plus
 actual Arya host reload and end-to-end operation. Do not mark the support-engineer
 objective complete from native ST editing alone.
+
+## Latest native FB and installed-help follow-up
+
+Commit b61192a was pushed to main as a 0.5.5 patch and installed with 120
+hash-verified package files; a fresh installed module exposed 56 tools.
+Native variable insertion now accepts an existing empty writable group, enabling
+the first declaration in a newly created POU. Absent FB declaration metadata is
+null, matching saved/native read-back rather than producing false disagreements.
+The live-bound catalog exposed 685 project/library/firmware blocks without an
+unavailable library. Pin directions/types come from user-library declarations or
+firmware .PT parameter tables; IEC/eCLR implicit bindings are labeled separately.
+
+The public ST FB insertion tool retains its plan and mutation phases, creates an
+instance through the native variable API, imports the call through native DDE,
+and independently verifies the source. It stops on partial failure without retry.
+The standard TON and Yaskawa TON_Retentive calls require the output-assignment
+form supported by this IDE. An initial `=>` form was rejected by the compiler and
+corrected; the generated replacements compiled with a fresh observed transition
+(8.9 s). Compiler Save cleared modified state without changing any program-stream
+or translation-file hash; Make settled up to date (2.7 s). The unused disposable
+test POU was removed with accepted native/saved collateral verification.
+The corrected public workflow was then rerun from creation through cleanup and
+passed completely: four declarations, standard TON and toolbox TON_Retentive
+insertion, fresh Build (10.1 s, compiled=true, modified=false), and Make (2.4 s).
+The cleanup assertion matched the original complete program/translation hashes,
+POUs, tasks and globals. Retained evidence:
+`native-fb-live-d418609b-6d17-4a61-b5f0-0b26ece3d125.json` in the disposable
+workspace's `.motionworks/verification` directory.
+After that complete cleanup, fresh Build passed again (8.9 s) and Make settled
+up to date (2.5 s), both compiled=true and modified=false. All program-stream and
+translation-file hashes remained unchanged. Evidence: `native-fb-cleanup-build.json`.
+
+The installed CHM reader now exposes `mw_code_installed_help` (57 definitions in
+the current checkout). Live reads cover 38 installed English archives and exact
+Edit Wizard, graphical inline insertion, default-shortcut, and ST FB-call topics.
+Its parser strips executable HTML content and preserves text/table boundaries and
+image references; source and topic hashes accompany excerpts. Tests cover archive
+binding, query/topic restrictions, cache reuse, cache corruption refusal and source
+version changes. Full regression tests pass. See INSTALLED_HELP_WORKFLOW.md.
+
+Arya was launched through its installed app entry and exposed its normal current
+workspace/session UI. The desktop profile and packaged host both include the
+MotionWorks bundle. This verifies startup/configuration, not a successful Arya-led
+operation or current in-process tool catalog. Computer-use screenshots fail with
+FrameArrived/window capture timeouts, and indexed clicks lack geometry. Text-only
+accessibility succeeds. The live Shift+F2 shortcut opened the populated Edit Wizard;
+Alt+3 focus activation remains unproven. F10 was incorrectly tried as a generic
+Windows menu key, produced the rejected online-mode dialog, and was dismissed.
+Installed help now confirms its Online: Debug assignment, and the skill forbids it.
+
+Remaining acceptance: complete populated/graphical POU editing, observed graphical
+FB placement/wiring, and end-to-end tool use from Arya. The overall support-engineer
+goal remains active; neither a help reader nor ST FB compilation proves those flows.

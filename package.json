@@ -79,6 +79,7 @@
     "test/st_comments.py",
     "test/fb_insertion.mjs",
     "test/block_interfaces.py",
+    "test/installed_help.py",
     "test/trial_dialog.ps1",
     "test/ide_ui_session.mjs",
     "!bridge/*.lock"

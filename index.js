@@ -1305,6 +1305,13 @@ async function executeNativeStructure(scope,args) {
 function defineTools() {
   return [
     {
+      name:'mw_code_installed_help',
+      description:'Read/search actual installed English MotionWorks CHM help as inert text. Omit module to list installed archives; then use an exact module to list topics, query words, or read an exact topic. Provides archive/topic hashes and native help links, caches text in this session workspace, and never opens help or edits the IDE. Use for shortcut/editor/toolbox and programming semantics instead of guessing keys or signatures. Images may contain diagrams or key symbols omitted from text. Installed help is source evidence, not proof of live operation or controller/library compatibility. Refuses absent/ambiguous roots, unknown modules and cache integrity changes.',
+      parameters:{type:'object',additionalProperties:false,properties:{module:{type:'string'},query:{type:'string',maxLength:256},topic:{type:'string',maxLength:256},limit:{type:'integer',minimum:1,maximum:10}}},
+      output:{schema:{type:'object',additionalProperties:true,required:['evidence_kind','action_performed']},render:(_a,v)=>text(JSON.stringify(v,null,2))},
+      execute:async args=>runCode('installed_help',args??{}),
+    },
+    {
       name:'mw_ide_fb_insert',
       description:'Insert ONE new FB instance and ST call using its installed declared interface. Requires exact expected_body, saved baseline, explicit pin bindings and optional line-boundary offset (default append). Resolves block/library through live-bound parameter/declaration tables; rejects hidden/non-FB blocks, unknown/duplicate pins, missing in-out pins, instance collisions and direct-variable type mismatches. Outputs/in-outs currently require existing direct local/external variables. Inputs allow single expressions; compiler validation remains required. Adds the instance via guarded native variable API, then imports/verifies the code via native DDE. Retains plan/phase evidence; a partial failure reports completed phases and never retries or silently rolls back. No graphical insertion or controller action. Require verification.accepted then fresh Build/Make.',
       parameters:{type:'object',additionalProperties:false,required:['project','pou','block','instance','expected_body','baseline_saved','bindings'],properties:{project:{type:'string'},pou:{type:'string'},block:{type:'string'},library:{type:'string'},instance:{type:'string'},expected_body:{type:'string'},baseline_saved:{type:'boolean'},group:{type:'string'},offset:{type:'integer',minimum:0},bindings:{type:'object',additionalProperties:{type:'string'}}}},
@@ -2706,7 +2713,7 @@ function defineTools() {
     },
     {
       name: 'mw_code_manual',
-      description: 'Search installed MotionWorks PDF text and reviewed, versioned Yaskawa references. Omit term to list available manuals, CHM topic filenames and the reviewed catalog. Installed legacy text extraction is heuristic and has no verified revision/page citations; prefer mw_code_reference for source-linked programming guidance. Full PDF search requires mw_code_reference_sync; curated guidance works offline.',
+      description: 'Search installed MotionWorks PDF text and reviewed, versioned Yaskawa references. Omit term to list available manuals, CHM archive filenames and the reviewed catalog. Use mw_code_installed_help for actual installed CHM topic text. Installed legacy PDF extraction is heuristic and has no verified revision/page citations; prefer mw_code_reference for source-linked programming guidance. Full PDF search requires mw_code_reference_sync; curated guidance works offline.',
       parameters: {
         type: 'object',
         additionalProperties: false,

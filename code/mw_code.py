@@ -70,6 +70,9 @@ def verb_block_interface(req):
     from motionworks_iec_mcp.block_interfaces import inspect
     return _ok(**inspect(Path(req['project']),req['native_libraries'],req.get('name'),req.get('library')))
 
+def verb_installed_help(req):
+    from motionworks_iec_mcp.installed_help import search
+    return _ok(**search(req.get('module'),req.get('query',''),req.get('topic'),req.get('limit',5)))
 
 # â”€â”€ read â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
@@ -626,7 +629,7 @@ def verb_manual(request):
         return _ok(manuals=[{'name': m.name, 'path': str(m.path), 'bytes': m.bytes,
                             'readable': m.readable, 'note': m.note, 'revision': 'not_verified'} for m in listed],
                    help_topics=topics, references=K.search(),
-                   note='Use mw_code_reference for reviewed revisions and page citations; installed CHM topic names are not extracted content.')
+                   note='Use mw_code_reference for reviewed revisions/page citations and mw_code_installed_help for actual installed CHM topic text; this list contains archive names only.')
     try:
         results = M.search(str(term), name=str(name) if name else None, limit=limit)
         for result in results:
@@ -1074,6 +1077,7 @@ VERBS = {
     "worksheet_target": verb_worksheet_target,
     "structure_snapshot": verb_structure_snapshot,
     "block_interface": verb_block_interface,
+    "installed_help": verb_installed_help,
     "unsupported": verb_unsupported,
     "write_st": verb_write_st,
     "var_add": verb_var_add,
