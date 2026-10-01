@@ -63,6 +63,11 @@ disposable session; staging/opening is not required again for every code request
 Call `mw_ide_edit_guide` for a concise operation checklist. Menu labels, controls and
 keyboard shortcuts must come from the installed IDE's observed UI or help.
 
+For local/global/external variables, first read
+[Variable worksheet safety](VARIABLE_WORKSHEET_WORKFLOW.md). Prove native insertion
+created a new data row before typing; Default is a group, not an insertion row.
+Use `mw_code_verify_variables` after Save against the full planned declaration list.
+
 | Operation | Native editor workflow | Acceptance evidence |
 |---|---|---|
 | ST body | Open the POU body; confirm ST; click text editor; verify focus; replace only intended text | Visible text, Save, `mw_code_read_st`, fresh compiler verdict |

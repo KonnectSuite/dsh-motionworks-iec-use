@@ -155,6 +155,21 @@ the CompactLogix side before writing it.
 
 ## Declarations and POU lifecycle
 
+Before local/global/external variable edits, read `docs/VARIABLE_WORKSHEET_WORKFLOW.md`
+or `mw_ide_edit_guide(operation: "variables")`, which returns that complete guidance.
+Never type into the bold Default/group row or column headers. Prefer the observed
+native Create Variable Set dialog for additions. First obtain `mw_ide_active_view`
+and a successful `mw_ide_variable_plan` token while no dialog is open. Clear unwanted
+address/initializer/description values before selecting `VAR_EXTERNAL`, which
+disables fields without clearing them. Set one
+confirmed labelled field at a time and clear inherited addresses/metadata absent
+from the plan. Verify all fields before OK. After native Save require
+`mw_ide_variable_verify` accepted:true; `mw_code_verify_variables` remains the
+complete-list fallback. These tools do not insert, navigate or send input.
+Inline insertion is a separately tested fallback, not an assumed reliable route.
+The verifier detects saved
+damage; it is not an input interlock and cannot certify unsaved editor contents.
+
 Use the native IDE variable worksheets, ST editors and project commands. Inspect
 references before deletion; compare saved descriptions, declarations and task bindings.
 Historical native-format notes are engineering evidence, not an editing workflow.

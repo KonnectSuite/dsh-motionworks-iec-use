@@ -54,18 +54,27 @@ import {
 } from 'node:fs';
 import { dirname, isAbsolute, join, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { tmpdir } from 'node:os';
 import { verifyAcceptance } from './verification.js';
+import { retainPlan, lookupPlan, requireVariableView } from './edit-session.js';
 
 export const name = 'motionworks-iec-use';
 export const inject = ['tools'];
 
-const HERE = dirname(fileURLToPath(import.meta.url));
+// Electron can read ASAR paths, but spawned Python/PowerShell cannot. Use the
+// physical unpacked package for child scripts; never write into an installation.
+const SELF = dirname(fileURLToPath(import.meta.url));
+const UNPACKED = SELF.replace(/app\.asar(?=[\\/]|$)/i, 'app.asar.unpacked');
+const HERE = UNPACKED !== SELF && existsSync(UNPACKED) ? UNPACKED : SELF;
 const BRIDGE_DIR = join(HERE, 'bridge');
 const BRIDGE_SCRIPT = join(BRIDGE_DIR, 'mw_bridge.ps1');
 const LAUNCHER_CMD = join(BRIDGE_DIR, 'start_bridge.cmd');
-const REQ = join(BRIDGE_DIR, 'req.json');
-const RES = join(BRIDGE_DIR, 'res.json');
-const LOG = join(BRIDGE_DIR, 'bridge.log');
+// One private mailbox per plugin instance prevents different hosts sharing replies.
+// Workspace authorization still comes from each request, never this temp directory.
+const IPC_DIR = join(tmpdir(), 'dsh-motionworks-ipc', `${process.pid}-${randomUUID()}`);
+const REQ = join(IPC_DIR, 'req.json');
+const RES = join(IPC_DIR, 'res.json');
+const LOG = join(IPC_DIR, 'bridge.log');
 function stageRoot() {
   const workspace = workspaceRoot();
   const root = join(workspace, '.motionworks', 'stage');
@@ -377,6 +386,7 @@ function call(verb, params = {}, timeoutMs = 30000) {
 }
 
 async function callBridge(verb, params = {}, timeoutMs = 30000) {
+  mkdirSync(IPC_DIR, { recursive: true });
   const id = randomUUID();
   const tmp = `${REQ}.tmp`;
   // A new process starts ids at 1, and a previous bridge's res.json can still
@@ -433,7 +443,7 @@ async function bridgeAlive(timeoutMs = 4000) {
 async function ensureBridge() {
   if (await bridgeAlive(1500)) return;
   if (!existsSync(BRIDGE_SCRIPT)) throw new Error(`bridge script missing: ${BRIDGE_SCRIPT}`);
-  mkdirSync(BRIDGE_DIR, { recursive: true });
+  mkdirSync(IPC_DIR, { recursive: true });
   // A leftover request would be consumed by the new bridge on startup, and the
   // `stop` verb exits — which is how a previous run's stale request killed a
   // freshly started bridge. Clear both files first.
@@ -447,7 +457,8 @@ async function ensureBridge() {
     // running the script (measured). A single launcher path is unambiguous.
     process.env.ComSpec ?? 'cmd.exe',
     ['/c', LAUNCHER_CMD],
-    { detached: true, stdio: 'ignore', windowsHide: true },
+    { detached: true, stdio: 'ignore', windowsHide: true,
+      env: { ...process.env, MW_BRIDGE_DIR: IPC_DIR } },
   );
   child.unref();
   bridgeSpawned = true;
@@ -493,8 +504,8 @@ async function verb(v, params, timeoutMs) {
 function runCode(codeVerb, request, timeoutMs = 180000) {
   return new Promise((resolve, reject) => {
     const requestId = randomUUID();
-    const codeReq = join(CODE_DIR, `req-${requestId}.json`);
-    const codeRes = join(CODE_DIR, `res-${requestId}.json`);
+    const codeReq = join(IPC_DIR, `req-${requestId}.json`);
+    const codeRes = join(IPC_DIR, `res-${requestId}.json`);
     const cleanup = () => {
       rmSync(codeReq, { force: true });
       rmSync(codeRes, { force: true });
@@ -508,7 +519,7 @@ function runCode(codeVerb, request, timeoutMs = 180000) {
       reject(new Error(`python not found at ${py} Ã¢â‚¬â€ set MW_PYTHON to a Python 3 interpreter`));
       return;
     }
-    mkdirSync(CODE_DIR, { recursive: true });
+    mkdirSync(IPC_DIR, { recursive: true });
     writeFileSync(codeReq, JSON.stringify(request), 'utf8');
 
     const child = spawn(py, [CODE_HELPER, codeVerb, codeReq, codeRes], {
@@ -1209,8 +1220,88 @@ function projectOf(args) {
   );
 }
 
+const VARIABLE_FIELDS = ['name', 'type', 'section', 'group', 'address', 'initial_value', 'description'];
+const VARIABLE_SCHEMA = {
+  type: 'object', additionalProperties: false, required: VARIABLE_FIELDS,
+  properties: Object.fromEntries(VARIABLE_FIELDS.map(field => [field,
+    field === 'name' ? { type: 'string', minLength: 1 }
+      : { oneOf: [{ type: 'string' }, { type: 'null' }] }])),
+};
+
+// Saved declaration evidence only. Never inject input or repair native streams here.
+function compareVariables(expected, actual) {
+  const errors = [];
+  const index = (rows, label, strict) => {
+    if (!Array.isArray(rows)) throw new Error(`${label} declarations must be an array`);
+    const result = new Map();
+    for (const row of rows) {
+      if (!row || typeof row.name !== 'string' || !row.name.trim()) throw new Error(`${label}: missing variable name`);
+      if (strict && VARIABLE_FIELDS.some(f => !Object.hasOwn(row, f)
+        || (row[f] !== null && typeof row[f] !== 'string'))) throw new Error(`${label}: supply every declaration field for ${row.name}, including explicit nulls`);
+      const key = row.name.toUpperCase();
+      if (result.has(key)) errors.push(`${label}: duplicate variable ${row.name}`);
+      result.set(key, row);
+    }
+    return result;
+  };
+  const wanted = index(expected, 'expected', true);
+  const found = index(actual, 'saved', false);
+  const missing = [], unexpected = [], changed = [];
+  for (const [key, row] of wanted) {
+    const saved = found.get(key);
+    if (!saved) { missing.push(row.name); continue; }
+    const fields = VARIABLE_FIELDS.filter(f => (row[f] ?? null) !== (saved[f] ?? null));
+    if (fields.length) changed.push({ name: row.name, fields,
+      expected: Object.fromEntries(fields.map(f => [f, row[f] ?? null])),
+      saved: Object.fromEntries(fields.map(f => [f, saved[f] ?? null])) });
+  }
+  for (const [key, row] of found) if (!wanted.has(key)) unexpected.push(row.name);
+  return { accepted: !errors.length && !missing.length && !unexpected.length && !changed.length,
+    evidence_kind: 'saved-declarations-only', expected_count: expected.length,
+    saved_count: actual.length, missing, unexpected, changed, errors };
+}
+
 function defineTools() {
   return [
+    {
+      name: 'mw_ide_active_view',
+      description: 'Read the exact active worksheet logical name from the live IDE. Use after native navigation instead of trusting a clipped tab or guessed tree row. Does not open, focus, edit or save a worksheet. No active editor returns an explicit error field, never a guessed target.',
+      parameters: {type:'object',additionalProperties:false,properties:{}},
+      output: {schema:{type:'object',additionalProperties:false,required:['active_project','logical_name','error'],properties:{active_project:{type:'string'},logical_name:{oneOf:[{type:'string'},{type:'null'}]},error:{oneOf:[{type:'string'},{type:'null'}]}}},render:(_a,v)=>text(JSON.stringify(v))},
+      execute: () => verb('active_view',{},20000),
+    },
+    {
+      name: 'mw_ide_variable_plan',
+      description: 'Prepare ONE native variable addition: verify the exact open stage and variable worksheet, retain the complete saved baseline internally, reject duplicate names/addresses and overlength identifiers, and return explicit Create Variable Set dialog values plus a verification token. READ/PLAN ONLY: does not insert or send keys. Reconcile and save unsaved worksheet edits first. Never allocate an IO address from arithmetic alone.',
+      parameters:{type:'object',additionalProperties:false,required:['project','baseline_saved','declaration'],properties:{project:{type:'string'},pou:{type:'string'},baseline_saved:{type:'boolean',description:'True only after reconciling unsaved edits and native Save All.'},declaration:VARIABLE_SCHEMA}},
+      output:{schema:{type:'object',additionalProperties:true,required:['token','expected_count','declaration','dialog_values','action_performed','expires_in_seconds']},render:(_a,v)=>text(JSON.stringify(v,null,2))},
+      execute: async args => {
+        if (args.baseline_saved !== true) throw new Error('REFUSED: reconcile unsaved changes and Save All before retaining a baseline');
+        const project=projectOf(args), status=await assertIdeProjectProven();
+        if (resolve(status.active_project).replace(/\.mwt$/i,'').toLowerCase() !== project.toLowerCase()) throw new Error('REFUSED: wrong open project');
+        const view=await verb('active_view',{},20000);
+        requireVariableView(view.logical_name,args.pou);
+        const saved=await runCode(args.pou?'read_st':'globals',{project,...(args.pou?{pou:args.pou}:{})});
+        if (saved.warnings?.length) throw new Error('REFUSED: saved variable baseline has parse warnings');
+        return retainPlan({workspace:workspaceRoot(),project,pou:args.pou,view:view.logical_name,baseline:saved.variables,declaration:args.declaration});
+      },
+    },
+    {
+      name: 'mw_ide_variable_verify',
+      description: 'After native Create Variable Set and Save All, verify the entire saved worksheet using the retained plan token. No need to resend hundreds of declarations. Detects missing additions, unrelated renames/group/type/address changes and extra rows. No Save or input; not a keyboard interlock. accepted:true is declaration agreement only, not compiler or machine acceptance.',
+      parameters:{type:'object',additionalProperties:false,required:['token'],properties:{token:{type:'string'}}},
+      output:{schema:{type:'object',additionalProperties:true,required:['accepted','evidence_kind','expected_count','saved_count','missing','unexpected','changed','errors']},render:(_a,v)=>text(JSON.stringify(v,null,2))},
+      execute: async args => {
+        const plan=lookupPlan(args.token,workspaceRoot());
+        assertProven(plan.project);
+        const status=await assertIdeProjectProven();
+        if(resolve(status.active_project).replace(/\.mwt$/i,'').toLowerCase()!==plan.project.toLowerCase()) throw new Error('REFUSED: wrong open project');
+        const saved=await runCode(plan.pou?'read_st':'globals',{project:plan.project,...(plan.pou?{pou:plan.pou}:{})});
+        const result=compareVariables(plan.expected,saved.variables);
+        if(saved.warnings?.length){result.errors.push(...saved.warnings);result.accepted=false;}
+        return result;
+      },
+    },
     {
       name: 'mw_ide_edit_guide',
       description: 'IDE-first editing and engineering checklists. Read-only: does not type or edit anything. Use engineering before designing motion logic and read docs/ENGINEERING_WORKFLOW.md. Use the connected computer tool for observed editor actions; never report a checklist as completed work.',
@@ -1223,6 +1314,7 @@ function defineTools() {
           steps: { type: 'array', items: { type: 'string' } },
           action_performed: { type: 'boolean' },
           engineering_guidance: { type: 'string' },
+          variable_guidance: { type: 'string' },
         }, required: ['mode', 'operation', 'steps', 'action_performed'], additionalProperties: false },
         render: (_a, v) => text(JSON.stringify(v, null, 2)),
       },
@@ -1230,7 +1322,7 @@ function defineTools() {
         const instructions = {
           engineering: ['Read docs/ENGINEERING_WORKFLOW.md and collect operation, controller/drive/IDE/library versions, axis units, task timing and interface ownership before choosing FBs.', 'Resolve the installed FB interface and firmware release-note applicability. Historical manuals and this checklist are not proof of compatibility.', 'Define state transitions, completion evidence, continuous target sequence, registration qualification, PLC authority, stop/park and home invalidation; review numeric ranges and timing at maximum speed.', 'Create a behavioral test matrix and retain diagnostics. Edit in the IDE, finish compile/persistence verification, and explicitly separate bench/field acceptance from compiler acceptance.'],
           st: ['Open the exact POU body in the IDE and observe its language and existing text.', 'Click inside the ST editor, verify focus, then select only the intended text and type the reviewed ST.', 'Multiline input requires explicit line-break support in the computer server; Enter can submit a dialog, so use it only in a confirmed multiline editor. Inspect indentation, line count and the entire saved body.', 'Inspect the resulting text before Save; do not type into a terminal or variable-name cell.'],
-          variables: ['Open the correct POU variable worksheet or Global_Variables resource worksheet.', 'Use the native insert/edit command visible in the current UI; set name, type, usage, address, initializer and description.', 'Verify cell edit mode and full committed name: typing may append to NewVar1 instead of replacing it, and Ctrl+A may select worksheet rows rather than cell text.', 'Check the row in the IDE; globals referenced by a POU also need native VAR_EXTERNAL declarations.'],
+          variables: ['Read docs/VARIABLE_WORKSHEET_WORKFLOW.md before any local/global/external edit; retain the full saved baseline. The bold Default/group row and column headers are NOT variable data rows.', 'For ADD, call mw_ide_active_view and obtain mw_ide_variable_plan while no dialog is open. Wait for success before invoking the observed native Create Variable Set dialog from a data row in the intended group. These tools do not navigate or send input.', 'Verify each labelled dialog field separately. Clear inherited addresses, initializers and descriptions absent from the plan. Use an exact single name without #; confirm scope/type and every field before OK. Never blind-Tab through fields. Inline Insert Variable is a separately proven fallback only.', 'For EDIT identify the exact existing variable and field, confirm editor focus and selection, then commit and refresh. If activation closes the cell editor, stop rather than typing into unknown selection.', 'Save through the IDE then require mw_ide_variable_verify accepted:true using the retained token, or mw_code_verify_variables with the complete planned final list. Missing/extra rows or changed existing names/groups/metadata require repair before building. Verification is not an input interlock.', 'Globals referenced by a POU need matching VAR_EXTERNAL declarations without physical address or initializer; verify both worksheets independently.'],
           pou: ['Select Logical POUs and use the observed native create/edit command; choose PROGRAM, FUNCTION or FUNCTION_BLOCK and the required language.', 'For rename/delete, inspect references and task instances first. Obtain required deletion confirmation.', 'Verify both the logical POU and its task assignment after Save; never patch PROJECT.TRE to complete a UI operation.'],
           graphical: ['Open the LD/FBD worksheet and inspect the actual Edit Wizard and installed library interface.', 'Insert contacts, coils, branches or FBs through native editor commands; observe pin names/directions before wiring.', 'Confirm connections and declarations visually; no arbitrary GB binary generation.'],
           tasks: ['Inspect native task properties and current instance order before editing.', 'Create/assign/unassign through the observed Project Tree commands, or supported guarded IDE object-model tools.', 'Confirm exact resource, task, instance, cycle/priority and order; a clean compile does not prove an unassigned POU executes.'],
@@ -1238,7 +1330,8 @@ function defineTools() {
         };
         if (!instructions[args.operation]) throw new Error('Unknown IDE editing operation');
         return { mode: 'ide-first', operation: args.operation, action_performed: false,
-          ...(args.operation === 'engineering' ? { engineering_guidance: readFileSync(join(HERE, 'docs', 'ENGINEERING_WORKFLOW.md'), 'utf8') } : {}), steps: [
+          ...(args.operation === 'engineering' ? { engineering_guidance: readFileSync(join(HERE, 'docs', 'ENGINEERING_WORKFLOW.md'), 'utf8') } : {}),
+          ...(args.operation === 'variables' ? { variable_guidance: readFileSync(join(HERE, 'docs', 'VARIABLE_WORKSHEET_WORKFLOW.md'), 'utf8') } : {}), steps: [
           'Run mw_project_find and inspect mw_ide_state/mw_ide_status. If the requested verified stage is already open, continue it without restaging, closing or reopening. Otherwise stage/open only with the required exact-project consent. Preserve unsaved IDE changes before relying on disk reads.',
           'Observe MotionWorks with the computer tool. One action, then a fresh screenshot; confirm focus before typing. Stop on unexpected dialogs or project identity changes.',
           ...instructions[args.operation],
@@ -1894,7 +1987,7 @@ function defineTools() {
         // told not to trust the empty pane.
         const wantShot = args?.screenshot || (count === 0 && compiles === false);
         if (wantShot) {
-          const out = join(HERE, 'shots', `pane-${pane.replace(/\W+/g, '')}-${Date.now()}.png`);
+          const out = join(IPC_DIR, 'shots', `pane-${pane.replace(/\W+/g, '')}-${Date.now()}.png`);
           mkdirSync(dirname(out), { recursive: true });
           try {
             const shot = await verb('screenshot', { path: out }, 30000);
@@ -2112,7 +2205,7 @@ function defineTools() {
       execute: async (args) => {
         const state = await verb('ide_state', {}, 45000);
         if (args?.screenshot) {
-          const out = join(HERE, 'shots', `state-${Date.now()}.png`);
+          const out = join(IPC_DIR, 'shots', `state-${Date.now()}.png`);
           mkdirSync(dirname(out), { recursive: true });
           try {
             const shot = await verb('screenshot', { path: out }, 30000);
@@ -2558,6 +2651,29 @@ function defineTools() {
       execute: (args) => runCode('globals', projectRequest(args)),
     },
 
+    {
+      name: 'mw_code_verify_variables',
+      description: 'After native IDE Save, compare a POU or global worksheet against the COMPLETE planned final declaration list (baseline plus authorized changes). Detects overwritten existing names, renamed groups, missing/extra rows and type/usage/address/init/description changes. Read-only; cannot stop generic keyboard input and cannot certify unsaved cells or compiler acceptance. Omit pou for globals. Do not build or claim success on accepted:false.',
+      parameters: { type: 'object', additionalProperties: false, required: ['expected_variables'], properties: {
+        project: { type: 'string' }, pou: { type: 'string' },
+        expected_variables: { type: 'array', items: VARIABLE_SCHEMA, description: 'Complete planned final worksheet, from the saved baseline with only authorized edits; all seven fields required, use null for absent metadata. Never construct it from already-damaged read-back.' },
+      } },
+      output: { schema: { type: 'object', additionalProperties: false,
+        required: ['accepted', 'evidence_kind', 'expected_count', 'saved_count', 'missing', 'unexpected', 'changed', 'errors'], properties: {
+          accepted: { type: 'boolean' }, evidence_kind: { type: 'string' },
+          expected_count: { type: 'integer' }, saved_count: { type: 'integer' },
+          missing: { type: 'array', items: { type: 'string' } }, unexpected: { type: 'array', items: { type: 'string' } },
+          changed: { type: 'array', items: { type: 'object', additionalProperties: true } },
+          errors: { type: 'array', items: { type: 'string' } },
+        } }, render: (_a, v) => text(JSON.stringify(v, null, 2)) },
+      execute: async args => {
+        // Validate the caller's complete expectation before starting the helper.
+        compareVariables(args.expected_variables, []);
+        const saved = await runCode(args.pou ? 'read_st' : 'globals',
+          projectRequest(args, args.pou ? { pou: String(args.pou) } : {}));
+        return compareVariables(args.expected_variables, saved.variables);
+      },
+    },
     {
       name: 'mw_code_read_st',
       description:
@@ -3398,7 +3514,7 @@ function defineTools() {
       },
       presentCall: () => ({ card: 'generic', title: 'Screenshot MotionWorks IDE', kind: 'read' }),
       execute: () => {
-        const out = join(HERE, 'shots', `ide-${Date.now()}.png`);
+        const out = join(IPC_DIR, 'shots', `ide-${Date.now()}.png`);
         mkdirSync(dirname(out), { recursive: true });
         return verb('screenshot', { path: out }, 30000);
       },
@@ -3464,7 +3580,7 @@ export function apply(ctx) {
   try {
     const skills = ctx.get?.('skills');
     if (skills?.register) {
-      const raw = readFileSync(fileURLToPath(new URL('./SKILL.md', import.meta.url)), 'utf8');
+      const raw = readFileSync(join(HERE, 'SKILL.md'), 'utf8');
       // Drop the YAML frontmatter: those fields go through the registration instead, so leaving
       // them in `content` would show the agent a second copy of its own description.
       const body = raw.replace(/^---\r?\n[\s\S]*?\r?\n---\r?\n/, '');
@@ -3483,6 +3599,7 @@ export function apply(ctx) {
           + 'the workspace — never one from elsewhere on the machine, even if you know where it is. '
           + 'Another program may be read with reference: true; that does not stage or open it. '
           + 'Edit through the companion computer-use MCP after verifying the staged IDE project. Preserve unsaved changes. '
+          + 'Before declaration edits use mw_ide_edit_guide variables: prove new data-row insertion, never type into a group header, and verify the complete saved declaration plan. '
           + 'For motion design/diagnosis, use the engineering guide and complete the authorized read-back, fresh compile, approved reopen/recompile and evidence handoff loop.',
         whenToUse: 'The user has MotionWorks IEC 3 Pro open or asks for work in it — a real build, a '
           + 'compile verdict, the live project model, reading or changing POU Structured Text, or '
@@ -3522,7 +3639,7 @@ export function apply(ctx) {
 
 /** Exported for tests: the bridge and code helpers, without needing a Cordis context. */
 export const __internals = {
-  call, ensureBridge, stopBridge, verb, assertStaged, defineTools,
-  runCode, pythonExe, codeSrc,
+  call, ensureBridge, stopBridge, verb, assertStaged, defineTools, compareVariables,
+  runCode, pythonExe, codeSrc, IPC_DIR, HERE,
   get STAGE_ROOT() { return stageRoot(); }, workspaceRoot, assertProven, projectOf, BRIDGE_DIR, BRIDGE_SCRIPT, CODE_DIR, CODE_HELPER,
 };

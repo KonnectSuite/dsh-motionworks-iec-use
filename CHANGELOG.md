@@ -8,6 +8,42 @@
 - Recorded global add/edit/remove and approved reopen smoke evidence, including
   warnings and wrapper recovery; corrected stale tool descriptions.
 
+## 0.5.5
+
+- Deploy the corrected Hardware/resource global worksheet identity and native
+  Create Variable Set instructions together. Clear inherited metadata before
+  switching to VAR_EXTERNAL, which disables fields without clearing them.
+- Complete disposable external insertion read-back: 149 declarations match the
+  retained plan, with no missing, extra or changed declarations.
+
+## 0.5.4
+
+- Added read-only active-worksheet identity, immutable workspace-bound variable
+  addition plans, and full saved-worksheet token verification. No automatic UI
+  navigation, input or insertion is advertised.
+- Prefer the observed native Create Variable Set dialog over unreliable inline
+  insertion; require a successful plan before opening a modal and explicitly
+  clear inherited address/initializer/description values.
+- Corrected global worksheet identity to the observed Hardware/resource path.
+- Added regression coverage for wrong worksheets, duplicate names/addresses,
+  scope, identifier limits, expired/cross-workspace plans and collateral damage.
+
+## 0.5.3
+
+- Variable workflow distinguishes group/column headers from actual data rows and
+  requires observed native insertion before typing, per-field focus/commit checks,
+  and full baseline preservation for local/global/external declarations.
+- Added read-only `mw_code_verify_variables` to detect saved group renames,
+  overwritten names, missing/extra declarations and changed metadata against a
+  complete planned final worksheet. It is not a keyboard input interlock.
+
+## 0.5.2
+
+- Resolve Electron ASAR package paths to physical unpacked child scripts.
+- Keep Python/bridge request files and diagnostic screenshots in private temporary
+  IPC directories, not beside installed code. Workspace/project guards remain intact.
+- Added packaged-runtime regression with real Python staging/inspection and no IDE actions.
+
 ## 0.5.1
 
 - IDE-first public catalog: retired eight offline editors and the unsupported Rebuild API.

@@ -1,0 +1,34 @@
+import assert from 'node:assert/strict';
+import {variableExpectation,requireVariableView,retainPlan,lookupPlan} from '../edit-session.js';
+import {__internals} from '../index.js';
+const row={name:'Existing',type:'INT',section:'VAR',group:'Default',address:null,initial_value:null,description:null};
+const addition={...row,name:'DialogSmoke',initial_value:'42'};
+const baseline=[row];
+assert.equal(variableExpectation(baseline,addition,'Main').length,2);
+assert.deepEqual(baseline,[row]);
+for(const invalid of [{...addition,name:'existing'}, {...addition,name:'A'.repeat(31)}, {...addition,name:'2bad'},
+  {...addition,group:'RenamedHeader'}, {...addition,section:'VAR_GLOBAL'}, {...addition,type:'INT;X'}])
+  assert.throws(()=>variableExpectation(baseline,invalid,'Main'));
+assert.throws(()=>variableExpectation([{...row,address:'%IW21496'}],{...addition,address:'%iw21496'},'Main'));
+assert.throws(()=>variableExpectation(baseline,{...addition,section:'VAR_EXTERNAL',address:'%IW21498'},'Main'));
+requireVariableView('/Pous/Main/MainV','Main');
+requireVariableView('/Hardware/Configuration/Resource/Global_Variables');
+assert.throws(()=>requireVariableView('/Configurations/Configuration/Resources/Resource/Global_Variables'));
+assert.throws(()=>requireVariableView('/Hardware/Configuration/Resource/IO_Configuration'));
+for(const wrong of [null,'/Pous/Main/Main','/Pous/Other/OtherV','Default']) assert.throws(()=>requireVariableView(wrong,'Main'));
+const plan=retainPlan({workspace:'workspace-a',project:'stage/Main',pou:'Main',view:'/Pous/Main/MainV',baseline,declaration:addition},1000);
+assert.equal(plan.action_performed,false);
+assert.equal(plan.dialog_values.address,'');
+assert.equal(plan.dialog_values.description,'');
+addition.name='Mutated';
+assert.equal(lookupPlan(plan.token,'workspace-a',1001).expected[1].name,'DialogSmoke');
+assert.throws(()=>lookupPlan(plan.token,'workspace-b',1001));
+assert.throws(()=>lookupPlan(plan.token,'workspace-a',1801001));
+assert.throws(()=>lookupPlan('missing','workspace-a',1001));
+const expected=lookupPlan(plan.token,'workspace-a',1001).expected;
+assert.equal(__internals.compareVariables(expected,[row,{...expected[1]}]).accepted,true);
+assert.equal(__internals.compareVariables(expected,[{...row,name:'INT'},expected[1]]).accepted,false);
+const tools=new Map(__internals.defineTools().map(t=>[t.name,t]));
+await assert.rejects(()=>tools.get('mw_ide_variable_plan').execute({baseline_saved:false}),/Save All/);
+assert.equal(tools.has('mw_ide_open_worksheet'),false,'failed OpenDocument route must not be advertised');
+console.log('Variable plan scope, identity, name limits, immutable baseline, expiry and damage detection passed; no desktop input');

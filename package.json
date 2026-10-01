@@ -1,6 +1,6 @@
 {
   "name": "dsh-motionworks-iec-use",
-  "version": "0.5.1",
+  "version": "0.5.5",
   "description": "Workspace-bound MotionWorks IEC editing, versioned programming references, static review and IDE verification for AryaAI DSH.",
   "keywords": [
     "dsh",
@@ -21,6 +21,7 @@
   "files": [
     "index.js",
     "verification.js",
+    "edit-session.js",
     "preflight.mjs",
     "SKILL.md",
     "README.md",
@@ -40,6 +41,7 @@
     "!code/res.json",
     "!code/res_*.json",
     "test/workspace*.mjs",
+    "test/packaged_runtime.mjs",
     "test/close_consent.mjs",
     "test/workspace*.py",
     "test/workspace*.ps1",
@@ -62,6 +64,8 @@
     "test/ide_first.mjs",
     "test/verification_flow.mjs",
     "test/guidance_contract.mjs",
+    "test/variable_audit.mjs",
+    "test/edit_session.mjs",
     "test/ide_ui_session.mjs",
     "!bridge/*.lock"
   ],

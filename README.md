@@ -9,6 +9,15 @@ computer-use MCP performs visible editor actions.
 download to controllers, force IO or command motion. Compilation is not proof of
 machine behavior, motion performance or functional safety.
 
+Variable editing now has a dedicated [worksheet safety workflow](docs/VARIABLE_WORKSHEET_WORKFLOW.md)
+and `mw_ide_active_view`, `mw_ide_variable_plan`, `mw_ide_variable_verify` plus the
+`mw_code_verify_variables` complete-list comparison. Prefer the labelled native
+Create Variable Set dialog, clearing inherited metadata before OK. Planning must
+finish before opening the modal dialog. These tools do not navigate or insert.
+They distinguish group
+headers from variable rows and detect collateral changes; they do not intercept
+generic keyboard input or guarantee cell focus.
+
 ## Requirements and installation
 
 - Windows with MotionWorks IEC 3 Pro installed and usable under your own license or
@@ -115,7 +124,8 @@ paths and tokens. Do not upload customer projects or proprietary vendor manuals.
 
 ## Current architecture
 
-Version 0.5.1 is IDE-first. The agent codes in MotionWorks through the separately
+Version 0.5.2 retains the IDE-first workflow and fixes Electron-packaged runtime
+paths/mailboxes. The agent codes in MotionWorks through the separately
 connected computer-use MCP, using `mw_ide_edit_guide` for operation-specific steps.
 Eight offline code/variable/POU editors and the unsupported Rebuild API are
 removed from the public catalog, not merely gated. See [IDE-first workflow](docs/IDE_FIRST_WORKFLOW.md).

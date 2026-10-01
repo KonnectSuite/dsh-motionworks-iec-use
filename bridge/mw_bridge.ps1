@@ -28,7 +28,7 @@
   * Never calls Quit: the user's IDE is left exactly as it was found.
 #>
 param(
-    [string]$BridgeDir = $PSScriptRoot,
+    [string]$BridgeDir = $(if ($env:MW_BRIDGE_DIR) { $env:MW_BRIDGE_DIR } else { $PSScriptRoot }),
     # Defaults to the plugin's OWN stage directory, so `open` can only ever touch a
     # copy that lives beside this bridge. Never point this at a real project tree.
     [string]$StageRoot = '',
@@ -747,6 +747,17 @@ while ($true) {
                     active_project  = $activeName
                     in_stage        = [bool]$inStage
                 }
+            }
+
+            'active_view' {
+                $app = Connect-App
+                [void](Assert-StagedOpen $app $verb)
+                $view = $null; $viewError = $null
+                try { $view = [string]$app.ActiveProject.GetLogicalNameOfActiveView() }
+                catch { $viewError = $_.Exception.Message }
+                if (-not $view -and -not $viewError) { $viewError = 'No active worksheet reported by the IDE' }
+                $ok = $true
+                $data = [ordered]@{ active_project = [string]$app.ActiveProject.FullName; logical_name = $view; error = $viewError }
             }
 
             'open' {
