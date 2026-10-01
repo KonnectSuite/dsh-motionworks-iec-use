@@ -24,6 +24,8 @@
     "preflight.mjs",
     "SKILL.md",
     "README.md",
+    "CONTRIBUTING.md",
+    "CHANGELOG.md",
     "LICENSE",
     "cordis.patch.yml",
     "bridge/",

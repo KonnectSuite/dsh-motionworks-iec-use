@@ -304,10 +304,10 @@ const PS32 = join(
 //   * the import/export providers are untyped IDispatch whose Execute() is a
 //     no-op from automation (returned OK, wrote 0 files).
 //
-// So code is edited where it lives - the CFB container of the expanded project -
-// by a Python helper wrapping the proven engine (motionworks_iec_mcp.writer).
-// That engine writes only the textual streams, backs up first, and refuses while
-// the IDE holds the project, so a write can never fight the IDE's cached state.
+// Current source edits use the visible IDE through the separate computer MCP.
+// The Python helper supplies read-only native inspection and guarded staging/
+// verification infrastructure. Historical container writers are private fixtures,
+// not a public source-editing fallback.
 const CODE_DIR = join(HERE, 'code');
 const CODE_HELPER = join(CODE_DIR, 'mw_code.py');
 

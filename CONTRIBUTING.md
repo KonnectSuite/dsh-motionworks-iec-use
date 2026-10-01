@@ -1,152 +1,101 @@
 # Contributing
 
-Thanks for considering it. This is an interoperability tool for an industrial
-IDE, so the bar for *not breaking someone's project* is higher than usual — read
-the invariants below before changing anything.
+This is an interoperability tool for an industrial IDE. Preserve user work and
+distinguish observed evidence from assumptions. Read [README](README.md),
+[SKILL.md](SKILL.md), [IDE-first workflow](docs/IDE_FIRST_WORKFLOW.md) and
+[engineering guidance](docs/ENGINEERING_WORKFLOW.md) before changing behavior.
 
-## Read these two first
+## Current architecture
 
-1. [README.md](README.md) — what the plugin does and the API facts behind it.
-2. [SKILL.md](SKILL.md) — the agent-facing contract. If you change a tool's
-   behaviour, this file changes in the same commit.
+The plugin supplies workspace identity, stages, read-only native inspection,
+engineering references, supported IDE object-model operations and verification.
+A separately connected computer-use MCP performs source/declaration/graphical edits
+inside the IDE. Native import through an observed IDE dialog is also an IDE operation.
 
-## The one design decision you must not undo
+Historical offline CFB writers remain private regression fixtures, not a supported
+public editing route. Do not re-expose them or recommend them after a UI failure.
+Automation body access, command execution and import/export providers were not
+proven usable for general source editing on the tested installation. New API
+discoveries need an isolated reproduction and explicit version boundaries.
 
-**Code is not edited through the IDE's automation API, because that API cannot
-touch code.** Three COM routes were tried and are closed:
+## Invariants
 
-| Route | Result |
-|---|---|
-| a body accessor on `_Pou` | does not exist (35 members, none is Source/Body/Text) |
-| `ExecuteCommand(CommandId)` | a stub — *"The method or operation is not implemented"* |
-| `iec_61131-3_file_export` / `_import` | untyped IDispatch; `Execute()` returns OK, writes 0 files |
+1. Never add controller downloads, Run/Reset, forces, jogs or motion commands.
+2. Mutations/builds operate only on the proven workspace stage. Outside references
+   stay read-only. Verify the active full project path before acting.
+3. Preserve unsaved IDE work. Obtain approval tied to the exact project before
+   closing/replacing it; GUI deletion needs scoped confirmation.
+4. Use native editors. No unknown graphical binary edits, blind clicks, lock
+   deletion, force-killing the IDE or silent source promotion.
+5. Save All and compare complete readback. Task assignments and installed FB
+   interfaces must be checked separately from compiler success.
+6. Never report success without evidence. Cached flags/no-op Make and empty panes
+   are not fresh-build proof. Reopen repeats compilation/source checks. Retain failures.
+7. Follow tool-specific dry-run/approval defaults for permitted infrastructure.
+   GUI actions do not have automatic transaction rollback.
 
-So the plugin has **two effectors**: COM for the IDE, and a CFB container writer
-for code. If you find a genuine COM path to code bodies, that is a significant
-discovery — please open an issue with the reproduction before restructuring.
+## Setup
 
-## Invariants — do not weaken these
+Use Windows, MotionWorks IEC 3 Pro, Node >=20, Python 3 and AryaAI DSH/Cordis.
+See README for interpreter selection and plugin-manager installation. Restart the
+host after updates; do not manually junction its dependencies. The desktop-control
+companion is separate and needed for live editor tests, not isolated regressions.
 
-1. **Never download to a controller. Never command motion.** No tool, no bridge
-   verb, no helper flag. A PR that adds one will be rejected regardless of merit.
-2. **Code tools only ever touch the plugin's own `stage/`.** Every path passes
-   through the staging guard. Do not add a way to point them at a real project.
-3. **Writes default to `dry_run: true`**, back up first, verify the untouched
-   sibling streams byte-for-byte, and refuse while the IDE holds the project.
-4. **Graphical LD/FBD bodies are refused**, never guessed at. They are proprietary
-   binary with no public grammar; only transplant from a known-good donor.
-5. **Never report a success you did not observe.** The build verbs report
-   `accepted` / `settled` / `is_compiled` separately on purpose — "compiled and
-   failed" must never be confused with "never ran".
+## Tests and review
 
-## Development setup
-
-Requirements:
-
-- **Windows.** `Mwt.exe` is a 32-bit Windows app; nothing here works elsewhere.
-- **MotionWorks IEC 3 Pro** installed, for anything beyond the structural tests.
-- **Node ≥ 20** to load the plugin.
-- **Python 3** for the code engine — but you do not have to install one. The
-  engine is stdlib-only (`win32com` is imported lazily inside a single function
-  in `ide.py`), and the plugin auto-discovers the interpreter that ships with
-  AryaAI. Override with `MW_PYTHON` if you want a different one.
-
-Install it into your DSH profile **through the plugin manager**, which manages the
-profile's dependency and lockfile — that is what the loader actually reads:
-
-```
-plugin_manager install_bundle  file:C:\path\to\this\repo
-```
-
-Then restart DSH; bundles are read at boot.
-
-⚠ **Do not install it by hand with a junction.** A junction into
-`profiles\<p>\node_modules\` appears to work — the package resolves, and a direct
-`import()` succeeds — but it is not how DSH resolves bundles, and it breaks the
-real install: pnpm cannot manage a path it does not own, so installing over it
-fails with `ERR_PNPM_EPERM` while renaming, which the user sees as *"the plugin
-failed to start"*. If you hit that, delete the junction and install via the plugin
-manager.
-
-Also note: DSH cannot hot-load a bundle, so always budget for a restart when
-testing install changes.
-
-## Tests
+From the repository root:
 
 ```powershell
-node test/verify.mjs          # structural: loads, 21 tools, JSON Schema, guards
-node test/demo.mjs            # runnable end-to-end demo — no IDE, no licence
-node test/selfcontained.mjs   # must pass with MW_SRC and MW_PYTHON unset
-node test/verbs.mjs           # live COM verbs — needs a running IDE
-node test/code_loop.mjs       # full loop — needs a running IDE + a project you own
+npm run preflight
+npm test
+node test/guidance_contract.mjs
+node test/verification_flow.mjs
+npm pack --dry-run
 ```
 
-`code_loop.mjs` takes a project from the environment, so no sample project is
-needed in the repo and none should ever be added:
+`npm test` is the maintained isolated suite and does not start the IDE or controller.
+Older scripts in `test/` include historical probes that may mutate project files or
+operate a live IDE. Do not run them indiscriminately or use retired writer probes
+as current acceptance. Consult the suite and IDE-first smoke documentation instead.
 
-```powershell
-$env:MW_SAMPLE_PROJECT = "C:\path\to\MyProject"   # folder, or the .mwt
-$env:MW_SAMPLE_POU     = "MyStPou"                # optional, default Initialize
-```
+On sandbox permission failure, identify denied fixture/subprocess access and request
+appropriate test-only access. Do not weaken workspace guards to pass tests.
 
-**Run `verify.mjs` and `selfcontained.mjs` in every PR.** The live tests need a
-licensed IDE and real hardware-adjacent state, so say in the PR which ones you
-ran and which you could not.
+For live acceptance use a disposable stage, disconnected/non-motion workflow and
+observed desktop companion. Capture baseline diagnostics, perform a scoped operation,
+Save All/read back, fresh Build/Make, and—with exact-project consent—close/reopen
+and repeat verification. Record warnings, failures and recovery. Test UI operations
+separately; ST success does not prove LD/library support. Never label planned or
+mocked checks as live tests.
 
-## The vendored engine
+In a PR state tests actually run, those not run, tested versions and affected contracts.
+Update documentation with behavior changes and SKILL.md when its agent contract changes.
+Keep active instructions consistent; label historical evidence explicitly.
 
-`code/engine/motionworks_iec_mcp/` is a **copy** of an engine that also exists in
-another project. It is vendored so this plugin is self-contained.
+## Source and packaging
 
-- If you change engine behaviour, change it **upstream first**, then re-vendor —
-  do not let the two diverge silently.
-- ⚠ **Before publishing this repository, confirm you hold the rights to license
-  the vendored engine.** It currently carries no per-file license header, and the
-  root `LICENSE` covers the repository as a whole. Decide deliberately, and add
-  per-file headers if the engine needs different terms from the plugin.
+The engine in `code/engine/motionworks_iec_mcp/` is vendored. Record provenance and
+coordinate upstream changes rather than silently diverging. Never add customer
+projects/backups, controller data, tokens or proprietary vendor PDFs. Link official
+references and state revision limits. The repository declares MIT licensing in LICENSE;
+maintainers must establish rights/attribution for contributed and vendored material.
+This review does not certify third-party redistribution rights.
 
-## The type-library dumps
+Type-library observations in `docs/tlb_dump.txt` and `docs/tlb_enums.txt` describe
+the tested interfaces, not every IDE release. Regeneration helpers require matching
+installed type libraries and 32-bit Python/pywin32—not normal plugin-user requirements.
 
-`docs/tlb_dump.txt` and `docs/tlb_enums.txt` are generated from the IDE's
-`Ade.tlb` and are the authoritative reference for the automation API — the
-`AdeCompileType` mapping that corrects the widespread "1 = Build, 2 = Rebuild"
-folklore came from here.
+Use Node built-ins for the host plugin and plain JSON Schema (`required` is an array).
+Check schema/render contracts after tool changes; preserve measured limitations.
 
-Regenerate with **32-bit** Python (the type library is 32-bit):
+## Bugs and security
 
-```powershell
-$py32 = "C:\path\to\32bit\python.exe"   # needs pywin32
-& $py32 docs\tlb_dump.py   > docs\tlb_dump.txt
-& $py32 docs\tlb_enums.py  > docs\tlb_enums.txt
-```
+Use GitHub Issues for ordinary bugs with sanitized reproduction, version/commit,
+exact request/result and verifier phase. Logs/reports can contain paths/project data;
+review before sharing and never upload customer projects.
 
-These dumps are factual interface information (member names, arities, enum
-values). If you are uncomfortable shipping a dump derived from a vendor binary,
-they are generated files and can be excluded — but please keep the *conclusions*
-in the README either way.
-
-## Style
-
-- Match the surrounding code. The comments explain **why**, usually recording the
-  measurement that forced the decision — keep that habit, it is the most valuable
-  thing in this repository.
-- No new package imports in `index.js`. A profile plugin cannot resolve
-  `@deepseek-ai/*` (measured: `MODULE_NOT_FOUND`), so it uses only `node:`
-  builtins and registers plain JSON Schema. `required` must be an **array** —
-  the inline `required: true` form is `defineTool`'s spec DSL and will silently
-  not be enforced here.
-- Test `verify.mjs` asserts the schema shape; run it after touching any tool.
-
-## Reporting bugs
-
-Include, in order of usefulness:
-
-1. The **exact tool call** and its JSON reply.
-2. `bridge/bridge.log` — it records every request/response pair.
-3. Your MotionWorks version (`mw_ide_status` reports it) and Windows version.
-4. Whether the IDE was launched by you or by `mw_ide_start`. The caption differs
-   (`MotionWorks IEC 3 Pro - X` vs `MULTIPROG - X`) and that has broken the window
-   search before.
-
-**Never paste a customer project** into an issue. Redact paths and POU contents,
-or reproduce with a throwaway project.
+For security issues use GitHub private vulnerability reporting if enabled, or request
+a private contact without disclosing exploit details publicly. Never publish tokens
+or unsafe desktop-control endpoints. Desktop control must remain local/supervised;
+optional HTTP transport needs authentication and loopback binding. This project is
+not affiliated with Yaskawa and does not certify machine safety.

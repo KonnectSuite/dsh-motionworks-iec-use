@@ -1,5 +1,22 @@
 # Changelog
 
+## Unreleased
+
+- Added public requirements, local-bundle setup, attach-first examples, capability
+  evidence, troubleshooting and sanitized support guidance.
+- Replaced obsolete offline-writer contributor instructions with IDE-first guidance.
+- Recorded global add/edit/remove and approved reopen smoke evidence, including
+  warnings and wrapper recovery; corrected stale tool descriptions.
+
+## 0.5.1
+
+- IDE-first public catalog: retired eight offline editors and the unsupported Rebuild API.
+- Added IDE operation guides and engineering guidance with source/version limits.
+- Added guarded fresh Build/Make and approved reopen verification with retained reports,
+  source-integrity checks and injected failure regressions.
+- Attach-first workflow continues an open verified stage while preserving unsaved work.
+- See dated smoke reports for live coverage; no production commissioning claim.
+
 ## 0.4.2
 
 - Require an explicit user-approved close request tied to the exact open project path.

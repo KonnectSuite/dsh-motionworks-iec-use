@@ -21,4 +21,10 @@ assert.match(read('docs/NATIVE_EDIT_WORKFLOW.md'), /Superseded by IDE_FIRST_WORK
 assert.match(read('docs/VERIFICATION_2026-09-30.md'), /HISTORICAL ONLY/);
 for (const tool of tools.values()) assert.doesNotMatch(tool.description, /mw_code_pou_create|close IDE -> edit the stage|Required before writing code/, tool.name);
 assert.ok(JSON.parse(read('package.json')).files.includes('verification.js'));
+const contributing = read('CONTRIBUTING.md');
+assert.match(contributing, /separately connected computer-use MCP/);
+assert.doesNotMatch(contributing, /CFB container writer\s+for code|only transplant from a known-good donor/);
+const readme = read('README.md');
+for (const section of ['Requirements and installation', 'First use: open IDE or a new test copy', 'Capabilities and evidence', 'Troubleshooting and support']) assert.ok(readme.includes('## ' + section), section);
+for (const doc of ['CONTRIBUTING.md', 'CHANGELOG.md']) assert.ok(JSON.parse(read('package.json')).files.includes(doc), doc);
 console.log('Engineering guide delivery, schema-shaped result, source limits and active instruction routing passed');
