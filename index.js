@@ -1918,7 +1918,8 @@ function defineTools() {
       name: 'mw_ide_start',
       description:
         'Start MotionWorks IEC (a bare Mwt.exe launch, no project). Needed after mw_ide_close, '
-        + 'which is required before code writes. Follow it with mw_ide_open to load a project: a '
+        + 'for an approved close/reopen persistence check. Source edits happen inside the open IDE. '
+        + 'Follow it with mw_ide_open to load a project: a '
         + 'freshly launched IDE has no project services until one is opened. If MotionWorks '
         + 'restores another project, it is left open until the user approves saving and closing it.',
       parameters: {
@@ -2497,8 +2498,9 @@ function defineTools() {
       description:
         'List the project VAR_GLOBAL declarations - the tags every POU can see, with type, '
         + 'group, IEC address, initial value and description. Read this BEFORE writing code that '
-        + 'references a shared tag, and after mw_code_var_add without a `pou` to confirm the '
-        + 'global landed. The automation API exposes NO project-level variable collection '
+        + 'references a shared tag, and after native IDE Save All to confirm the '
+        + 'global landed. Each consuming POU needs a matching VAR_EXTERNAL declaration. '
+        + 'The automation API exposes NO project-level variable collection '
         + '(project.Variables, project.Globals and project.VariableGroups are all absent or '
         + 'empty), so the live variable model cannot show globals at all - this reads them from '
         + 'the resource declaration stream instead.',

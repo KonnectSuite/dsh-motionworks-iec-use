@@ -1,4 +1,8 @@
-# Native MotionWorks editing: lessons incorporated into 0.5
+# MotionWorks session lessons: IDE-first workflow
+
+This is historical evidence plus current workflow guidance. The supported source
+editing path is the IDE, not the retired offline native writers. Use SKILL.md,
+WORKFLOW.md and ENGINEERING_WORKFLOW.md for the current contract.
 
 ## Evidence, not repeated guesses
 
@@ -10,8 +14,8 @@ the machine-specific cam or timer patches to other projects.
 |---|---|
 | A declaration appears but LD says variable not found | Inspect paired VB/VGR, native usage, handles and rows; compile the assigned POU. |
 | File error or MSILv2ResManager internal error | Preserve diagnostic and journal; validate native stores. Close before restoring. |
-| Editing src.st1 as Latin1 text destroys the container | Edit individual CFB streams through native writers, preserving untouched siblings. |
-| IDE overwrites an offline change from its cache | Refuse writes while Mwt runs; save/close only the explicitly approved project. |
+| Editing src.st1 as Latin1 text destroys the container | Never patch native source containers; edit through the IDE and read back saved streams. |
+| IDE overwrites an offline change from its cache | Use one IDE-first owner; save/close only the explicitly approved project. |
 | Workspace copied to a new folder | Read-only readiness reports stale identity. Never restage over unsynced edits. |
 | Wrapper has no absolute path | Native sibling-directory mode is valid with provenance; verify the active IDE path. |
 | Clean build of an unassigned POU | Check task instances and program types; build acceptance does not establish execution. |
@@ -19,7 +23,7 @@ the machine-specific cam or timer patches to other projects.
 | Empty error pane | Keep compile evidence and diagnostics together; empty text is not success. |
 | Notes say filtering removed, source still has timers | Read native ST and timer presets; reconcile notes rather than trusting recency alone. |
 | Proposed TON cooldown uses NOT Q then resets in idle | Review cyclic semantics; it is not a proven lockout. No blind machine patches. |
-| Batch fails halfway through | One full-project transaction rolls back the complete batch unless partial behavior was explicitly requested. |
+| Multi-step edit fails halfway through | Retain evidence and inspect actual IDE state; GUI actions have no automatic transaction rollback. |
 | Compiled DLL contains expected constants | Not proof the current source was compiled or that the controller received it. |
 
 ## Agent UX
@@ -29,11 +33,14 @@ For a pre-existing stage use `mw_workflow_check` before attempting a mutation. I
 read-only stale-identity inspection does not expand writer permissions. If the stage
 was relocated, preserve both stage and source before choosing any recovery plan.
 
-Preview native operations, then commit using the same supported writer. Read failures
-and journals. Unsupported native layouts remain refusals: never use a raw binary regex
-replacement to bypass the format parser. Donors must match type, usage AND addressed
-versus unaddressed layout; a system BOOL with a segmented memory address is not an
-unaddressed global BOOL donor.
+Make source and declaration edits in the observed IDE. Read failures and saved
+declarations. Never use a raw binary regex replacement or a retired native writer
+to bypass an unsupported IDE operation. A highlighted cell is not proof of full
+text selection: typing can append to NewVar1, and Ctrl+A can select entire rows.
+In a confirmed editable single-line cell, Home then Shift+End selected the full
+text in the live global/external smoke test. Verify the committed field afterward.
+Input acknowledgement can precede visible completion; inspect a settled follow-up
+screenshot before navigating away or sending another action.
 
 Open the exact staged wrapper and call `mw_ide_verify`. It returns one of:
 
@@ -59,7 +66,13 @@ before promoting source with `mw_code_sync_back`; promotion is not a download.
 
 ## Acceptance test
 
-`test/live_acceptance.mjs` requires an explicit source wrapper, existing writable
+The retired `test/live_acceptance.mjs` exercised offline writers and is not the
+current IDE-first acceptance workflow. `test/ide_ui_session.mjs` takes a source wrapper
+and creates a disposable copy for manual IDE editing and verification. Actual
+add/edit/remove acceptance requires visible IDE actions, saved readback, fresh
+Build/Make and approved reopen; isolated regressions do not prove those actions.
+
+The historical offline acceptance runner required an explicit source wrapper, existing writable
 parent and disposable-close consent. It copies the supplied fixture into a unique
 workspace, hashes the original, and uses the public registered tools with real session
 context. It tests preview immutability, local/global/external variables, descriptions,
