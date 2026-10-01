@@ -15,7 +15,12 @@ requires explicit approval and reference review. Check `verification.accepted`
 and stop on failure rather than retrying. Finish with fresh Build/Make.
 
 Use `mw_ide_open_worksheet` for inspection or when an editor operation is needed.
-It resolves the document URN from PROJECT.TRE and verifies the active logical view.
+It resolves the document URN from PROJECT.TRE and verifies the active logical view,
+unchanged modified state, and two responsive frames with the expected editor caption.
+This is not keyboard focus verification. Observe current editable focus through
+the connected computer tool before input. Stale or absent accessibility cannot
+authorize typing, even when the native view matches. An unsettled request returns
+`accepted=false`, `action_performed=true`; inspect it without repeating the request.
 The dialog workflow below is a fallback for operations the API cannot perform.
 
 ## Before input

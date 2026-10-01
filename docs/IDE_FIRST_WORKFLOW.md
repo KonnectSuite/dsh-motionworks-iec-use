@@ -13,6 +13,14 @@ use the running IDE and verify saved/native results without mouse input. Require
 their accepted verdict, retain the verification report and finish Build/Make.
 The UI recipes below remain fallbacks for editor operations not yet automated.
 
+Native navigation distinguishes the COM active-view identity from visible editor
+readiness. It requires two responsive frames and the expected editor caption before
+`accepted=true`. Caption is a readiness check; the full native project path and saved
+URN remain the identity checks. `keyboard_focus_verified=false` requires a current
+editable-focus observation through the connected computer tool before input.
+If the frame is unresponsive/unknown or its caption still names an earlier editor,
+stop and inspect the existing request rather than opening again or sending keys.
+
 For POU creation, set `language` to `ST`, `FBD` or `LD` (default `ST`).
 Copy retains the source language. FBD and LD share the `.GB` extension, so the
 reader uses the exact saved tree record to distinguish them. Graphical creation

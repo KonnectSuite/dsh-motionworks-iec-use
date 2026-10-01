@@ -10,6 +10,9 @@
 
 ## 0.5.5
 
+- Require responsive, settled editor frames and matching captions after native
+  navigation; distinguish COM view verification from keyboard focus. Refuse
+  unresponsive/unknown frames and report unsettled navigation without retries.
 - Add native blank FBD/LD creation for PROGRAM, FUNCTION_BLOCK and FUNCTION,
   with explicit language selection and independent saved-language/default checks.
 - Distinguish FBD from LD using the saved graphical worksheet record, rather

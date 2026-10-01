@@ -395,6 +395,30 @@ function Get-IdePid {
     return [int]$p
 }
 
+function Get-IdeUiStatus {
+    $ideProcessId = Get-IdePid
+    try {
+        if (-not $ideProcessId) { throw 'No native IDE frame' }
+        $process = Get-Process -Id $ideProcessId -ErrorAction Stop
+        return @{ pid = $ideProcessId; responding = [bool]$process.Responding; caption = [string]$process.MainWindowTitle }
+    } catch {
+        return @{ pid = $ideProcessId; responding = $null; caption = $null }
+    }
+}
+
+function Get-WorksheetEditorState($requested, $actual, $beforeModified, $afterModified, $ui, $expectedCaption) {
+    $nativeVerified = ($actual -ceq $requested -and $beforeModified -is [bool] -and
+        $afterModified -is [bool] -and $beforeModified -eq $afterModified)
+    $captionMatches = $null
+    if (-not [string]::IsNullOrWhiteSpace([string]$ui.caption)) {
+        $captionMatches = ([string]$ui.caption).EndsWith(('[' + $expectedCaption + ']'), [StringComparison]::OrdinalIgnoreCase)
+    }
+    $ready = ($nativeVerified -and $ui.responding -eq $true -and $captionMatches -eq $true)
+    return [ordered]@{ native_navigation_verified = [bool]$nativeVerified; ui_responsive = $ui.responding;
+        editor_caption_matches = $captionMatches; editor_caption = $ui.caption; editor_window_ready = [bool]$ready;
+        keyboard_focus_verified = $false }
+}
+
 function Get-IdeDialogs {
     $idePid = Get-IdePid
     $script:dialogHwnds = @{}
@@ -861,7 +885,9 @@ while ($true) {
                 catch { $viewError = $_.Exception.Message }
                 if (-not $view -and -not $viewError) { $viewError = 'No active worksheet reported by the IDE' }
                 $ok = $true
-                $data = [ordered]@{ active_project = [string]$app.ActiveProject.FullName; logical_name = $view; error = $viewError }
+                $ui=Get-IdeUiStatus
+                $data = [ordered]@{ active_project = [string]$app.ActiveProject.FullName; logical_name = $view; error = $viewError;
+                    ui_responsive=$ui.responding; editor_caption=$ui.caption; keyboard_focus_verified=$false }
             }
 
             'open_worksheet' {
@@ -873,26 +899,42 @@ while ($true) {
                 $documentView=[string]$req.document_logical_name
                 if($documentView -cmatch '^/Pous/([^/.\\]+)/([^/.\\]+)$') {
                     $pouName=$Matches[1];$sheetName=$Matches[2]
+                    $expectedCaption='{0}:{1}' -f $sheetName,$pouName
                     [void](Get-VariableSheet $app $pouName)
                     if($urn -cne ('@POUS.'+$pouName+'.'+$sheetName)){throw 'REFUSED: inconsistent worksheet identity'}
                     $expectedView=if($req.kind -eq 'code'){'/Pous/'+$pouName}else{$documentView}
                     if($view -cne $expectedView){throw 'REFUSED: inconsistent active-view identity'}
                 } elseif($documentView -cmatch '^/Hardware/([^/.\\]+)/([^/.\\]+)/([^/.\\]+)$') {
                     $config=$Matches[1];$resource=$Matches[2];$sheet=$Matches[3]
+                    $expectedCaption='{0}:{1}.{2}' -f $sheet,$config,$resource
                     if($req.kind -ne 'variables' -or $urn -cne ('@HW.'+$config+'.'+$resource+'.'+$sheet)){throw 'REFUSED: inconsistent globals identity'}
                     if($view -cne $documentView){throw 'REFUSED: inconsistent active-view identity'}
                     [void]$app.ActiveProject.GetObjectByLogicalName(('Hardware/'+$config+'/'+$resource),10)
                 } else {throw 'REFUSED: unsupported worksheet identity'}
-                $beforeModified=[bool]$app.ActiveProject.IsModified
+                $uiBefore=Get-IdeUiStatus
+                if($uiBefore.responding -ne $true){throw 'REFUSED: IDE frame responsiveness is false or unknown; inspect the live window before navigation'}
+                $beforeModified=$app.ActiveProject.IsModified
                 $userData=[object[]]@()
                 [void]$app.OpenDocument($urn,$true,[ref]$userData)
-                $actual=[string]$app.ActiveProject.GetLogicalNameOfActiveView()
-                $afterModified=[bool]$app.ActiveProject.IsModified
+                # COM can report the new view before its visible editor settles.
+                # Observe two responsive, matching frames without repeating OpenDocument.
+                $deadline=(Get-Date).AddSeconds(3);$readySamples=0
+                do {
+                    $actual=[string]$app.ActiveProject.GetLogicalNameOfActiveView()
+                    $afterModified=$app.ActiveProject.IsModified
+                    $editorState=Get-WorksheetEditorState $view $actual $beforeModified $afterModified (Get-IdeUiStatus) $expectedCaption
+                    if($editorState.editor_window_ready){$readySamples++}else{$readySamples=0}
+                    if($readySamples -ge 2){break}
+                    Start-Sleep -Milliseconds 250
+                }while((Get-Date) -lt $deadline)
                 $ok=$true
-                $data=[ordered]@{accepted=($actual -ceq $view -and $beforeModified -eq $afterModified);
+                $data=[ordered]@{accepted=($readySamples -ge 2);
                     action_performed=$true;method='native_com_urn';active_project=[string]$app.ActiveProject.FullName;
                     requested_logical_name=$view;logical_name=$actual;urn=$urn;is_modified=$afterModified;
-                    modified_state_unchanged=($beforeModified -eq $afterModified)}
+                    modified_state_unchanged=($beforeModified -is [bool] -and $afterModified -is [bool] -and $beforeModified -eq $afterModified);
+                    editor_settled=($readySamples -ge 2);ready_observations=$readySamples;
+                    next_step=$(if($readySamples -ge 2){'Observe current editor focus through the connected computer tool before keyboard input. Native declaration/code APIs do not need editor focus.'}else{'STOP: navigation was requested, but the visible editor did not settle. Inspect current window state; do not repeat navigation or send keys automatically.'})}
+                foreach($key in $editorState.Keys){$data[$key]=$editorState[$key]}
             }
 
             'open' {

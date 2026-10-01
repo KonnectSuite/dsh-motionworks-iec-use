@@ -239,3 +239,43 @@ Deployment copied and hash-verified all 123 package files as 0.5.5; backup:
 57 tools with ST/FBD/LD creation and its installed helper correctly reads the
 three original LD POUs. This does not prove the current Arya process reloaded
 its tool catalog.
+
+## Native navigation and visible editor readiness
+
+The native active-view API reported a newly opened blank FBD document before
+the computer tool observed its visible editor. The returned window title changed,
+but its accessibility tree still named the earlier ST document. A later window
+listing exposed a transient Not Responding ghost, while native metadata remained
+readable. MotionWorks recovered without termination. Screenshot capture failed
+with `FrameArrived timed out` and `window capture timed out`; after an observation
+kernel reset, current accessibility was null for both MotionWorks and Arya.
+No keyboard/text/click input was sent against this inconsistent observation.
+
+Navigation now refuses false/unknown frame responsiveness before OpenDocument.
+After the one native request, it requires two responsive observations with the
+expected editor caption, exact native active view and unchanged known modified
+state. It returns the distinct native/frame verdicts, settled observation count,
+and `keyboard_focus_verified=false`. An unsettled action reports accepted=false,
+action_performed=true and asks for inspection, never an automatic second open.
+Caption is only a readiness check; project path, staged identity and saved URN
+remain the identity checks. Native declaration/code APIs still need no editor focus.
+
+Eight injected regressions cover ready, unresponsive, unknown, stale/absent caption,
+wrong view, modified-state drift and unknown baseline. Live FBD code/local-variable
+navigation passed before the unused test POU was deleted. The final public guard
+also passed ST code, local variables, populated LD code and globals with two ready
+observations each and complete source/declaration/task/translation preservation.
+Evidence: `native-navigation-readiness-live-34b41686-e259-4291-a96b-b2e2b3b860af.json`.
+Original seven-POU cleanup and fresh Build (6.7 s)/Make (2.5 s) passed. Build set
+modified=true; native Save cleared it with all inventories/program/translation
+hashes unchanged. Evidence: `native-editor-readiness-cleanup-build.json`.
+The full 57-tool regression suite passes. Current graphical keyboard insertion,
+wiring and an Arya-led session remain unverified; the overall goal remains active.
+
+Deployment: all 123 package files were copied and hash-verified as 0.5.5, with
+backup `Arya-restored-hotfix-20261001-194509-7212c087`. A fresh installed module
+exposes 57 tools and its native global navigation returned two responsive,
+matching editor observations, focus_verified=false, compiled=true, modified=false.
+Complete source/inventory comparison passed. Evidence: `installed-editor-readiness.json`.
+This is installed-module acceptance, not proof that the existing Arya process
+reloaded its catalog or performed an engineering task.

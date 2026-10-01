@@ -6,7 +6,7 @@ $ast = [System.Management.Automation.Language.Parser]::ParseFile(
 if ($errors.Count) { throw ($errors | Out-String) }
 $names = @('Normalize-MwPath', 'Set-RequestScope', 'Assert-NoLinkedPath',
     'Test-InsideWorkspace', 'Test-InsideStage', 'Test-SameProject', 'Assert-ProvenCopy',
-    'Get-OpenProjectPath', 'Assert-StagedOpen', 'Assert-CloseConsent')
+    'Get-OpenProjectPath', 'Assert-StagedOpen', 'Assert-CloseConsent', 'Get-WorksheetEditorState')
 foreach ($fn in $ast.FindAll({param($node) $node -is [System.Management.Automation.Language.FunctionDefinitionAst]}, $true)) {
     if ($names -contains $fn.Name) { . ([scriptblock]::Create($fn.Extent.Text)) }
 }
@@ -15,6 +15,18 @@ function Refuses([scriptblock]$action) {
     try { & $action | Out-Null } catch { if ($_.Exception.Message -like '*REFUSED*') { $refused = $true } else { throw } }
     if (-not $refused) { throw 'Expected a workspace refusal' }
 }
+$readyUi=@{responding=$true;caption='MotionWorks IEC 3 Pro - Machine - [Main:Main]'}
+$ready=Get-WorksheetEditorState '/Pous/Main' '/Pous/Main' $false $false $readyUi 'Main:Main'
+if(-not $ready.editor_window_ready -or $ready.keyboard_focus_verified){throw 'Native navigation was mistaken for keyboard focus'}
+foreach($ui in @(@{responding=$false;caption=$readyUi.caption},@{responding=$null;caption=$readyUi.caption},@{responding=$true;caption='MotionWorks IEC 3 Pro - Machine - [Old:Old]'},@{responding=$true;caption=$null})){
+    $state=Get-WorksheetEditorState '/Pous/Main' '/Pous/Main' $false $false $ui 'Main:Main'
+    if(-not $state.native_navigation_verified -or $state.editor_window_ready){throw 'Unresponsive, unknown or stale editor passed readiness'}
+}
+foreach($case in @(@{view='/Pous/Other';before=$false;after=$false},@{view='/Pous/Main';before=$false;after=$true},@{view='/Pous/Main';before=$null;after=$false})){
+    $state=Get-WorksheetEditorState '/Pous/Main' $case.view $case.before $case.after $readyUi 'Main:Main'
+    if($state.native_navigation_verified -or $state.editor_window_ready){throw 'Wrong view, modification drift or unknown baseline passed readiness'}
+}
+Write-Output '8 injected editor readiness checks passed; no UI input'
 $tempBase = [IO.Path]::GetTempPath()
 $testRoot = Join-Path $tempBase ('mw-bridge-' + [guid]::NewGuid())
 $ws = Join-Path $testRoot 'a'

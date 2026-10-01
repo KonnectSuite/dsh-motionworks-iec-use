@@ -32,8 +32,13 @@ requires explicit user approval and reference review; renames require review.
 Run fresh Build/Make after the intended edits. This API does not require opening
 a worksheet. To inspect or edit a named worksheet, use `mw_ide_open_worksheet`
 with kind `variables` or `code`, the staged project, and exact POU (omit only for
-globals). Require `accepted:true` before editor input. The tool resolves the
-internal document URN from the saved tree and verifies the active view; never
+globals). Require `accepted:true`: the tool verifies the native view and two
+responsive frames with the expected editor caption. Its `keyboard_focus_verified`
+remains false. Observe current editable focus with the connected computer tool
+before keys or text; do not use a stale accessibility tree or infer focus from
+the native view/caption. An unsettled request may have opened the document already;
+inspect it before any next action and never repeat navigation automatically.
+The tool resolves the internal document URN from the saved tree; never
 send a slash-style logical name directly to OpenDocument or navigate by guessed
 tree coordinates. Code editors report the POU logical name as their active view.
 For ST function-block insertion, inspect `mw_code_block_interface` with an exact
