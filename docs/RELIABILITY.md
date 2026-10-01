@@ -1,5 +1,8 @@
 # Workflow adaptation and verification
 
+Historical private-engine evidence, not public edit instructions. Current editing
+uses IDE_FIRST_WORKFLOW.md; retired tools cannot be restored by environment flags.
+
 The supplied MotionWorks IEC Offline Editing Workflow and MotionWorksTools scripts were
 reviewed as reference evidence. Their project-specific absolute paths and fixed node/row
 counts were not adopted. Source ZIP data stays in the unshipped `.workflow-reference` folder.
@@ -7,7 +10,7 @@ counts were not adopted. Source ZIP data stays in the unshipped `.workflow-refer
 Implemented: bounded native variable records, trailer preservation, matching donors,
 paired declaration/grid edits, descriptions/translation IDs, ST control-marker preservation,
 POU clone semantics and view entries, workspace-bound backups/exports, full snapshot rollback,
-static validation, graceful close and a separate native Rebuild request.
+static validation and graceful close. The former Rebuild API request is retired.
 
 The supplied native data also uses blank binary initializer cells for explicit primitive
 zero/FALSE initializers. Validation accepts these equivalents. It preserves segmented system
@@ -19,8 +22,8 @@ variable-length edits, native usages, overlaps, lock contention, unique snapshot
 failures and rollback. Native reference tests work on disposable copies and hash the supplied
 source before/after. They do not launch the IDE or prove Rebuild/Make acceptance.
 
-Native Rebuild uses the runtime-resolved adeCmdBuildRebuildProject command only when it
-matches the known ID 36570. Posting WM_COMMAND is request evidence, not completion evidence.
+Native Rebuild must use the observed IDE menu, not the retired API. Posting a command
+is request evidence, not completion evidence.
 Only an observed pending-to-compiled transition settles the bridge verdict. Fast builds whose
 transition is missed report unverified. Always inspect diagnostics and save/reopen persistence.
 This bridge route needs live acceptance on the installed IDE version.

@@ -3,19 +3,22 @@
 The current workflow and supported operations are defined in [SKILL.md](SKILL.md).
 Format provenance and verification limitations are in [docs/RELIABILITY.md](docs/RELIABILITY.md).
 
-1. Discover and select the workspace project; stage its wrapper and expanded directory.
+1. Discover and select the workspace project. Attach to a matching verified open stage;
+   only stage/open when needed. Read [engineering guidance](docs/ENGINEERING_WORKFLOW.md)
+   before designing or diagnosing motion logic.
 2. Run `mw_workflow_check` on the explicitly selected stage. Inspect native sources,
    identity, wrapper binding and blockers before any write. Session notes are
    historical evidence, not a substitute for reading current VB/VGR/STB streams.
 3. Open the exact stage. If replacing another open project, obtain save/close consent.
    Use the connected computer tool to edit in the MotionWorks IDE, not native files.
    Follow [IDE-first workflow](docs/IDE_FIRST_WORKFLOW.md) and `mw_ide_edit_guide`.
-4. Save in MotionWorks; read back the saved source/declarations/tasks and compare
+4. Use native Save All in MotionWorks; read back the saved source/declarations/tasks and compare
    with the intended change. Retain baseline and observation evidence.
 5. Use `mw_ide_verify` on the saved stage for fresh
    Build, Make, Errors/Warnings capture and Save evidence in one call.
 6. With explicit consent, set `close_reopen: true` and `user_approved: true` to
-   verify persisted native streams and descriptions. Inspect the report's verdict;
+   verify persisted native streams/descriptions and repeat fresh Build/Make after reopening.
+   Inspect the report's verdict;
    `unverified` is not success even if the tool itself returned without throwing.
 
 Offline code editor tools and the unsupported Rebuild API are retired. Use native

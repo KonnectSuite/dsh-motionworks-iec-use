@@ -88,17 +88,14 @@ The practical routes that DO work, and what the plugin uses instead:
   the POU's own `src.st1` streams. No export needed.
 - **Reading globals** — `mw_code_globals` reads `Global_Variables.VB` (161+ declarations
   with type, group, IEC address and description).
-- **Writing a POU** — `mw_code_pou_create` + `mw_code_var_add` + `mw_code_write_st`.
-  Caveat: creation CLONES a template, and a clone inherits that template's external
-  variable records. See SKILL.md — only a template with **no** `VAR_EXTERNAL` is safe to
-  clone, and `mw_code_read_st` shows which declarations carry a `group` (an external
-  reference).
-- **Cross-reference** — not exposed by the API here, but the plugin can answer the same
-  questions from the files: `mw_code_pou_delete`'s reference check already walks every
-  POU body to find callers.
+- **Writing a POU** — native IDE editors and project-tree commands. Offline POU,
+  variable and ST writers are retired. Inspect inherited externals if using a native
+  copy/import, then Save All, read back, Build/Make and verify approved reopen.
+- **Cross-reference** — inspect the native IDE cross-reference and saved source.
+  Offline text searches cannot prove all graphical or indirect references are absent.
 - **Controller download/upload** — `AdeLoadDirection` / `AdeUpDownloadType` exist in the
   type library but no method taking them was found on the objects probed. Worth a
-  follow-up probe on the resource/communication objects if deployment is ever wanted.
+  follow-up outside this plugin's scope. This plugin never downloads or commands motion.
 
 ## Reproducing
 

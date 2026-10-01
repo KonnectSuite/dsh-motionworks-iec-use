@@ -33,8 +33,9 @@ than wiring/noise, polarity, software rearming, startup behavior or repeated req
    reside in translation records rather than literal ST bodies.
 8. API Build/Make; inspect current diagnostics and fresh-completion evidence. Native
    Rebuild is separate and version-dependent. Compare source manifests afterward.
-9. Leave the project open. Close/reopen is a separately approved persistence test,
-   not mandatory churn. No controller download, Run/Reset, forces or motion commands.
+9. Leave the project open unless a separately approved persistence test is requested.
+   That test includes fresh Build/Make after reopening, not hashes alone. No controller
+   download, Run/Reset, forces or motion commands.
 
 ## API failure and trial edition
 

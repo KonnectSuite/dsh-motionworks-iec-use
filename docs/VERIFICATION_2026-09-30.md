@@ -1,5 +1,10 @@
 # MotionWorks IEC capability audit — 2026-09-30
 
+HISTORICAL ONLY. This records an older checkout, not the current tool catalog.
+Offline editor tools and Rebuild API are retired; offline POU deletion was later
+quarantined. Use TOOL_RETIREMENT.md, IDE_FIRST_WORKFLOW.md and IDE_SMOKE_2026-10-01.md
+for current routing and individually proven UI capabilities.
+
 Host: MotionWorks IEC 3 Pro 1.19 on Windows. Project: a disposable staged copy of the
 user-supplied TopCutter example. Original project files were not edited.
 

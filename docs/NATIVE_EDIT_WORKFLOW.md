@@ -1,4 +1,10 @@
-# Native MotionWorks IEC offline edit workflow
+# Historical native-format findings — not an editing workflow
+
+Superseded by IDE_FIRST_WORKFLOW.md and TOOL_RETIREMENT.md. Public offline editors
+are removed, even with legacy opt-in. The following describes private format-test
+mechanisms only; never execute it as agent instructions or edit behind an open IDE.
+POU deletion was subsequently quarantined after corruption; earlier success is not
+evidence that generic offline deletion is safe. Use native IDE lifecycle commands.
 
 This records what was learned by editing disposable copies of expanded MotionWorks IEC
 projects and then checking them in MotionWorks IEC 3 Pro. It is not a specification of
@@ -32,7 +38,7 @@ step after acceptance.
 | Description | Declaration comment, native translation ID, translation XML | Allocate a fresh ID, XML-escape content, retain unrelated translation items. |
 | ST body | `.STB` in `src.st1` | Preserve native control markers and unrelated CFB streams. |
 | New POU | Donor POU directory, renamed container streams, project tree/registry/view records | Clone a same-language POU and its native metadata; generate distinct IDs; validate tree and reopen. |
-| Delete POU | POU directory and project metadata | Remove only the exact named POU and its references in a recoverable transaction. |
+| Delete POU | POU directory and project metadata | Offline deletion is quarantined; use the native IDE command after reference review. |
 | Existing-task assignment | Project/task metadata | Use the supported IDE route and read back assignment; compile afterwards. Do not infer generic offline task grammar from one project. |
 | Library addition | Library manager metadata and installed `.mwt` | Not currently exposed as an offline tool; use the IDE and verify the project. |
 
@@ -59,11 +65,9 @@ reopen, not appearance alone, decide acceptance.
 
 ## Batch variable behavior
 
-`mw_code_var_add_many` previews without changing files by default. On a write it
-runs inside one full-project transaction; all items must succeed. A failed item
-reports its index/name and causes a full rollback. `allow_partial=true` is an explicit
-best-effort mode: successful items commit together, failures are returned by index.
-Use partial mode only when the caller is prepared to reconcile the exact landed set.
+Private batch-engine tests exercise preview, full rollback and explicit partial
+results. No public batch-variable editor remains. Use native declaration worksheets
+and verify the exact saved set instead of invoking a historical writer.
 
 ## Verification levels
 

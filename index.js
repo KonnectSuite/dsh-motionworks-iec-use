@@ -54,6 +54,7 @@ import {
 } from 'node:fs';
 import { dirname, isAbsolute, join, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { verifyAcceptance } from './verification.js';
 
 export const name = 'motionworks-iec-use';
 export const inject = ['tools'];
@@ -1212,20 +1213,22 @@ function defineTools() {
   return [
     {
       name: 'mw_ide_edit_guide',
-      description: 'IDE-first editing checklist for ST, variables, POUs, LD/FBD, tasks or libraries. Read-only: does not type or edit anything. Use the connected computer tool for actual observed MotionWorks editor actions; never fabricate coordinates or report this checklist as completed work.',
+      description: 'IDE-first editing and engineering checklists. Read-only: does not type or edit anything. Use engineering before designing motion logic and read docs/ENGINEERING_WORKFLOW.md. Use the connected computer tool for observed editor actions; never report a checklist as completed work.',
       parameters: { type: 'object', additionalProperties: false, properties: {
-        operation: { type: 'string', enum: ['st', 'variables', 'pou', 'graphical', 'tasks', 'libraries'] },
+        operation: { type: 'string', enum: ['st', 'variables', 'pou', 'graphical', 'tasks', 'libraries', 'engineering'] },
       }, required: ['operation'] },
       output: {
         schema: { type: 'object', properties: {
           mode: { type: 'string' }, operation: { type: 'string' },
           steps: { type: 'array', items: { type: 'string' } },
           action_performed: { type: 'boolean' },
+          engineering_guidance: { type: 'string' },
         }, required: ['mode', 'operation', 'steps', 'action_performed'], additionalProperties: false },
         render: (_a, v) => text(JSON.stringify(v, null, 2)),
       },
       execute: args => {
         const instructions = {
+          engineering: ['Read docs/ENGINEERING_WORKFLOW.md and collect operation, controller/drive/IDE/library versions, axis units, task timing and interface ownership before choosing FBs.', 'Resolve the installed FB interface and firmware release-note applicability. Historical manuals and this checklist are not proof of compatibility.', 'Define state transitions, completion evidence, continuous target sequence, registration qualification, PLC authority, stop/park and home invalidation; review numeric ranges and timing at maximum speed.', 'Create a behavioral test matrix and retain diagnostics. Edit in the IDE, finish compile/persistence verification, and explicitly separate bench/field acceptance from compiler acceptance.'],
           st: ['Open the exact POU body in the IDE and observe its language and existing text.', 'Click inside the ST editor, verify focus, then select only the intended text and type the reviewed ST.', 'Multiline input requires explicit line-break support in the computer server; Enter can submit a dialog, so use it only in a confirmed multiline editor. Inspect indentation, line count and the entire saved body.', 'Inspect the resulting text before Save; do not type into a terminal or variable-name cell.'],
           variables: ['Open the correct POU variable worksheet or Global_Variables resource worksheet.', 'Use the native insert/edit command visible in the current UI; set name, type, usage, address, initializer and description.', 'Verify cell edit mode and full committed name: typing may append to NewVar1 instead of replacing it, and Ctrl+A may select worksheet rows rather than cell text.', 'Check the row in the IDE; globals referenced by a POU also need native VAR_EXTERNAL declarations.'],
           pou: ['Select Logical POUs and use the observed native create/edit command; choose PROGRAM, FUNCTION or FUNCTION_BLOCK and the required language.', 'For rename/delete, inspect references and task instances first. Obtain required deletion confirmation.', 'Verify both the logical POU and its task assignment after Save; never patch PROJECT.TRE to complete a UI operation.'],
@@ -1234,7 +1237,8 @@ function defineTools() {
           libraries: ['Inspect current library versions and dependent POUs first.', 'Use the native Libraries command to select the operator-approved local library and observe the imported interface.', 'Do not remove a referenced library or silently substitute another version; compile all consumers.'],
         };
         if (!instructions[args.operation]) throw new Error('Unknown IDE editing operation');
-        return { mode: 'ide-first', operation: args.operation, action_performed: false, steps: [
+        return { mode: 'ide-first', operation: args.operation, action_performed: false,
+          ...(args.operation === 'engineering' ? { engineering_guidance: readFileSync(join(HERE, 'docs', 'ENGINEERING_WORKFLOW.md'), 'utf8') } : {}), steps: [
           'Run mw_project_find and inspect mw_ide_state/mw_ide_status. If the requested verified stage is already open, continue it without restaging, closing or reopening. Otherwise stage/open only with the required exact-project consent. Preserve unsaved IDE changes before relying on disk reads.',
           'Observe MotionWorks with the computer tool. One action, then a fresh screenshot; confirm focus before typing. Stop on unexpected dialogs or project identity changes.',
           ...instructions[args.operation],
@@ -1246,7 +1250,7 @@ function defineTools() {
       name: 'mw_ide_status',
       description:
         'Detect the running MotionWorks IEC 3 Pro IDE and report its automation version, '
-        + 'window handle, and whether a project is open in it. Call this first: every other '
+        + 'window handle, and whether a project is open in it. After mw_project_find, inspect this: every other '
         + 'mw_ide_* tool needs a live IDE, and this says whether one exists.',
       parameters: { type: 'object', additionalProperties: false, properties: {} },
       output: {
@@ -2183,9 +2187,8 @@ function defineTools() {
     {
       name: 'mw_ide_close',
       description:
-        'Close MotionWorks IEC and wait until it is really gone. Required before writing code: '
-        + 'the write engine refuses while the IDE holds the project, because the IDE caches '
-        + 'project state and rewrites whole files, which would discard an external edit. '
+        'Close MotionWorks IEC gracefully for an explicitly approved persistence test or recovery. '
+        + 'Normal code editing happens inside the open IDE; closing is not a prerequisite. '
         + 'Ask the user whether the agent may save and close MotionWorks first. Pass '
         + 'user_approved=true and the exact open project path as expected_project. '
         + 'If the project changed, the close is refused.',
@@ -2209,7 +2212,7 @@ function defineTools() {
           },
         },
         render: (_a, v) => text(v.closed
-          ? `MotionWorks closed gracefully. Code writes can proceed.`
+          ? `MotionWorks closed gracefully. Continue only the approved reopen or recovery workflow.`
           : 'MotionWorks is STILL running Ã¢â‚¬â€ do not write code yet.'),
       },
       presentCall: () => ({ card: 'generic', title: 'Close MotionWorks IEC', kind: 'execute' }),
@@ -2862,7 +2865,7 @@ function defineTools() {
 
     {
       name: 'mw_ide_verify',
-      description: 'Acceptance workflow on the exact open staged project: native validation, source manifest, Build, Make, compiler messages and Save. Optionally save/close/reopen that named project with explicit consent and compare source streams. Saves a JSON evidence report even on failure. Never force-closes, repairs files, downloads or commands motion. A cached Make is not a fresh Build.',
+      description: 'After native Save All and intended-change read-back, verify the exact open stage: validation, manifests, fresh Build, Make, messages and Save. With consent, close/reopen, compare persistence, then repeat fresh Build/Make and integrity checks. Retains a JSON report on failure. Never force-closes, repairs files, downloads or commands motion. Cached Make is not fresh Build.',
       parameters: { type: 'object', additionalProperties: false, required: ['project'], properties: {
         project: { type: 'string' }, close_reopen: { type: 'boolean', default: false },
         user_approved: { type: 'boolean', description: 'Explicit consent to save/close/reopen this disposable or named project. Required when close_reopen is true.' },
@@ -2879,56 +2882,21 @@ function defineTools() {
           next_step: 'Inspect the retained evidence; do not download on an unverified result.' };
         const definitions = new Map(defineTools().map(t => [t.name, t]));
         const step = async (name, input = {}) => {
-          const value = await definitions.get(name).execute(input);
-          report.steps.push({ tool: name, value });
-          return value;
+          try {
+            const value = await definitions.get(name).execute(input);
+            report.steps.push({ tool: name, phase: report.phase ?? 'preflight', value });
+            return value;
+          } catch (error) {
+            report.steps.push({ tool: name, phase: report.phase ?? 'preflight', error: error.message });
+            throw error;
+          }
         };
         try {
           const status = await assertIdeProjectProven();
           const active = resolve(String(status.active_project)).replace(/\.mwt$/i, '');
           if (active.toLowerCase() !== resolve(project).toLowerCase()) throw new Error('REFUSED: the open IDE project differs from the requested verification project.');
-          const validation = await step('mw_code_validate', { project });
-          if (validation.result?.ok === false) throw new Error('Offline validation failed; stop before compiling.');
-          const before = await step('mw_code_source_manifest', { project });
-          const build = await step('mw_ide_build');
-          await step('mw_ide_errors', { pane: 'Errors' });
-          await step('mw_ide_errors', { pane: 'Warnings' });
-          if (build.fresh_compile !== true || build.is_compiled !== true) {
-            report.next_step = 'Build completion was not freshly observed. Inspect the IDE; cached flags are insufficient.';
-            return report;
-          }
-          const make = await step('mw_ide_make');
-          await step('mw_ide_errors', { pane: 'Errors' });
-          await step('mw_ide_errors', { pane: 'Warnings' });
-          if (!make.settled || !make.is_compiled) return report;
-          await step('mw_ide_save');
-          const saved = await step('mw_code_source_manifest', { project });
-          report.compile_source_integrity = { program_streams_unchanged: before.program_digest === saved.program_digest,
-            native_bookkeeping_changed: before.source_digest !== saved.source_digest };
-          if (!report.compile_source_integrity.program_streams_unchanged) {
-            report.next_step = 'Build/save changed program or declaration streams. Inspect before/saved manifests before accepting.';
-            return report;
-          }
-          if (args.close_reopen) {
-            await step('mw_ide_close', { user_approved: true, expected_project: status.active_project });
-            await step('mw_ide_start');
-            await step('mw_ide_open', { path: project + '.mwt' });
-            const after = await step('mw_code_source_manifest', { project });
-            report.persistence = { identical_native_streams: saved.source_digest === after.source_digest,
-              identical_source_streams: saved.persistence_digest === after.persistence_digest,
-              normalized_view_metadata: saved.source_digest !== after.source_digest
-                && saved.persistence_digest === after.persistence_digest,
-              before: saved.source_digest, after: after.source_digest };
-            if (!report.persistence.identical_source_streams) {
-              report.next_step = 'IDE normalized or changed native source streams. Inspect the manifest diff before claiming persistence acceptance.';
-              return report;
-            }
-            const reopenedValidation = await step('mw_code_validate', { project });
-            if (reopenedValidation.result?.ok === false) return report;
-          }
-          report.verdict = args.close_reopen ? 'ide_acceptance_and_persistence_verified' : 'ide_compile_verified_persistence_not_tested';
-          report.next_step = 'Compiler acceptance only: controller download and machine behavior remain untested.';
-          return report;
+          return await verifyAcceptance({ project, activeProject: status.active_project,
+            closeReopen: args.close_reopen === true, step, report });
         } catch (error) {
           report.error = error.message;
           report.next_step = 'Inspect this report and current IDE state. Do not retry mutations or delete locks blindly.';
@@ -2952,9 +2920,8 @@ function defineTools() {
       name: 'mw_code_sync_back',
       description:
         'Copy the STAGED edit back to the real project it was staged from - the step the release '
-        + 'loop was missing: close IDE -> edit the stage -> build -> COPY BACK -> re-stage -> '
-        + 'verify. Every other step was a tool; this one had to be a script that knew by convention '
-        + 'what to carry. '
+        + 'loop: edit in IDE -> Save All -> read back -> fresh Build/Make -> approved reopen '
+        + 'and recompile -> separately authorized source-only promotion. Do not restage over edits. '
         + 'It carries SOURCE ONLY: the POU containers (src.st1), declaration and grid streams, the '
         + 'project tree, the type list and the resource files. It does NOT carry the .mwt wrapper, '
         + 'whose stored path is bound to the stage and would point the real project at a temporary '
@@ -3014,7 +2981,7 @@ function defineTools() {
       description:
         'Read-only: how a staged project\'s .mwt wrapper is bound, and whether it is STALE. '
         + 'mw_ide_open refuses a wrapper whose stored path is not the staged directory, and that '
-        + 'refusal can appear after mw_code_pou_create has renumbered the project. Re-staging to '
+        + 'refusal can appear after native project metadata changes. Re-staging to '
         + 'clear it is the wrong remedy - it overwrites the stage and takes the new POU with it - '
         + 'so this reports which wrapper is stale and whether re-binding is enough, before anything '
         + 'tries to open it. Omit project to check every staged project.',
@@ -3283,8 +3250,8 @@ function defineTools() {
     {
       name: 'mw_code_pou_assign',
       description:
-        'Assign a program to a task so it actually RUNS and is compile-checked. A POU created by '
-        + 'mw_code_pou_create is not assigned to anything, so without this it is inert: nothing '
+        'Assign a program to a task so it actually RUNS and is compile-checked. An unassigned POU '
+        + 'may be inert: nothing '
         + 'calls it and a clean build says nothing about whether it is correct. '
         + 'This goes through the IDE\'s own object model - task.ProgramInstances.Create then '
         + 'Save() - so the IDE writes the project tree itself and nothing here edits a file. The '
@@ -3513,7 +3480,8 @@ export function apply(ctx) {
           + 'START HERE: run mw_project_find before anything else, and work only on a project inside '
           + 'the workspace — never one from elsewhere on the machine, even if you know where it is. '
           + 'Another program may be read with reference: true; that does not stage or open it. '
-          + 'Edit through the companion computer-use MCP after verifying the staged IDE project. Preserve unsaved changes.',
+          + 'Edit through the companion computer-use MCP after verifying the staged IDE project. Preserve unsaved changes. '
+          + 'For motion design/diagnosis, use the engineering guide and complete the authorized read-back, fresh compile, approved reopen/recompile and evidence handoff loop.',
         whenToUse: 'The user has MotionWorks IEC 3 Pro open or asks for work in it — a real build, a '
           + 'compile verdict, the live project model, reading or changing POU Structured Text, or '
           + 'the IDE error list. ALSO USE WHEN a MotionWorks project is mentioned at all, even to '

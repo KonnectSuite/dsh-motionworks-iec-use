@@ -7,6 +7,8 @@ const commands = [
   [process.execPath, ['preflight.mjs']],
   [process.execPath, ['test/render_contract.mjs']],
   [process.execPath, ['test/ide_first.mjs']],
+  [process.execPath, ['test/verification_flow.mjs']],
+  [process.execPath, ['test/guidance_contract.mjs']],
   [process.execPath, ['test/skill_delivery.mjs', root]],
   [process.execPath, ['test/workspace_session.mjs']],
   [process.execPath, ['test/workspace_boundary.mjs']],

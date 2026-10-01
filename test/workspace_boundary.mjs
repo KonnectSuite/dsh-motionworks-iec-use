@@ -56,7 +56,7 @@ try {
     for (const [name, args] of [
       ['mw_ide_open', { path: stagedB.staged_mwt }],
       ['mw_code_pous', { project: stagedB.staged_directory }],
-      ['mw_code_rebind_wrapper', { project: stagedB.staged_directory, dry_run: false }],
+      ['mw_code_rebind_wrapper', { mwt: stagedB.staged_mwt, directory: stagedB.staged_directory, dry_run: false }],
     ]) await assert.rejects(run(name, args, a), /REFUSED/);
   });
   await check('staging an existing stage cannot delete its source', async () => {

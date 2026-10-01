@@ -10,6 +10,12 @@ Use the installed tools for discovery, staging, IDE editing and IDE verification
 The DEFAULT is IDE-FIRST: the agent actually enters code and declarations in MotionWorks.
 Offline code/variable/POU editors and the unsupported Rebuild API are retired.
 No environment flag restores those public tools. Edit through the IDE instead.
+For any motion-logic design, diagnosis or review, read `docs/ENGINEERING_WORKFLOW.md`
+before proposing code. It supplies the requirements, evidence, timing, FB lifecycle,
+PLC authority, registration, cam, stop/recovery and behavioral acceptance gates.
+Use `mw_ide_edit_guide(operation: "engineering")` as the short entry checklist.
+Continue through the complete authorized edit/read-back/verification loop; do not
+stop at a successful tool call or reopen. Never conceal a blocker or bypass safety.
 A successful file write is offline evidence only. Report native IDE acceptance separately.
 Never download a project, start a controller, or command machine motion.
 Use one IDE owner and serialize acceptance workflows. The bridge's single IPC
@@ -65,7 +71,7 @@ FB, graphical command, task operation or library version works.
    Do not search Desktop, Downloads, other chats, or remembered paths for a substitute.
 3. Select the intended `.mwt` and its expanded directory. If several exist and intent
    cannot be determined from the request, clarify which one is intended.
-4. Call `mw_ide_stage`. It copies both into `<workspace>/.motionworks/stage/`, rewrites
+4. If no matching verified stage is already open, call `mw_ide_stage`. It copies both into `<workspace>/.motionworks/stage/`, rewrites
    the wrapper binding and records source identity. Edit this workspace copy.
 5. Pass the selected project explicitly when multiple staged copies exist. Opening
    validates the wrapper's embedded directory and its digest before the bridge acts.
@@ -180,7 +186,8 @@ not a freshly compiled Build. Report warnings separately from compilation succes
    or cached IsCompiled flag alone does not prove this invocation completed. The bridge
    requires an observed pending-to-compiled transition. If completion cannot be observed,
    it reports unverified; inspect the IDE instead of fabricating a clean verdict.
-4. Run Make, inspect errors and warnings, save, close gracefully, reopen the same
+4. Run Make, inspect errors and warnings, Save All. Only with exact-project consent,
+   close gracefully and reopen the same
    wrapper and inspect the changed declarations/body, task bindings and project state.
    Repeat Build/Make when establishing persistence acceptance for a completed change.
 5. Report exactly which checks completed, their evidence and any remaining errors.

@@ -1,11 +1,15 @@
 # MotionWorks IEC Use for AryaAI DSH
 
-Version 0.5 is IDE-first. The agent codes in MotionWorks through the separately
+Version 0.5.1 is IDE-first. The agent codes in MotionWorks through the separately
 connected computer-use MCP, using `mw_ide_edit_guide` for operation-specific steps.
 Eight offline code/variable/POU editors and the unsupported Rebuild API are
 removed from the public catalog, not merely gated. See [IDE-first workflow](docs/IDE_FIRST_WORKFLOW.md).
 For an IDE already open, use the [attach-first Remote Engineer workflow](docs/OPEN_IDE_REMOTE_ENGINEER.md).
 Continue a verified open stage; do not close/restage it for each coding request.
+Read the [engineering workflow](docs/ENGINEERING_WORKFLOW.md) for requirements,
+FB lifecycle, tasks, cams, registration, PLC authority, stops/recovery, IO scaling
+and behavioral acceptance. `mw_ide_edit_guide` includes an `engineering` operation.
+Guidance distinguishes vendor facts, original engineering judgment and open items.
 
 It also adds `mw_workflow_check`, `mw_code_source_manifest` and `mw_ide_verify`:
 readiness with actionable blockers, native-source fingerprints, and retained IDE
@@ -33,18 +37,17 @@ stay inside that workspace too.
 
 ## Reliability changes
 
-- Declaration and native grid changes are synchronized, including global variables.
-- Native donors preserve record usage, group trailers and worksheet row semantics.
-- Description edits synchronize native IDs and translation XML.
-- POU clones preserve external/local/FB semantics and update tree, registry and view state.
-- Real edits use complete verified snapshots, project locks and rollback on failure.
-- Multi-variable writes are atomic by default; best-effort partial writes require explicit opt-in.
+- Current edits use native IDE editors; retired disk writers are not a fallback.
+- Private native-format regression tests preserve historical parser/rollback coverage;
+  they do not establish supported public editor capabilities.
 - `mw_code_validate` reports offline consistency errors; unsupported layouts fail closed.
 - IDE close is graceful and workspace-checked. Failed builds never repair live disk files.
 - Closing the IDE or replacing its open project requires user approval tied to the exact
   project path. The bridge saves that project, then closes it; a changed project is refused.
 - Build and Make remain distinct operations; the unsupported Rebuild API is retired.
 - Compile completion is reported unverified when only a cached success flag is available.
+- Persistence verification repeats fresh Build/Make after reopening and fails closed
+  on missing validation/digests, changed program streams or unproven completion.
 
 ## Workflow
 
@@ -55,16 +58,17 @@ PDF pages. Source revisions and unresolved coverage are returned explicitly. See
 [Programming knowledge](docs/PROGRAMMING_KNOWLEDGE.md) for tool usage and scope.
 
 Open, Build and close passed a live check on a disposable TopCutter copy with MotionWorks IEC
-1.19. Native Rebuild remains version dependent and has not been accepted on this IDE build.
+1.19. Rebuild through the bridge API was not accepted and is retired; observed native
+menu Rebuild has separate evidence in the 2026-10-01 IDE smoke report.
 
-Discover → select → stage → inspect → open exact stage → edit inside IDE → Save →
-read back → Build/Make → inspect diagnostics → approved close/reopen → verify.
+Discover → attach to verified stage (or stage/open if needed) → engineering review →
+edit inside IDE → Save All → read back → Build/Make → inspect diagnostics →
+approved close/reopen → validate and fresh Build/Make again → handoff.
 
-See [SKILL.md](SKILL.md) for the agent instructions, [native edit workflow](docs/NATIVE_EDIT_WORKFLOW.md)
-for the on-disk format and proof procedure, and [RELIABILITY.md](docs/RELIABILITY.md)
-for scope and verification details. The plugin registers the skill with the host.
-The [live capability audit](docs/VERIFICATION_2026-09-30.md) records the task, LD and library
-limitations measured on this host.
+See [SKILL.md](SKILL.md) for current agent instructions. Native-format and 2026-09-30
+audit documents are explicitly historical, not current edit routes. The plugin registers
+the skill with the host. [IDE smoke evidence](docs/IDE_SMOKE_2026-10-01.md) records
+individually tested UI operations; untested operations still require harness acceptance.
 
 Run `npm test` for isolated regression checks. The optional `test/native_reference.py`
 accepts a supplied native fixture path and edits only a disposable temporary copy.

@@ -1,9 +1,8 @@
 # Versioned MotionWorks programming knowledge
 
-Version 0.3 adds programming review and retrieval to the existing workspace-bound
-editing workflow. It does not change bridge commands or controller behavior.
-The owner's previous open/Rebuild/Make/close/reopen result remains the IDE workflow
-baseline. The new static checks and examples have separate regression coverage.
+Current workflow: IDE-first editing, read-only offline review, and guarded native
+Build/Make verification. Read ENGINEERING_WORKFLOW.md for engineering decisions;
+IDE_FIRST_WORKFLOW.md governs editing. Historical tests are not current capability promises.
 
 ## Tools and working sequence
 
@@ -15,13 +14,13 @@ baseline. The new static checks and examples have separate regression coverage.
 | `mw_code_diagnose` | Map exact diagnostics to cited candidate causes and checks. Unknown messages remain unknown. |
 | `mw_code_pattern` | Retrieve declarations, ST, assumptions and adaptation checks for four original examples. |
 
-Find/select/stage the workspace project as before. Inspect native declarations,
+Discover and attach to the exact verified open stage; stage only when needed. Inspect native declarations,
 resource globals, library identities and task instances. Retrieve the relevant
 reference before choosing types, pins or execution semantics. Review proposed ST,
-then preview and commit through the existing transactional writer. Both dry-run and
-committed ST write responses include `programming_review`. Review findings before
-continuing; this supplemental report does not introduce new write refusals.
-Run native Rebuild/Make and inspect the actual compiler diagnostics. Feed exact
+then implement through the native IDE editor, Save All and read back the intended change.
+The offline editor tools are retired; static review never writes the program.
+Run fresh Build/Make and inspect the actual compiler diagnostics. Reopen only with
+exact-project consent and repeat Build/Make to establish persistence acceptance. Feed exact
 diagnostics into the diagnostic tool; a candidate explanation is not a confirmed cause.
 
 ## Reviewed sources
