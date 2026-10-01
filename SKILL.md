@@ -23,7 +23,12 @@ existing writable group. Inspect `verification.accepted` before continuing;
 failure means stop and inspect evidence, never retry automatically. Delete
 requires explicit user approval and reference review; renames require review.
 Run fresh Build/Make after the intended edits. This API does not require opening
-a worksheet and does not establish automatic navigation support.
+a worksheet. To inspect or edit a named worksheet, use `mw_ide_open_worksheet`
+with kind `variables` or `code`, the staged project, and exact POU (omit only for
+globals). Require `accepted:true` before editor input. The tool resolves the
+internal document URN from the saved tree and verifies the active view; never
+send a slash-style logical name directly to OpenDocument or navigate by guessed
+tree coordinates. Code editors report the POU logical name as their active view.
 No environment flag restores those public tools. Edit through the IDE instead.
 For any motion-logic design, diagnosis or review, read `docs/ENGINEERING_WORKFLOW.md`
 before proposing code. It supplies the requirements, evidence, timing, FB lifecycle,

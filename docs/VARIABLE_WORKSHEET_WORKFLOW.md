@@ -4,6 +4,20 @@ Read this before editing any variable worksheet. These are native IDE edits, not
 offline writes. The desktop-control server is separate and cannot enforce this
 plugin's workspace or cell semantics.
 
+## Prefer the native declaration API
+
+Use `mw_ide_variable_change` for local/global/external add/edit/delete. It selects
+the exact POU/resource and writable group without opening a worksheet, preserves
+the complete native baseline and flags, saves through the IDE, and checks all
+saved and native declarations. Supply all seven declaration fields for add/edit;
+externals require an existing global name/type and no address/initializer. Delete
+requires explicit approval and reference review. Check `verification.accepted`
+and stop on failure rather than retrying. Finish with fresh Build/Make.
+
+Use `mw_ide_open_worksheet` for inspection or when an editor operation is needed.
+It resolves the document URN from PROJECT.TRE and verifies the active logical view.
+The dialog workflow below is a fallback for operations the API cannot perform.
+
 ## Before input
 
 Verify the exact open stage and worksheet. Retain the **complete saved baseline**
@@ -25,7 +39,7 @@ the intended new declaration is still absent.
 
 ## Add a declaration
 
-### Preferred: native Create Variable Set dialog
+### Fallback: native Create Variable Set dialog
 
 1. Save/reconcile the worksheet before planning. Call `mw_ide_active_view` to
    establish its exact logical identity, then `mw_ide_variable_plan` with the

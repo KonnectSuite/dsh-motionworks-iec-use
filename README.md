@@ -9,14 +9,11 @@ computer-use MCP performs visible editor actions.
 download to controllers, force IO or command motion. Compilation is not proof of
 machine behavior, motion performance or functional safety.
 
-Variable editing now has a dedicated [worksheet safety workflow](docs/VARIABLE_WORKSHEET_WORKFLOW.md)
-and `mw_ide_active_view`, `mw_ide_variable_plan`, `mw_ide_variable_verify` plus the
-`mw_code_verify_variables` complete-list comparison. Prefer the labelled native
-Create Variable Set dialog, clearing inherited metadata before OK. Planning must
-finish before opening the modal dialog. These tools do not navigate or insert.
-They distinguish group
-headers from variable rows and detect collateral changes; they do not intercept
-generic keyboard input or guarantee cell focus.
+Use `mw_ide_variable_change` for native local/global/external add/edit/delete,
+with complete saved/native read-back checks. Use `mw_ide_open_worksheet` to open
+code or variables by exact saved tree identity and verify the active view. These
+operations use COM without mouse input. The [worksheet workflow](docs/VARIABLE_WORKSHEET_WORKFLOW.md)
+also covers dialog fallbacks and the retained planning/verification tools.
 
 ## Requirements and installation
 
@@ -81,6 +78,7 @@ Example requests:
 | Capability | Current evidence / boundary |
 |---|---|
 | Source/declaration/task inspection and engineering guidance | Available; installed interfaces take precedence over historical FB references |
+| Native COM variable lifecycle and named worksheet navigation | Local/global/external add/edit/delete and code/local/global navigation passed in a disposable stage; see implementation status |
 | Native ST POU creation, local variable edits, existing-task assignment | Live IDE, saved readback and reopen evidence |
 | Global add/edit/remove with external consumer | Live compilation and removal/reopen persistence evidence |
 | Build/Make and approved persistence verification | Fresh compile evidence, exact identity and retained source-hash comparisons |
@@ -124,9 +122,10 @@ paths and tokens. Do not upload customer projects or proprietary vendor manuals.
 
 ## Current architecture
 
-Version 0.5.2 retains the IDE-first workflow and fixes Electron-packaged runtime
-paths/mailboxes. The agent codes in MotionWorks through the separately
-connected computer-use MCP, using `mw_ide_edit_guide` for operation-specific steps.
+Version 0.5.5 supports native COM declaration changes and worksheet navigation,
+with Electron-packaged runtime paths/mailboxes. The agent uses native IDE APIs
+first and the separately connected computer-use MCP for remaining editor actions,
+using `mw_ide_edit_guide` for operation-specific steps.
 Eight offline code/variable/POU editors and the unsupported Rebuild API are
 removed from the public catalog, not merely gated. See [IDE-first workflow](docs/IDE_FIRST_WORKFLOW.md).
 For an IDE already open, use the [attach-first Remote Engineer workflow](docs/OPEN_IDE_REMOTE_ENGINEER.md).

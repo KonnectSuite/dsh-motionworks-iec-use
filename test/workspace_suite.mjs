@@ -18,6 +18,7 @@ const commands = [
   [process.execPath, ['test/packaged_runtime.mjs']],
   [process.execPath, ['test/close_consent.mjs']],
   [i.pythonExe(), ['-B', 'test/workspace_engine.py']],
+  [i.pythonExe(), ['-B', 'test/navigation_target.py']],
   [i.pythonExe(), ['-B', 'test/reliability_test.py']],
   [i.pythonExe(), ['-B', 'test/workflow_test.py']],
   [i.pythonExe(), ['-B', 'test/pou_deletion_test.py']],

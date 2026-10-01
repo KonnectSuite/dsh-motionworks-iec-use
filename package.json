@@ -68,6 +68,7 @@
     "test/variable_audit.mjs",
     "test/edit_session.mjs",
     "test/native_variables.mjs",
+    "test/navigation_target.py",
     "test/trial_dialog.ps1",
     "test/ide_ui_session.mjs",
     "!bridge/*.lock"

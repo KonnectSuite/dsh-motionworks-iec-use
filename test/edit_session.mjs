@@ -30,5 +30,6 @@ assert.equal(__internals.compareVariables(expected,[row,{...expected[1]}]).accep
 assert.equal(__internals.compareVariables(expected,[{...row,name:'INT'},expected[1]]).accepted,false);
 const tools=new Map(__internals.defineTools().map(t=>[t.name,t]));
 await assert.rejects(()=>tools.get('mw_ide_variable_plan').execute({baseline_saved:false}),/Save All/);
-assert.equal(tools.has('mw_ide_open_worksheet'),false,'failed OpenDocument route must not be advertised');
+assert.equal(tools.has('mw_ide_open_worksheet'),true,'verified native URN navigation is public');
+assert.match(tools.get('mw_ide_open_worksheet').description,/PROJECT.TRE/);
 console.log('Variable plan scope, identity, name limits, immutable baseline, expiry and damage detection passed; no desktop input');

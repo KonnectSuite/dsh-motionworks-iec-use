@@ -10,6 +10,12 @@
 
 ## 0.5.5
 
+- Resolve worksheet OpenDocument URNs from the saved PROJECT.TRE; public native
+  code/local-variable/global navigation now verifies the exact active view and
+  unchanged modified state. Slash-style logical names are not document URNs.
+- Verify native global/external add/edit/delete with complete saved/native
+  comparisons, returning both worksheets to their baseline counts.
+
 - Follow-up patch: isolate mwctVerify trial dialogs and their exact Use Trial
   button, check blocked/already-running IDEs, and verify a single native action.
 - Add guarded native variable add/edit/delete with saved/live baseline checks,

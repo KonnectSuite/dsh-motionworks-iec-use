@@ -64,6 +64,11 @@ def _project(root: str):
     return P.Project(root=Path(root))
 
 
+def verb_worksheet_target(req):
+    from motionworks_iec_mcp.navigation import worksheet_target
+    return _ok(**worksheet_target(_project(req['project']), req['kind'], req.get('pou')))
+
+
 # â”€â”€ read â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 def verb_pous(req):
@@ -693,6 +698,7 @@ def verb_check_mwt(req):
 #: Reads that may look at a project outside the staging root when the caller
 #: sets reference=true. Everything else still has to be a staged copy.
 READ_VERBS = frozenset({
+    "worksheet_target",
     "pous", "read_st", "unsupported", "globals", "tasks", "types", "library",
 })
 
@@ -1062,6 +1068,7 @@ VERBS = {
     "library": verb_library,
     "pous": verb_pous,
     "read_st": verb_read_st,
+    "worksheet_target": verb_worksheet_target,
     "unsupported": verb_unsupported,
     "write_st": verb_write_st,
     "var_add": verb_var_add,

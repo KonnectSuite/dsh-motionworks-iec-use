@@ -842,6 +842,37 @@ while ($true) {
                 $data = [ordered]@{ active_project = [string]$app.ActiveProject.FullName; logical_name = $view; error = $viewError }
             }
 
+            'open_worksheet' {
+                $app=Connect-App
+                [void](Assert-StagedOpen $app $verb)
+                if([IO.Path]::GetFullPath($app.ActiveProject.FullName) -ine [IO.Path]::GetFullPath([string]$req.project+'.mwt')) {throw 'REFUSED: wrong native project'}
+                $view=[string]$req.logical_name
+                $urn=[string]$req.urn
+                $documentView=[string]$req.document_logical_name
+                if($documentView -cmatch '^/Pous/([^/.\\]+)/([^/.\\]+)$') {
+                    $pouName=$Matches[1];$sheetName=$Matches[2]
+                    [void](Get-VariableSheet $app $pouName)
+                    if($urn -cne ('@POUS.'+$pouName+'.'+$sheetName)){throw 'REFUSED: inconsistent worksheet identity'}
+                    $expectedView=if($req.kind -eq 'code'){'/Pous/'+$pouName}else{$documentView}
+                    if($view -cne $expectedView){throw 'REFUSED: inconsistent active-view identity'}
+                } elseif($documentView -cmatch '^/Hardware/([^/.\\]+)/([^/.\\]+)/([^/.\\]+)$') {
+                    $config=$Matches[1];$resource=$Matches[2];$sheet=$Matches[3]
+                    if($req.kind -ne 'variables' -or $urn -cne ('@HW.'+$config+'.'+$resource+'.'+$sheet)){throw 'REFUSED: inconsistent globals identity'}
+                    if($view -cne $documentView){throw 'REFUSED: inconsistent active-view identity'}
+                    [void]$app.ActiveProject.GetObjectByLogicalName(('Hardware/'+$config+'/'+$resource),10)
+                } else {throw 'REFUSED: unsupported worksheet identity'}
+                $beforeModified=[bool]$app.ActiveProject.IsModified
+                $userData=[object[]]@()
+                [void]$app.OpenDocument($urn,$true,[ref]$userData)
+                $actual=[string]$app.ActiveProject.GetLogicalNameOfActiveView()
+                $afterModified=[bool]$app.ActiveProject.IsModified
+                $ok=$true
+                $data=[ordered]@{accepted=($actual -ceq $view -and $beforeModified -eq $afterModified);
+                    action_performed=$true;method='native_com_urn';active_project=[string]$app.ActiveProject.FullName;
+                    requested_logical_name=$view;logical_name=$actual;urn=$urn;is_modified=$afterModified;
+                    modified_state_unchanged=($beforeModified -eq $afterModified)}
+            }
+
             'open' {
                 # The cached Application can describe a project that no longer
                 # exists once this has run; drop it so the next verb reconnects.
