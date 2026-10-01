@@ -56,6 +56,16 @@ class References(unittest.TestCase):
             self.assertEqual(result['matches'][0]['confidence'], 'candidate_not_confirmed')
         self.assertFalse(K.diagnose('Unknown failure 987654321')['matched'])
 
+    def test_observed_output_syntax_diagnostic_routes_to_installed_help(self):
+        result=K.diagnose("Illegal IEC syntax at or before '>'!")
+        self.assertTrue(result['matched']);self.assertFalse(result['automatic_changes'])
+        candidate=result['matches'][0]
+        self.assertEqual(candidate['confidence'],'candidate_not_confirmed')
+        self.assertEqual(candidate['evidence']['installed_help']['topic'],'callingfunctionblocksinst.htm')
+        self.assertIn('If the line uses =>',' '.join(candidate['suggested_checks']))
+        self.assertIn('other reasons',' '.join(candidate['suggested_checks']))
+        self.assertFalse(K.diagnose("Illegal IEC syntax at or before ';'!")['matched'])
+
     def test_all_patterns_have_sources_and_review_cleanly(self):
         for entry in K.patterns()['patterns']:
             pattern = K.patterns(entry['id'])

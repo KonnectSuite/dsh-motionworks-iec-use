@@ -164,3 +164,41 @@ Edit Wizard shortcut topic in the disposable session workspace. Backup:
 showed disabled Send and inactive child agents before a reload attempt; Alt+F4 did
 not remove its window/process. Therefore the live host catalog/reload and an
 Arya-led operation remain unverified; no forced termination was performed.
+
+## Populated POU acceptance and collateral verification
+
+The populated ST workflow passed through the public tools on the disposable
+TopCutterCamSetup source (5205 readable characters, 12 declarations): native copy
+to CodexPopCopy, full code/comment import including a new executable local INT
+assignment, rename to CodexPopEdit, fresh Build (5.1 s), Make (2.2 s), and deletion.
+Declarations and native flags remained intact. Final POUs/tasks/globals and complete
+program/translation hashes matched the original seven-POU baseline. Multi-line
+comment line endings are normalized by native import/translation XML; the live
+test compares normalized EOLs, preserving all other text. The complete rerun passed.
+Evidence: `native-populated-live-14e9c736-e0f0-43ae-9ae5-7894f17a70e6.json`.
+
+Populated LD lifecycle also passed: ServoTaskSlow native copy to CodexLdCopy,
+rename to CodexLdEdit, fresh Build (6.6 s), Make (2.3 s), and deletion. The copied
+graphical body bytes/declarations and all unrelated sources remained unchanged.
+Final complete inventories and source/translation manifests matched the original.
+Evidence: `native-graph-lifecycle.json`.
+
+A no-op ChangeCodeWS LD attempt using the exact copied native GB stream returned
+3 and changed no program stream, translation file or modified state. This is a
+rejected route, not proof that all graphical APIs are impossible. No retry or
+hand-edit of the graphical native container was performed. Evidence:
+`native-graph-noop-probe.json`. Graphical insertion/wiring acceptance remains open.
+
+Structural verification now compares the union of original/final program-source
+and translation-file paths outside the explicitly affected POU folders. It detects
+unrelated additions, removals and changes, including unused translation records
+which a readable-body comparison alone might miss. Injected regressions pass,
+and the stricter guard passed the live populated ST and LD operations.
+The support diagnostic for the observed illegal `>` token is a conditional candidate:
+inspect the exact source, then consult the installed ST FB-call help if it uses
+`=>`. It does not assume every greater-than error has that cause or edit automatically.
+After final cleanup, the original seven POUs/five tasks compiled again with a fresh
+Build transition (4.7 s) and Make (2.3 s), compiled=true and modified=false.
+Complete source/translation and inventory comparisons passed before/after this
+compile. Evidence: `native-populated-cleanup-build.json`. The full regression suite
+passes with 57 definitions and 22 programming/reference tests.

@@ -190,6 +190,20 @@ def diagnose(message):
     matches = [{'category': kind, 'evidence': reference(topic), 'suggested_checks': checks,
                 'confidence': 'candidate_not_confirmed', 'mapping': 'plugin_authored_from_cited_guidance'}
                for pattern, topic, kind, checks in patterns if re.search(pattern, message, re.I)]
+    if re.search(r'''illegal\s+IEC\s+syntax\s+at\s+or\s+before\s+['"]>['"]''',message,re.I):
+        matches.append({
+            'category':'compiler',
+            'confidence':'candidate_not_confirmed',
+            'mapping':'plugin_authored_from_live_observation_and_installed_help',
+            'evidence':{'kind':'installed_help_and_live_compile',
+                        'observed_ide':'MotionWorks IEC 3 Pro, automation version 1.19',
+                        'installed_help':{'tool':'mw_code_installed_help','module':'ST001','topic':'callingfunctionblocksinst.htm'}},
+            'suggested_checks':[
+                'Read the exact offending ST line before diagnosing the token.',
+                'If the line uses => for an FB output, read the installed ST FB-call topic: the tested IDE rejected that form and accepted assignments from instance output fields after the call.',
+                'Resolve actual pin directions/types with mw_code_block_interface. Keep in-out bindings in the call; capture output fields afterward.',
+                'A greater-than token can fail for other reasons. Confirm the source context and installed version, then use guarded code editing and fresh Build/Make; do not rewrite automatically.'
+            ]})
     return {'matches': matches, 'matched': bool(matches), 'automatic_changes': False,
             'next': 'Confirm candidates against the exact diagnostic, project and installed versions.' if matches else 'No documented mapping matched. Preserve the exact message and inspect its source location; do not invent a root cause.'}
 

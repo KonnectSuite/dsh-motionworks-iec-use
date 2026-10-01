@@ -10,6 +10,11 @@
 
 ## 0.5.5
 
+- Verify populated ST copy/code edit/rename/delete and populated LD copy/rename/
+  delete through native APIs, with fresh Build/Make and exact cleanup manifests.
+- Detect unrelated translation-file additions/deletions/changes and new unrelated
+  source files during structural verification. Route the observed `>` syntax
+  diagnostic to installed FB-call help as a conditional candidate, without repairs.
 - Add inert-text search of installed English CHM help with exact module/topic
   selection, source hashes, native help links and workspace-local cache integrity
   checks. Resolve shortcuts from installed help rather than guessing key behavior.

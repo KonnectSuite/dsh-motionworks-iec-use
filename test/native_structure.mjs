@@ -43,6 +43,17 @@ reads=0;
 const damaged=await nativeStructureChange('pou',args,{...deps,saved:async()=>reads++?{...before,pous:[{...pou,body_sha256:'damaged'},{...pou,name:'NewPou',body_blank:true}]}:before});
 assert.equal(damaged.verification.accepted,false);
 assert.ok(damaged.verification.errors.some(e=>e.includes('Unrelated POU')));
+for(const translationFiles of [ {'POE/Main/Translation.xml':'changed'}, {}, {'POE/Main/Translation.xml':'original','POE/Main/ExtraTranslation.xml':'added'} ]){
+  reads=0;
+  const baseline={...before,translation_files:{'POE/Main/Translation.xml':'original'}};
+  const changed=await nativeStructureChange('pou',args,{...deps,saved:async()=>reads++?{...baseline,pous:[pou,{...pou,name:'NewPou',body_blank:true}],translation_files:translationFiles}:baseline});
+  assert.equal(changed.verification.accepted,false);
+  assert.ok(changed.verification.errors.some(e=>e.includes('Unrelated translation')));
+}
+reads=0;
+const extraSource=await nativeStructureChange('pou',args,{...deps,saved:async()=>reads++?{...before,pous:[pou,{...pou,name:'NewPou',body_blank:true}],program_sources:{...before.program_sources,'POE/Main/extra.st1':{Extra:'added'}}}:before});
+assert.equal(extraSource.verification.accepted,false);
+assert.ok(extraSource.verification.errors.some(e=>e.includes('Unrelated program streams')));
 let retained;
 reads=0;
 await assert.rejects(()=>nativeStructureChange('pou',args,{...deps,

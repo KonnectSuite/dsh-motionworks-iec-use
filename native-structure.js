@@ -108,9 +108,14 @@ export async function nativeStructureChange(scope,args,{status,saved,snapshot,mu
     if(plan.affected.some(n=>eq(n,old.name)))continue;
     if(!same(old,byName(after.pous,old.name)))errors.push('Unrelated POU changed: '+old.name);
   }
-  for(const [file,streams] of Object.entries(before.program_sources)){
-    if(plan.affected.some(n=>file.toLowerCase().startsWith('poe/'+n.toLowerCase()+'/')))continue;
-    if(!same(streams,after.program_sources[file]))errors.push('Unrelated program streams changed: '+file);
+  const affectedFile=file=>plan.affected.some(n=>file.replace(/\\/g,'/').toLowerCase().startsWith('poe/'+n.toLowerCase()+'/'));
+  for(const file of new Set([...Object.keys(before.program_sources),...Object.keys(after.program_sources)])){
+    if(affectedFile(file))continue;
+    if(!same(before.program_sources[file],after.program_sources[file]))errors.push('Unrelated program streams changed: '+file);
+  }
+  for(const file of new Set([...Object.keys(before.translation_files??{}),...Object.keys(after.translation_files??{})])){
+    if(affectedFile(file))continue;
+    if(before.translation_files?.[file]!==after.translation_files?.[file])errors.push('Unrelated translation file changed: '+file);
   }
   if(scope==='pou'){
     const created=byName(after.pous,args.operation==='create'?args.name:args.new_name);
