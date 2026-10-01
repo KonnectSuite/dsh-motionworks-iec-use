@@ -627,6 +627,28 @@ function Assert-VariableBaseline($expected,$actual) {
         }
     }
 }
+function Get-NativeStructure($app) {
+    $pous=@();$tasks=@();$types=@{7='PROGRAM';6='FUNCTION_BLOCK';24='FUNCTION'}
+    $collection=$app.ActiveProject.Pous
+    for($i=1;$i -le $collection.Count;$i++) {
+        $p=$collection.Item($i);$type=$types[[int]$p.PouType]
+        if(-not $type){throw 'Unsupported native POU type'}
+        $pous+=,[ordered]@{name=[string]$p.Name;type=$type;language=[int]$p.PouLanguage;
+            plc_type=[string]$p.PlcType;processor_type=[string]$p.ProcessorType;read_only=[bool]$p.ReadOnly}
+    }
+    $resource=$app.ActiveProject.GetObjectByLogicalName('Hardware/Configuration/Resource',10)
+    if(-not $resource){throw 'Exact resource not found'}
+    $collection=$resource.Tasks
+    for($i=1;$i -le $collection.Count;$i++) {
+        $t=$collection.Item($i);$instances=@()
+        for($j=1;$j -le $t.ProgramInstances.Count;$j++) {
+            $p=$t.ProgramInstances.Item($j)
+            $instances+=,[ordered]@{name=[string]$p.Name;type=[string]$p.Type}
+        }
+        $tasks+=,[ordered]@{name=[string]$t.Name;kind=[string]$t.Type;instances=$instances}
+    }
+    return [ordered]@{pous=$pous;tasks=$tasks}
+}
 function Normalize-MwPath([string]$path) {
     if ([string]::IsNullOrWhiteSpace($path)) { return '' }
     try { return [IO.Path]::GetFullPath($path).TrimEnd('\') } catch { return $path.Trim().TrimEnd('\') }
@@ -1063,26 +1085,19 @@ while ($true) {
                 # take the whole verb down with it: an object model that does not answer for this
                 # path returned a response the caller could not read, so `mw_code_task_model`
                 # failed with a type error rather than reporting anything about the tasks. The
-                # fallback below already lists the task names this project uses.
+                # Fail explicitly instead of inventing a task inventory.
                 try {
                     $resource = $app.ActiveProject.GetObjectByLogicalName(
                         'Hardware/Configuration/Resource', 10)
                 } catch {
-                    Log "task_model: resource lookup failed ($($_.Exception.Message)); using the known task names"
-                    $resource = $null
+                    throw "task_model: resource lookup failed ($($_.Exception.Message))"
                 }
                 if ($resource -ne $null) {
                     try {
                         $coll = $resource.Tasks
                         for ($i = 1; $i -le $coll.Count; $i++) { $taskNames += $coll.Item($i).Name }
                     } catch {
-                        Log "task_model: reading the task collection failed ($($_.Exception.Message))"
-                        $taskNames = @()
-                    }
-                }
-                if ($taskNames.Count -eq 0) {
-                    foreach ($t in @('BG', 'FastTsk', 'MedTsk', 'SlowTsk', 'Start')) {
-                        $taskNames += $t
+                        throw "task_model: reading the task collection failed ($($_.Exception.Message))"
                     }
                 }
                 foreach ($name in $taskNames) {
@@ -1376,6 +1391,93 @@ while ($true) {
                     $groups+=@{name=[string]$g.Name;read_only=[bool]$g.ReadOnly}
                 }
                 $data=[ordered]@{variables=(Get-VariableRows $vars);groups=$groups}
+                $ok=$true
+            }
+            'structure_snapshot' {
+                $app=Connect-App
+                [void](Assert-StagedOpen $app $verb)
+                $data=Get-NativeStructure $app
+                $ok=$true
+            }
+            'structure_mutate' {
+                $app=Connect-App
+                [void](Assert-StagedOpen $app $verb)
+                $project=[IO.Path]::GetFullPath([string]$req.project)
+                if([IO.Path]::GetFullPath($app.ActiveProject.FullName) -ine ($project+'.mwt')){throw 'REFUSED: wrong native project'}
+                if([bool]$app.ActiveProject.IsModified){throw 'REFUSED: reconcile/save native edits'}
+                $now=Get-NativeStructure $app
+                if(($now | ConvertTo-Json -Depth 20 -Compress) -cne ($req.before_native | ConvertTo-Json -Depth 20 -Compress)){throw 'REFUSED: structural baseline changed'}
+                foreach($property in $req.before_files.PSObject.Properties) {
+                    $file=[IO.Path]::GetFullPath((Join-Path $project $property.Name))
+                    if(-not $file.StartsWith($project.TrimEnd('\')+'\',[StringComparison]::OrdinalIgnoreCase)){throw 'REFUSED: baseline source outside project'}
+                    Assert-NoLinkedPath $file
+                    if(-not (Test-Path -LiteralPath $file)){throw 'REFUSED: saved structural source missing'}
+                    $algorithm=[Security.Cryptography.SHA256]::Create()
+                    try {$hash=[BitConverter]::ToString($algorithm.ComputeHash([IO.File]::ReadAllBytes($file))).Replace('-','')}
+                    finally {$algorithm.Dispose()}
+                    if($hash -ine [string]$property.Value){throw 'REFUSED: saved structural source changed'}
+                }
+                $name=[string]$req.name;$op=[string]$req.operation
+                $max=if($req.scope -eq 'task'){7}else{30}
+                if($name -notmatch ('^[A-Za-z_][A-Za-z0-9_]{0,'+($max-1)+'}$')){throw 'REFUSED: invalid native name'}
+                if($req.scope -eq 'pou') {
+                    $pous=$app.ActiveProject.Pous
+                    if($op -eq 'create') {
+                        if([bool]$pous.ReadOnlyAttribute){throw 'REFUSED: POU collection read-only'}
+                        $types=@{PROGRAM=7;FUNCTION_BLOCK=6;FUNCTION=24}
+                        $kind=if($req.pou_type){[string]$req.pou_type}else{'PROGRAM'}
+                        if(-not $types.ContainsKey($kind)){throw 'REFUSED: invalid POU type'}
+                        [void]$pous.Create($name,[int]$types[$kind],2,[string]$req.return_type,'','')
+                    }else{
+                        $target=$pous.Item($name)
+                        if([bool]$target.ReadOnly){throw 'REFUSED: POU read-only'}
+                        if($op -in @('rename','copy') -and [string]$req.new_name -notmatch '^[A-Za-z_][A-Za-z0-9_]{0,29}$'){throw 'REFUSED: invalid new name'}
+                        if($op -eq 'copy'){[void]$target.Copy([string]$req.new_name)}
+                        elseif($op -eq 'rename') {
+                            if($req.references_reviewed -ne $true){throw 'REFUSED: rename reference review required'}
+                            $target.Name=[string]$req.new_name
+                        }elseif($op -eq 'delete') {
+                            if($req.user_approved -ne $true -or $req.references_reviewed -ne $true){throw 'REFUSED: deletion approval/review required'}
+                            $target.Delete()
+                        }else{throw 'Unknown POU operation'}
+                    }
+                }elseif($req.scope -eq 'task') {
+                    $resource=$app.ActiveProject.GetObjectByLogicalName('Hardware/Configuration/Resource',10)
+                    if($op -eq 'create') {
+                        $kind=if($req.kind){[string]$req.kind}else{'CYCLIC'}
+                        [void]$resource.Tasks.Create($name,$kind)
+                    }else{
+                        $target=$resource.Tasks.Item($name)
+                        if($op -eq 'delete') {
+                            if($req.user_approved -ne $true -or $target.ProgramInstances.Count -ne 0){throw 'REFUSED: task deletion approval or empty task required'}
+                            $target.Delete()
+                        }elseif($op -eq 'assign') {
+                            $instance=if($req.instance){[string]$req.instance}else{[string]$req.pou}
+                            $pou=$app.ActiveProject.Pous.Item([string]$req.pou)
+                            if([int]$pou.PouType -ne 7){throw 'REFUSED: assignment requires PROGRAM'}
+                            [void]$target.ProgramInstances.Create($instance,[string]$pou.Name)
+                        }elseif($op -eq 'unassign') {
+                            if($req.user_approved -ne $true){throw 'REFUSED: unassignment approval required'}
+                            $target.ProgramInstances.Item([string]$req.instance).Delete()
+                        }elseif($op -eq 'edit') {
+                            $inputFile=[IO.Path]::GetFullPath([string]$req.settings_import_path)
+                            $inputRoot=Join-Path $script:WorkspaceRoot '.motionworks\native-input'
+                            if(-not $inputFile.StartsWith([IO.Path]::GetFullPath($inputRoot).TrimEnd('\')+'\',[StringComparison]::OrdinalIgnoreCase)){throw 'REFUSED: task input outside private workspace input directory'}
+                            Assert-NoLinkedPath $inputFile
+                            if([IO.File]::ReadAllText($inputFile) -cne [string]$req.settings_text){throw 'REFUSED: task input changed'}
+                            if([string]$req.settings_text -notmatch ('^TASK '+[regex]::Escape($name)+'\r?\n')){throw 'REFUSED: task input names another task'}
+                            $target.ImportSettingsFile($inputFile)
+                        }else{throw 'Unknown task operation'}
+                    }
+                }else{throw 'Unknown native structural scope'}
+                $app.ActiveProject.Save()
+                $deadline=[DateTime]::UtcNow.AddSeconds(10)
+                do {
+                    Start-Sleep -Milliseconds 250
+                    $after=Get-NativeStructure $app
+                    $matches=(($after | ConvertTo-Json -Depth 20 -Compress) -ceq ($req.expected_native | ConvertTo-Json -Depth 20 -Compress))
+                }while(-not $matches -and [DateTime]::UtcNow -lt $deadline)
+                $data=[ordered]@{operation=$op;saved=$true;snapshot=$after;is_modified=[bool]$app.ActiveProject.IsModified;method='native_com';native_matches_plan=$matches}
                 $ok=$true
             }
             'variable_mutate' {

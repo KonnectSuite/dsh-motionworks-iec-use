@@ -79,10 +79,11 @@ Example requests:
 |---|---|
 | Source/declaration/task inspection and engineering guidance | Available; installed interfaces take precedence over historical FB references |
 | Native COM variable lifecycle and named worksheet navigation | Local/global/external add/edit/delete and code/local/global navigation passed in a disposable stage; see implementation status |
+| Native POU/task structure | Blank ST PROGRAM create/rename/copy/delete, FUNCTION_BLOCK/FUNCTION create/delete, task create/settings edit/assign/unassign/delete passed with saved/native and collateral source checks |
 | Native ST POU creation, local variable edits, existing-task assignment | Live IDE, saved readback and reopen evidence |
 | Global add/edit/remove with external consumer | Live compilation and removal/reopen persistence evidence |
 | Build/Make and approved persistence verification | Fresh compile evidence, exact identity and retained source-hash comparisons |
-| LD/FBD, libraries, arbitrary POU rename/delete and newly created tasks | Guided workflows; broader live lifecycle acceptance still required |
+| Populated/graphical POU changes and libraries | Reference review and broader live lifecycle acceptance still required; code/toolbox editor automation remains incomplete |
 | All FB/FU interfaces, high-speed motion, production behavior and safety | Not universally validated; project-specific engineering and supervised commissioning required |
 
 See [initial IDE smoke](docs/IDE_SMOKE_2026-10-01.md) and

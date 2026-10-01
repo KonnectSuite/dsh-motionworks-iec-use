@@ -10,6 +10,14 @@
 
 ## 0.5.5
 
+- Add native POU create/copy/rename/delete and task create/edit/assign/unassign/
+  delete, checking complete saved/native inventories, input source hashes and
+  unrelated source preservation. Task edits use native ImportSettingsFile;
+  full before/after reports stay in workspace verification files.
+- Fix empty task settings consuming the next line. Read function return types
+  from their authoritative PROJECT.TRE field, not the blank registry column.
+- Remove guessed task names when native task inventory lookup fails.
+
 - Resolve worksheet OpenDocument URNs from the saved PROJECT.TRE; public native
   code/local-variable/global navigation now verifies the exact active view and
   unchanged modified state. Slash-style logical names are not document URNs.

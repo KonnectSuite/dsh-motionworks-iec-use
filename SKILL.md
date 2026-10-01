@@ -29,6 +29,19 @@ globals). Require `accepted:true` before editor input. The tool resolves the
 internal document URN from the saved tree and verifies the active view; never
 send a slash-style logical name directly to OpenDocument or navigate by guessed
 tree coordinates. Code editors report the POU logical name as their active view.
+For POU structure use `mw_ide_pou_change`: create blank ST PROGRAM/FUNCTION_BLOCK/
+FUNCTION (explicit return_type for FUNCTION), copy, rename or delete. Copy/rename
+uses `new_name`. Reconcile saved edits and require `verification.accepted`.
+Rename/delete requires references_reviewed, including graphical and indirect
+calls; the automatic ST scan cannot prove their absence. Delete also requires
+explicit user approval. Review task assignments and remaining type/call references.
+For tasks use `mw_ide_task_change`: create/edit/delete/assign/unassign. Edit accepts
+`settings_changes` for existing field names and imports them through the IDE,
+preserving other fields. Unassignment uses the exact `instance` name, which can
+differ from the POU type. Unassign/delete requires approval; delete refuses a
+nonempty task. Full source baselines are retained at `evidence_path`, with compact
+counts returned to avoid repeating whole projects in the conversation. Finish
+structural edits with fresh Build/Make and saved-source checks.
 No environment flag restores those public tools. Edit through the IDE instead.
 For any motion-logic design, diagnosis or review, read `docs/ENGINEERING_WORKFLOW.md`
 before proposing code. It supplies the requirements, evidence, timing, FB lifecycle,
@@ -59,9 +72,9 @@ investigation. If status times out or contradicts visible state, do not launch a
 IDE or conclude it is closed. Report the API attach failure.
 
 After selecting/staging and opening (or attaching to) the exact project, use the IDE's editors for ST,
-local/global/external variables, descriptions, LD/FBD, POU lifecycle and libraries.
-Native task object-model tools remain supported for task operations, but UI actions
-are the fallback for unsupported object-model commands. Do not edit native streams
+code bodies, descriptions, LD/FBD and libraries when no verified native tool is
+available. Prefer the native declaration, POU and task tools above for their
+supported operations; UI actions are the fallback. Do not edit native streams
 behind the open IDE. Preserve original code and inspect references before rename/delete.
 
 For each input: observe the current screenshot, choose the target from that observation,

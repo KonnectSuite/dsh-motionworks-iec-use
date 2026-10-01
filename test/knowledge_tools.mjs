@@ -20,7 +20,7 @@ async function call(name, args = {}) {
   return response.result;
 }
 try {
-  assert.equal(definitions.length, 51);
+  assert.equal(definitions.length, 53);
   assert.ok((await call('mw_code_reference')).sources.length >= 6);
   assert.ok((await call('mw_code_reference', { query: 'VAR_EXTERNAL' })).topics.length);
   assert.equal((await call('mw_code_reference', { block: 'MC_Power' })).signature.outputs.Status, 'BOOL');

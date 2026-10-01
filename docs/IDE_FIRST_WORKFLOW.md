@@ -1,5 +1,13 @@
 # MotionWorks IDE-first workflow
 
+For supported operations, prefer native APIs: `mw_ide_open_worksheet` resolves
+the exact code/variable document; `mw_ide_variable_change` manages declarations;
+`mw_ide_pou_change` manages blank ST POU creation/copy/rename/delete; and
+`mw_ide_task_change` manages tasks, settings and exact program instances. These
+use the running IDE and verify saved/native results without mouse input. Require
+their accepted verdict, retain the verification report and finish Build/Make.
+The UI recipes below remain fallbacks for editor operations not yet automated.
+
 ## Architecture and dependency
 
 Arya's MotionWorks Cordis plugin supplies workspace identity, staging, native read-only

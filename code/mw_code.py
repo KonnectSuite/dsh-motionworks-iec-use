@@ -69,6 +69,11 @@ def verb_worksheet_target(req):
     return _ok(**worksheet_target(_project(req['project']), req['kind'], req.get('pou')))
 
 
+def verb_structure_snapshot(req):
+    from motionworks_iec_mcp.structure import snapshot
+    return _ok(**snapshot(Path(req['project'])))
+
+
 # â”€â”€ read â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 def verb_pous(req):
@@ -699,6 +704,7 @@ def verb_check_mwt(req):
 #: sets reference=true. Everything else still has to be a staged copy.
 READ_VERBS = frozenset({
     "worksheet_target",
+    "structure_snapshot",
     "pous", "read_st", "unsupported", "globals", "tasks", "types", "library",
 })
 
@@ -1069,6 +1075,7 @@ VERBS = {
     "pous": verb_pous,
     "read_st": verb_read_st,
     "worksheet_target": verb_worksheet_target,
+    "structure_snapshot": verb_structure_snapshot,
     "unsupported": verb_unsupported,
     "write_st": verb_write_st,
     "var_add": verb_var_add,

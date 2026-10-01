@@ -23,6 +23,7 @@
     "verification.js",
     "edit-session.js",
     "native-variables.js",
+    "native-structure.js",
     "preflight.mjs",
     "SKILL.md",
     "README.md",
@@ -69,6 +70,9 @@
     "test/edit_session.mjs",
     "test/native_variables.mjs",
     "test/navigation_target.py",
+    "test/native_structure.mjs",
+    "test/task_settings.py",
+    "test/structure_reader.py",
     "test/trial_dialog.ps1",
     "test/ide_ui_session.mjs",
     "!bridge/*.lock"

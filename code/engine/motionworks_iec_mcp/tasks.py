@@ -34,7 +34,7 @@ from .errors import NotFound
 #: ``TASK <name>`` on the first meaningful line.
 _TASK_RE = re.compile(r"^\s*TASK\s+(\S+)", re.IGNORECASE)
 #: ``FIELD := value`` with an optional trailing comma or semicolon.
-_FIELD_RE = re.compile(r"([A-Za-z_][A-Za-z0-9_]*)\s*:=\s*([^,;\r\n]+)")
+_FIELD_RE = re.compile(r"([A-Za-z_][A-Za-z0-9_]*)[ \t]*:=[ \t]*([^,;\r\n]*)")
 
 
 @dataclass

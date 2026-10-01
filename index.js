@@ -58,6 +58,7 @@ import { tmpdir } from 'node:os';
 import { verifyAcceptance } from './verification.js';
 import { retainPlan, lookupPlan, requireVariableView } from './edit-session.js';
 import { nativeVariableChange } from './native-variables.js';
+import { nativeStructureChange } from './native-structure.js';
 
 export const name = 'motionworks-iec-use';
 export const inject = ['tools'];
@@ -1262,8 +1263,57 @@ function compareVariables(expected, actual) {
     saved_count: actual.length, missing, unexpected, changed, errors };
 }
 
+async function executeNativeStructure(scope,args) {
+  const project=projectOf(args),identity=await assertIdeProjectProven();
+  if(resolve(identity.active_project).replace(/\.mwt$/i,'').toLowerCase()!==project.toLowerCase())throw new Error('REFUSED: wrong open project');
+  const directory=join(workspaceRoot(),'.motionworks','verification');
+  if(!isInsideWorkspace(directory))throw new Error('REFUSED: verification evidence outside workspace');
+  mkdirSync(directory,{recursive:true});
+  const evidence_path=join(directory,'native-structure-'+randomUUID()+'.json');
+  let retained;
+  let result;
+  try {result=await nativeStructureChange(scope,args,{
+    status:()=>verb('compile_state',{},30000),
+    saved:()=>runCode('structure_snapshot',{project}),
+    snapshot:()=>verb('structure_snapshot',{},30000),
+    mutate:request=>verb('structure_mutate',{...request,project},60000),
+    retainPlan:async record=>{
+      retained=record;
+      writeFileSync(evidence_path,JSON.stringify({phase:'plan_retained',...record},null,2),{encoding:'utf8',flag:'wx'});
+    },
+    prepareSettings:async settings_text=>{
+      const directory=join(workspaceRoot(),'.motionworks','native-input');
+      if(!isInsideWorkspace(directory))throw new Error('REFUSED: private input outside workspace');
+      mkdirSync(directory,{recursive:true});
+      const settings_import_path=join(directory,randomUUID()+'.SET');
+      if(!isInsideWorkspace(settings_import_path))throw new Error('REFUSED: linked task input');
+      writeFileSync(settings_import_path,settings_text,{encoding:'ascii',flag:'wx'});
+      return {settings_import_path,settings_text};
+    },
+  });}catch(error){
+    if(retained)throw new Error(error.message+`; inspect native state and retained plan at ${evidence_path} before another action.`);
+    throw error;
+  }
+  if(!isInsideWorkspace(evidence_path))throw new Error('REFUSED: linked verification evidence');
+  writeFileSync(evidence_path,JSON.stringify({phase:'result',plan:retained,...result},null,2),{encoding:'utf8'});
+  const {saved_result:fullSavedResult,baseline:fullBaseline,...summary}=result;
+  return {...summary,evidence_path,baseline:{pou_count:fullBaseline.pous.length,task_count:fullBaseline.tasks.length,
+    global_count:result.baseline.globals.length,graphical_reference_review_required:result.baseline.pous.filter(p=>!p.reference_scan_complete).map(p=>p.name)}};
+}
 function defineTools() {
   return [
+    ...['pou','task'].map(scope=>({
+      name:`mw_ide_${scope}_change`,
+      description:scope==='pou'?
+        'Native COM POU create/copy/rename/delete with complete saved/native inventories, source baseline guards and unrelated source checks. Creates blank ST PROGRAM, FUNCTION_BLOCK or FUNCTION (explicit simple return_type). Copy/rename uses new_name. Rename/delete requires references_reviewed including graphical/indirect calls; delete additionally requires user_approved. Refuses detected ST/declaration/task references and read-only POUs. Evidence lists graphical POUs the ST scan cannot cover. Full baseline retained in evidence_path. Reconcile/save first, check verification.accepted, then fresh Build/Make. No mouse input, disk-source editing, download or automatic retry.':
+        'Native COM task create/edit/delete/assign/unassign with full saved/native structural/source checks. Edit imports a generated settings file through Task.ImportSettingsFile, preserving all existing fields; settings_changes keys must exist in the saved task. Task names max 7 characters. Assignment requires PROGRAM and optionally an exact instance name. Unassignment requires exact instance and user_approved; task deletion requires approval and an empty task. Reconcile/save first, check verification.accepted, then fresh Build/Make. No download or automatic retry.',
+      parameters:{type:'object',additionalProperties:false,required:['project','operation','name','baseline_saved'],properties:{
+        project:{type:'string'},operation:{type:'string',enum:scope==='pou'?['create','copy','rename','delete']:['create','edit','delete','assign','unassign']},name:{type:'string'},baseline_saved:{type:'boolean'},user_approved:{type:'boolean'},
+        ...(scope==='pou'?{new_name:{type:'string'},pou_type:{type:'string',enum:['PROGRAM','FUNCTION_BLOCK','FUNCTION']},return_type:{type:'string'},references_reviewed:{type:'boolean'}}:
+          {kind:{type:'string',enum:['CYCLIC','DEFAULT','SYSTEM']},pou:{type:'string'},instance:{type:'string'},settings_changes:{type:'object',additionalProperties:{type:'string'}}})}},
+      output:{schema:{type:'object',additionalProperties:true,required:['scope','operation','action_performed','native_result','verification','baseline','expected_native','next_step']},render:(_a,v)=>text(JSON.stringify(v,null,2))},
+      execute:args=>executeNativeStructure(scope,args),
+    })),
     {
       name:'mw_ide_variable_change',
       description:'Add, edit or delete ONE declaration through the native MotionWorks COM API by exact POU/resource, without grid input or worksheet navigation. Requires reconciled saved edits; compares the complete live/saved baseline before changing and verifies all saved declarations afterward. Uses the selected existing writable group. Externals require the matching global name/type. Edit accepts the complete desired seven-field declaration. Delete requires explicit approval and reference review. Does not download, compile automatically, move groups or repair/retry partial failures.',
@@ -1351,9 +1401,9 @@ function defineTools() {
           engineering: ['Read docs/ENGINEERING_WORKFLOW.md and collect operation, controller/drive/IDE/library versions, axis units, task timing and interface ownership before choosing FBs.', 'Resolve the installed FB interface and firmware release-note applicability. Historical manuals and this checklist are not proof of compatibility.', 'Define state transitions, completion evidence, continuous target sequence, registration qualification, PLC authority, stop/park and home invalidation; review numeric ranges and timing at maximum speed.', 'Create a behavioral test matrix and retain diagnostics. Edit in the IDE, finish compile/persistence verification, and explicitly separate bench/field acceptance from compiler acceptance.'],
           st: ['Open the exact POU body in the IDE and observe its language and existing text.', 'Click inside the ST editor, verify focus, then select only the intended text and type the reviewed ST.', 'Multiline input requires explicit line-break support in the computer server; Enter can submit a dialog, so use it only in a confirmed multiline editor. Inspect indentation, line count and the entire saved body.', 'Inspect the resulting text before Save; do not type into a terminal or variable-name cell.'],
           variables: ['Read docs/VARIABLE_WORKSHEET_WORKFLOW.md before any local/global/external edit; retain the full saved baseline. The bold Default/group row and column headers are NOT variable data rows.', 'Prefer mw_ide_variable_change for add/edit/delete through native COM without navigation or grid input. Supply all seven desired fields for add/edit, reconcile saved edits, and require verification.accepted. Deletion requires explicit approval/reference review. Use mw_ide_open_worksheet for exact code/variables navigation and require accepted before editor input.', 'For dialog fallback ADD, call mw_ide_active_view and obtain mw_ide_variable_plan while no dialog is open. Wait for success before invoking the observed native Create Variable Set dialog from a data row in the intended group. Planning tools do not navigate or send input.', 'Verify each labelled dialog field separately. Clear inherited addresses, initializers and descriptions absent from the plan. Use an exact single name without #; confirm scope/type and every field before OK. Never blind-Tab through fields. Inline Insert Variable is a separately proven fallback only.', 'For fallback EDIT identify the exact existing variable and field, confirm editor focus and selection, then commit and refresh. If activation closes the cell editor, stop rather than typing into unknown selection.', 'Native changes save and verify the complete declarations automatically. For dialog changes save through the IDE then require mw_ide_variable_verify accepted:true using the retained token, or mw_code_verify_variables with the complete planned final list. Missing/extra rows or changed existing names/groups/metadata require inspection before building. Verification is not an input interlock.', 'Globals referenced by a POU need matching VAR_EXTERNAL declarations without physical address or initializer; verify both worksheets independently. Run fresh Build/Make after the intended edits.'],
-          pou: ['Select Logical POUs and use the observed native create/edit command; choose PROGRAM, FUNCTION or FUNCTION_BLOCK and the required language.', 'For rename/delete, inspect references and task instances first. Obtain required deletion confirmation.', 'Verify both the logical POU and its task assignment after Save; never patch PROJECT.TRE to complete a UI operation.'],
+          pou: ['Prefer mw_ide_pou_change for blank ST create, copy, rename or delete through native COM. Use PROGRAM, FUNCTION_BLOCK or FUNCTION with explicit return_type for functions; copy/rename uses new_name.', 'For rename/delete inspect task, declaration, ST, graphical and indirect references. references_reviewed must cover them all; the automatic ST scan cannot prove graphical/indirect absence. Delete also requires user_approved.', 'Reconcile saved edits and require verification.accepted. Full before/after sources remain in evidence_path. Verify assignment and fresh Build/Make; never patch PROJECT.TRE or retry a partial action automatically. Use observed IDE commands only for unsupported operations/languages.'],
           graphical: ['Open the LD/FBD worksheet and inspect the actual Edit Wizard and installed library interface.', 'Insert contacts, coils, branches or FBs through native editor commands; observe pin names/directions before wiring.', 'Confirm connections and declarations visually; no arbitrary GB binary generation.'],
-          tasks: ['Inspect native task properties and current instance order before editing.', 'Create/assign/unassign through the observed Project Tree commands, or supported guarded IDE object-model tools.', 'Confirm exact resource, task, instance, cycle/priority and order; a clean compile does not prove an unassigned POU executes.'],
+          tasks: ['Prefer mw_ide_task_change for create/edit/delete/assign/unassign. Inspect native task properties and current instance order before editing; reconcile saved edits.', 'Edit settings_changes uses existing field names and native ImportSettingsFile, preserving other fields. Assignment requires PROGRAM; unassignment uses exact instance, which can differ from the POU name. Unassign/delete requires user_approved and deletion refuses a nonempty task.', 'Require verification.accepted and inspect evidence_path on failure. Confirm exact resource, task, instance, cycle/priority and order; run fresh Build/Make. A clean compile does not prove an unassigned POU executes.'],
           libraries: ['Inspect current library versions and dependent POUs first.', 'Use the native Libraries command to select the operator-approved local library and observe the imported interface.', 'Do not remove a referenced library or silently substitute another version; compile all consumers.'],
         };
         if (!instructions[args.operation]) throw new Error('Unknown IDE editing operation');

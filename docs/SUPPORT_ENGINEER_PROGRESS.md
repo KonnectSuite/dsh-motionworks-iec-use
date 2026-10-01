@@ -45,17 +45,39 @@ This is work in progress. Version 0.5.5 did not establish complete IDE control.
 
 ## Required remaining capability evidence
 
+Native structure follow-up: public POU PROGRAM create/rename/copy/delete passed
+with counts 7→8→8→9→8→7. Blank ST FUNCTION_BLOCK and FUNCTION (INT return type)
+create/delete passed. Function return types live in the PROJECT.TRE POU record;
+LIST.POU's third column is blank. All unrelated program streams, declarations,
+globals and tasks remained unchanged. Public task create/settings edit/assign/
+unassign/delete passed with counts 5→6→6→6→6→5. Settings changed interval to
+T#20ms and priority to 5, preserving watchdog and empty display fields. A distinct
+instance name was assigned and removed by that exact name. Native cross-reference
+Update/ExportToCsvFile also passed without source edits, producing a local CSV;
+this export is variable-reference evidence, not proof of every indirect call.
+After cleanup, fresh Build passed with an observed compile transition (4.8 s),
+compiled=true and modified=false; Make settled already up to date (2.3 s). The
+installed package exposes 53 definitions in a fresh module load and reads the
+same native inventory (7 POUs, 5 tasks). The running Arya host still needs reload.
+Structural plans are saved before mutation; full saved/native before/after
+evidence remains available even when a native operation fails partway through.
+
+POU rename/delete still requires reviewed graphical/indirect references: the ST
+token scan does not cover three LD POUs in this fixture. The evidence lists those
+POUs. Current live structure proofs use disposable, newly created unused POUs;
+do not generalize them to arbitrary populated or protected POU conversions.
+
 | Requirement | Evidence needed / current status |
 |---|---|
 | Startup and trial | Passed disposable launch; install reload still required |
 | Named worksheet navigation | Native code/local/global navigation passed; exact saved-tree URNs and active views verified in two POUs |
-| POU add/edit/delete | Native lifecycle with independent saved inventory and reference checks; incomplete |
+| POU add/edit/delete | Public native blank ST create/rename/copy/delete passed with independent saved/native inventory and collateral checks; populated/graphical conversions remain unverified |
 | Local/global/external variables | Public native add/edit/delete and full saved/native comparisons passed for all three scopes; group moves remain refused |
-| Tasks and POU assignment | Existing tools need complete live lifecycle verification for required operations |
+| Tasks and POU assignment | Public native create/settings edit/assign/exact-instance unassign/delete passed; controller-specific timing acceptance remains separate |
 | POU code editing | Deterministic native editor route, full saved body comparison and compilation; incomplete |
 | Toolbox and FB insertion | Installed interface/pin inspection, editor insertion/wiring, declaration and build verification; incomplete |
 | Support-engineering judgment | Version-aware reference lookup, engineering diagnosis and tested operation workflows; existing guidance alone is insufficient |
 
-Next implementation: native POU/task lifecycle, deterministic code editing, and
+Next implementation: deterministic code editing, populated POU workflows, and
 toolbox/FB insertion. Do not mark the support-engineer objective complete from
 startup, navigation, and declaration evidence alone.
