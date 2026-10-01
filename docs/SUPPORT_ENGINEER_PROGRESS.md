@@ -155,3 +155,12 @@ Installed help now confirms its Online: Debug assignment, and the skill forbids 
 Remaining acceptance: complete populated/graphical POU editing, observed graphical
 FB placement/wiring, and end-to-end tool use from Arya. The overall support-engineer
 goal remains active; neither a help reader nor ST FB compilation proves those flows.
+
+Deployment: help follow-up commit 6780d09 was pushed to main and installed as
+0.5.5, with 123 package files copied and hash-verified. A fresh installed module
+exposed 57 tools and its bundled Python helper successfully searched the installed
+Edit Wizard shortcut topic in the disposable session workspace. Backup:
+`Arya-restored-hotfix-20261001-183752-22c86879`. The currently visible Arya session
+showed disabled Send and inactive child agents before a reload attempt; Alt+F4 did
+not remove its window/process. Therefore the live host catalog/reload and an
+Arya-led operation remain unverified; no forced termination was performed.
