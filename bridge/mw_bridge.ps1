@@ -1399,6 +1399,38 @@ while ($true) {
                 $data=Get-NativeStructure $app
                 $ok=$true
             }
+            'code_mutate' {
+                $app=Connect-App
+                [void](Assert-StagedOpen $app $verb)
+                $project=[IO.Path]::GetFullPath([string]$req.project)
+                if([IO.Path]::GetFullPath($app.ActiveProject.FullName) -ine ($project+'.mwt') -or [bool]$app.ActiveProject.IsModified){throw 'REFUSED: wrong or unsaved project'}
+                $name=[string]$req.pou;$worksheet=[string]$req.worksheet
+                if($name -notmatch '^[A-Za-z_][A-Za-z0-9_]{0,29}$' -or $worksheet -notmatch '^[A-Za-z_][A-Za-z0-9_]{0,29}$'){throw 'REFUSED: unsupported native code identity'}
+                $target=$app.ActiveProject.Pous.Item($name)
+                if([bool]$target.ReadOnly -or [int]$target.PouLanguage -ne 2){throw 'REFUSED: code import requires writable ST POU'}
+                $now=Get-NativeStructure $app
+                if(($now | ConvertTo-Json -Depth 20 -Compress) -cne ($req.before_native | ConvertTo-Json -Depth 20 -Compress)){throw 'REFUSED: native baseline changed'}
+                Assert-VariableBaseline $req.before_declarations.variables (Get-VariableRows (Get-VariableSheet $app $name))
+                foreach($property in $req.before_files.PSObject.Properties){
+                    $file=[IO.Path]::GetFullPath((Join-Path $project $property.Name))
+                    if(-not $file.StartsWith($project.TrimEnd('\')+'\',[StringComparison]::OrdinalIgnoreCase)){throw 'REFUSED: source outside project'}
+                    Assert-NoLinkedPath $file
+                    $algorithm=[Security.Cryptography.SHA256]::Create()
+                    try{$hash=[BitConverter]::ToString($algorithm.ComputeHash([IO.File]::ReadAllBytes($file))).Replace('-','')}finally{$algorithm.Dispose()}
+                    if($hash -ine [string]$property.Value){throw 'REFUSED: saved code baseline changed'}
+                }
+                $inputFile=[IO.Path]::GetFullPath([string]$req.code_import_path)
+                $inputRoot=[IO.Path]::GetFullPath((Join-Path $script:WorkspaceRoot '.motionworks\native-input'))
+                if(-not $inputFile.StartsWith($inputRoot.TrimEnd('\')+'\',[StringComparison]::OrdinalIgnoreCase) -or $inputFile -match '["\r\n]'){throw 'REFUSED: invalid code input path'}
+                Assert-NoLinkedPath $inputFile
+                if([string]$req.input_text -match '[^\x09\x0a\x0d\x20-\x7e]' -or [IO.File]::ReadAllText($inputFile) -cne [string]$req.input_text){throw 'REFUSED: code input changed or unsupported encoding'}
+                $command='ChangeCodeWS '+$name+' ST '+$worksheet+' "'+$inputFile+'"'
+                $returnCode=$app.ExecuteDdeCommand($command)
+                if([int]$returnCode -ne 0){throw ('Native code import returned '+$returnCode+'; inspect state before another action')}
+                $app.ActiveProject.Save()
+                $data=[ordered]@{saved=$true;is_modified=[bool]$app.ActiveProject.IsModified;snapshot=(Get-NativeStructure $app);return_code=[int]$returnCode;method='native_dde_ChangeCodeWS'}
+                $ok=$true
+            }
             'structure_mutate' {
                 $app=Connect-App
                 [void](Assert-StagedOpen $app $verb)
@@ -1427,7 +1459,12 @@ while ($true) {
                         $types=@{PROGRAM=7;FUNCTION_BLOCK=6;FUNCTION=24}
                         $kind=if($req.pou_type){[string]$req.pou_type}else{'PROGRAM'}
                         if(-not $types.ContainsKey($kind)){throw 'REFUSED: invalid POU type'}
-                        [void]$pous.Create($name,[int]$types[$kind],2,[string]$req.return_type,'','')
+                        $created=$pous.Create($name,[int]$types[$kind],2,[string]$req.return_type,'','')
+                        # New native variable storage is lazy. Initialize it as
+                        # part of this authorized creation, before its Save,
+                        # so a later read does not dirty the new empty POU.
+                        [void]$created.Variables.Count
+                        [void]$created.Variables.Groups.Count
                     }else{
                         $target=$pous.Item($name)
                         if([bool]$target.ReadOnly){throw 'REFUSED: POU read-only'}

@@ -9,7 +9,7 @@ class Reader(unittest.TestCase):
         parent=S(name='Fn',path='POE\\Fn\t\t',line=1,children=[])
         document=S(warnings=[],lines=['24','params','Fn','POE\\Fn','INT'],walk_with_ancestors=lambda:[(parent,[])])
         table=S(warnings=[],variables=[])
-        pou=S(name='Fn',declarations=lambda:table,body_stream=lambda:('Fn.STB','ST'),st_body=lambda:'')
+        pou=S(name='Fn',directory=S(iterdir=lambda:[]),declarations=lambda:table,body_stream=lambda:('Fn.STB','ST'),st_body=lambda:'')
         project=S(list_pou_lines=lambda:['FUNCTION\tFn\t\t\tPT=1'],pous=lambda:[pou],global_variables=lambda:table)
         with patch('motionworks_iec_mcp.structure.Project',return_value=project),patch('motionworks_iec_mcp.structure.CompoundFile'),patch('motionworks_iec_mcp.structure.parse_document',return_value=document),patch('motionworks_iec_mcp.structure.read_tasks',return_value=[]),patch('motionworks_iec_mcp.structure.source_manifest',return_value={'streams':{},'files':{}}):
             result=snapshot(Path('fixture'))

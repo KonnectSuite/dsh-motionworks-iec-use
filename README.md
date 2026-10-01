@@ -9,6 +9,9 @@ computer-use MCP performs visible editor actions.
 download to controllers, force IO or command motion. Compilation is not proof of
 machine behavior, motion performance or functional safety.
 
+Use `mw_ide_code_change` for native ST body replacement with an exact saved
+body precondition, full code/comment read-back and collateral source checks.
+Follow its accepted verdict with fresh Build/Make.
 Use `mw_ide_variable_change` for native local/global/external add/edit/delete,
 with complete saved/native read-back checks. Use `mw_ide_open_worksheet` to open
 code or variables by exact saved tree identity and verify the active view. These
@@ -80,10 +83,11 @@ Example requests:
 | Source/declaration/task inspection and engineering guidance | Available; installed interfaces take precedence over historical FB references |
 | Native COM variable lifecycle and named worksheet navigation | Local/global/external add/edit/delete and code/local/global navigation passed in a disposable stage; see implementation status |
 | Native POU/task structure | Blank ST PROGRAM create/rename/copy/delete, FUNCTION_BLOCK/FUNCTION create/delete, task create/settings edit/assign/unassign/delete passed with saved/native and collateral source checks |
+| Native ST code editing | Public body replacement and clearing, exact comment read-back, stale-body refusal and fresh Build/Make passed on a disposable POU; printable ASCII input |
 | Native ST POU creation, local variable edits, existing-task assignment | Live IDE, saved readback and reopen evidence |
 | Global add/edit/remove with external consumer | Live compilation and removal/reopen persistence evidence |
 | Build/Make and approved persistence verification | Fresh compile evidence, exact identity and retained source-hash comparisons |
-| Populated/graphical POU changes and libraries | Reference review and broader live lifecycle acceptance still required; code/toolbox editor automation remains incomplete |
+| Populated/graphical POU changes and libraries | Reference review and broader live lifecycle acceptance still required; graphical/toolbox automation remains incomplete |
 | All FB/FU interfaces, high-speed motion, production behavior and safety | Not universally validated; project-specific engineering and supervised commissioning required |
 
 See [initial IDE smoke](docs/IDE_SMOKE_2026-10-01.md) and

@@ -79,8 +79,12 @@ entry points expecting an interactive IDE session.
 
 ## What this means for the plugin
 
-Import/export via COM is a **dead end** in this build, the same way `ExecuteCommand` is a
-stub. Do not build on it.
+The provider-based COM import/export routes above were not usable headlessly in
+these probes. Do not generalize this to every native entry point: the follow-up
+`ExecuteDdeCommand` route is independently proven for ST import. Prefer
+`mw_ide_code_change`, which guards its input/baseline and verifies native saved
+code/comments and collateral source. `ExecuteCommand` and `ExecuteDdeCommand`
+are separate interfaces.
 
 The practical routes that DO work, and what the plugin uses instead:
 
@@ -88,7 +92,9 @@ The practical routes that DO work, and what the plugin uses instead:
   the POU's own `src.st1` streams. No export needed.
 - **Reading globals** — `mw_code_globals` reads `Global_Variables.VB` (161+ declarations
   with type, group, IEC address and description).
-- **Writing a POU** — native IDE editors and project-tree commands. Offline POU,
+- **Writing ST code** — `mw_ide_code_change` uses native DDE ChangeCodeWS with
+  exact expected-body preconditions and full read-back; finish fresh Build/Make.
+- **Other POU edits** — native IDE editors and project-tree commands. Offline POU,
   variable and ST writers are retired. Inspect inherited externals if using a native
   copy/import, then Save All, read back, Build/Make and verify approved reopen.
 - **Cross-reference** — inspect the native IDE cross-reference and saved source.

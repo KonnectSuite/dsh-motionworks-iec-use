@@ -10,6 +10,11 @@
 
 ## 0.5.5
 
+- Add guarded native ST code import with exact expected-body preconditions,
+  whole-source baseline checks, native save and independent code/comment and
+  collateral read-back. Resolve ST comment references through worksheet
+  translation XML; include translation files in structural baseline hashes.
+
 - Add native POU create/copy/rename/delete and task create/edit/assign/unassign/
   delete, checking complete saved/native inventories, input source hashes and
   unrelated source preservation. Task edits use native ImportSettingsFile;

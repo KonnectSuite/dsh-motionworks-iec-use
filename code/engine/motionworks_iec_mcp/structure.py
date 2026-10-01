@@ -1,6 +1,7 @@
 """Independent saved structural/source evidence for native IDE mutations."""
 import hashlib
 import re
+import xml.etree.ElementTree as ET
 from .project import Project
 from .cfb import CompoundFile
 from .tree import parse_document, task_assignments
@@ -69,4 +70,19 @@ def snapshot(root):
     file_hashes=dict(manifest['files'])
     for setting in settings.values():
         file_hashes[setting.source.relative_to(root).as_posix()]=hashlib.sha256(setting.source.read_bytes()).hexdigest()
-    return dict(pous=pous,tasks=task_nodes,globals=global_rows,program_sources=program_sources,file_hashes=file_hashes)
+    translations={}
+    empty_translations=[]
+    for pou in project.pous():
+        for path in pou.directory.iterdir():
+            if path.name.casefold().endswith('translation.xml'):
+                key=path.relative_to(root).as_posix()
+                translations[key]=hashlib.sha256(path.read_bytes()).hexdigest()
+                file_hashes[key]=translations[key]
+                try:
+                    translation_document=ET.parse(path)
+                    if translation_document.getroot().tag=='TranslationDocument' and not translation_document.findall('./ItemList/item'):
+                        empty_translations.append(key)
+                except ET.ParseError:
+                    pass  # Older unused translation placeholders may be all zero bytes.
+    return dict(pous=pous,tasks=task_nodes,globals=global_rows,program_sources=program_sources,
+                translation_files=translations,empty_translation_files=empty_translations,file_hashes=file_hashes)

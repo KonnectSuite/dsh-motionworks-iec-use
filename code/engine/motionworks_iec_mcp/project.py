@@ -142,6 +142,19 @@ class PouInfo:
             return None
         return self.source().read_stream(found[0]).decode("latin1")
 
+    def st_body_text(self) -> str | None:
+        """Return readable ST, restoring comments from native translations."""
+        body = self.st_body()
+        if body is None or '\x07' not in body:
+            return body
+        from .st_comments import resolve_comments
+        worksheet = self.body_stream()[0][:-4]
+        matches = [p for p in self.directory.iterdir()
+                   if p.name.casefold() == (worksheet + 'Translation.xml').casefold()]
+        if len(matches) != 1:
+            raise ValueError('Native ST comment translation is absent or ambiguous')
+        return resolve_comments(body, matches[0])
+
     def summary(self) -> dict[str, object]:
         try:
             stream_names = self.stream_names()

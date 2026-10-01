@@ -3,7 +3,12 @@
 For supported operations, prefer native APIs: `mw_ide_open_worksheet` resolves
 the exact code/variable document; `mw_ide_variable_change` manages declarations;
 `mw_ide_pou_change` manages blank ST POU creation/copy/rename/delete; and
-`mw_ide_task_change` manages tasks, settings and exact program instances. These
+`mw_ide_task_change` manages tasks, settings and exact program instances.
+`mw_ide_code_change` replaces existing ST bodies through native ChangeCodeWS:
+read `mw_code_read_st`, supply exact `expected_body` and complete ASCII `code`,
+and reconcile/save before calling. It verifies code and native comment translations,
+declarations/flags, globals, tasks and other POU sources, retaining full evidence.
+These
 use the running IDE and verify saved/native results without mouse input. Require
 their accepted verdict, retain the verification report and finish Build/Make.
 The UI recipes below remain fallbacks for editor operations not yet automated.

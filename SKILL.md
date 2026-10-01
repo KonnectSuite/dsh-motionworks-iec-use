@@ -56,6 +56,16 @@ channel is not verified for concurrent independent harness processes.
 
 ## Default: code inside the MotionWorks IDE
 
+For an existing writable ST worksheet, prefer `mw_ide_code_change`. Read the
+current body with `mw_code_read_st`, supply it as exact `expected_body`, and pass
+the complete replacement `code` with `baseline_saved:true` only after native
+edits are reconciled/saved. This uses the native DDE ChangeCodeWS API, not
+keyboard input or a disk-source writer. Comments are resolved from the native
+translation XML for full saved read-back. Input currently supports printable
+ASCII plus tabs/newlines. Inspect `verification.accepted` and `evidence_path`,
+then fresh Build/Make. A failed or uncertain import requires inspection before
+another action. Graphical/IL/toolbox workflows still use observed native editors.
+
 Read `docs/IDE_FIRST_WORKFLOW.md` before editing. The companion KonnectSuite
 `computer-use-mcp` provides `computer` actions for screenshots, clicks, keys and typing.
 It is a separate MCP server: loading this Cordis plugin does NOT install or register it.
@@ -73,7 +83,7 @@ IDE or conclude it is closed. Report the API attach failure.
 
 After selecting/staging and opening (or attaching to) the exact project, use the IDE's editors for ST,
 code bodies, descriptions, LD/FBD and libraries when no verified native tool is
-available. Prefer the native declaration, POU and task tools above for their
+available. Prefer the native code, declaration, POU and task tools above for their
 supported operations; UI actions are the fallback. Do not edit native streams
 behind the open IDE. Preserve original code and inspect references before rename/delete.
 

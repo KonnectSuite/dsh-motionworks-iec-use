@@ -59,6 +59,7 @@ import { verifyAcceptance } from './verification.js';
 import { retainPlan, lookupPlan, requireVariableView } from './edit-session.js';
 import { nativeVariableChange } from './native-variables.js';
 import { nativeStructureChange } from './native-structure.js';
+import { nativeCodeChange } from './native-code.js';
 
 export const name = 'motionworks-iec-use';
 export const inject = ['tools'];
@@ -1302,6 +1303,41 @@ async function executeNativeStructure(scope,args) {
 }
 function defineTools() {
   return [
+    {
+      name:'mw_ide_code_change',
+      description:'Replace an existing writable ST worksheet through MotionWorks native ChangeCodeWS API. Requires exact expected_body from mw_code_read_st, reconciled saved baseline, and printable ASCII code. Retains the plan, guards complete saved/native source baselines, imports once, saves and verifies full code including comments, unchanged declarations/native flags, tasks, globals and other POUs. No mouse input, clipboard, disk source editing, controller action or automatic retry. Check verification.accepted, then fresh Build/Make. Graphical/IL edits are not supported by this tool.',
+      parameters:{type:'object',additionalProperties:false,required:['project','pou','baseline_saved','expected_body','code'],properties:{project:{type:'string'},pou:{type:'string'},baseline_saved:{type:'boolean'},expected_body:{type:'string'},code:{type:'string'}}},
+      output:{schema:{type:'object',additionalProperties:true,required:['pou','action_performed','method','native_result','verification','body','evidence_path','next_step']},render:(_a,v)=>text(JSON.stringify(v,null,2))},
+      execute:async args=>{
+        const project=projectOf(args),identity=await assertIdeProjectProven();
+        if(resolve(identity.active_project).replace(/\.mwt$/i,'').toLowerCase()!==project.toLowerCase())throw new Error('REFUSED: wrong open project');
+        const directory=join(workspaceRoot(),'.motionworks','verification');
+        if(!isInsideWorkspace(directory))throw new Error('REFUSED: linked evidence directory');
+        mkdirSync(directory,{recursive:true});
+        const evidence_path=join(directory,'native-code-'+randomUUID()+'.json');
+        let plan,result;
+        try{result=await nativeCodeChange(args,{
+          status:()=>verb('compile_state',{},30000),saved:()=>runCode('structure_snapshot',{project}),
+          snapshot:()=>verb('structure_snapshot',{},30000),read:()=>runCode('read_st',{project,pou:args.pou}),
+          document:async()=>({...await runCode('worksheet_target',{project,pou:args.pou,kind:'code'}),variable_worksheet:(await runCode('worksheet_target',{project,pou:args.pou,kind:'variables'})).urn.split('.').at(-1)}),
+          declarations:()=>verb('variable_snapshot',{pou:args.pou},30000),
+          prepare:async input_text=>{
+            const dir=join(workspaceRoot(),'.motionworks','native-input');
+            if(!isInsideWorkspace(dir))throw new Error('REFUSED: linked input directory');
+            mkdirSync(dir,{recursive:true});
+            const code_import_path=join(dir,randomUUID()+'.ST');
+            writeFileSync(code_import_path,input_text,{encoding:'ascii',flag:'wx'});
+            return {code_import_path};
+          },
+          retain:async record=>{plan=record;writeFileSync(evidence_path,JSON.stringify({phase:'plan_retained',...record},null,2),{encoding:'utf8',flag:'wx'});},
+          mutate:request=>verb('code_mutate',{...request,project},60000),
+        });}catch(error){if(plan)throw new Error(error.message+`; inspect native state and retained plan at ${evidence_path} before another action.`);throw error;}
+        if(!isInsideWorkspace(evidence_path))throw new Error('REFUSED: linked evidence file');
+        writeFileSync(evidence_path,JSON.stringify({phase:'result',plan,...result},null,2),'utf8');
+        const {baseline,saved_result,...summary}=result;
+        return {...summary,evidence_path};
+      },
+    },
     ...['pou','task'].map(scope=>({
       name:`mw_ide_${scope}_change`,
       description:scope==='pou'?

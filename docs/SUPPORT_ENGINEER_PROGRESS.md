@@ -74,10 +74,31 @@ do not generalize them to arbitrary populated or protected POU conversions.
 | POU add/edit/delete | Public native blank ST create/rename/copy/delete passed with independent saved/native inventory and collateral checks; populated/graphical conversions remain unverified |
 | Local/global/external variables | Public native add/edit/delete and full saved/native comparisons passed for all three scopes; group moves remain refused |
 | Tasks and POU assignment | Public native create/settings edit/assign/exact-instance unassign/delete passed; controller-specific timing acceptance remains separate |
-| POU code editing | Deterministic native editor route, full saved body comparison and compilation; incomplete |
+| POU code editing | Public native ST import/replacement/clear passed with exact saved code/comments, declaration/flag and collateral checks; stale-body refusal; fresh Build/Make passed. Printable ASCII input; graphical/IL routes remain incomplete |
 | Toolbox and FB insertion | Installed interface/pin inspection, editor insertion/wiring, declaration and build verification; incomplete |
 | Support-engineering judgment | Version-aware reference lookup, engineering diagnosis and tested operation workflows; existing guidance alone is insufficient |
 
-Next implementation: deterministic code editing, populated POU workflows, and
-toolbox/FB insertion. Do not mark the support-engineer objective complete from
-startup, navigation, and declaration evidence alone.
+Native code follow-up: `mw_ide_code_change` uses
+`ChangeCodeWS <POU> ST <worksheet> "<input path>"` through ExecuteDdeCommand.
+Parenthesized/bracketed command strings were rejected; the native parser expects
+space-separated arguments. The input is a private import file, not a modified
+native source stream. Native ST comments are references into the worksheet's
+translation XML, now resolved in readable source and included in baseline hashes.
+The public disposable workflow passed create, code/comment replacement, stale-body
+refusal, comment-only replacement, empty-body clearing and delete. Fresh Build
+while the code was present passed with observed compile transition (6.2 s),
+compiled=true and modified=false; Make settled up to date (2.2 s).
+New POU variable storage is initialized within creation before Save, preventing
+the next native variable read from unexpectedly dirtying a just-created POU.
+The full regression suite passes with 54 tool definitions. The running Arya host
+still needs reload before its catalog can be claimed current.
+The installed package was hash-verified (116 files), and a fresh installed module
+exposed all 54 tools. After test cleanup, it read the original 7 POUs/5 tasks;
+fresh Build passed (5.1 s) and Make settled up to date (2.2 s). Full program-stream
+and translation-file hashes were identical before/after this compilation.
+Evidence: `native-code-cleanup-build-500b088f-3051-40e8-b16c-a78ba8124e4f.json`
+in the disposable workspace's `.motionworks/verification` directory.
+
+Next implementation: populated POU workflows and toolbox/FB insertion, plus
+actual Arya host reload and end-to-end operation. Do not mark the support-engineer
+objective complete from native ST editing alone.

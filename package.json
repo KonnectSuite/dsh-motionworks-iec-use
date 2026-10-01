@@ -24,6 +24,7 @@
     "edit-session.js",
     "native-variables.js",
     "native-structure.js",
+    "native-code.js",
     "preflight.mjs",
     "SKILL.md",
     "README.md",
@@ -73,6 +74,8 @@
     "test/native_structure.mjs",
     "test/task_settings.py",
     "test/structure_reader.py",
+    "test/native_code.mjs",
+    "test/st_comments.py",
     "test/trial_dialog.ps1",
     "test/ide_ui_session.mjs",
     "!bridge/*.lock"

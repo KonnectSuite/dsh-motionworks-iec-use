@@ -110,7 +110,7 @@ def verb_read_st(req):
     body = None
     body_error = None
     try:
-        body = info.st_body()
+        body = info.st_body_text()
     except Exception as exc:
         body_error = str(exc)
 
