@@ -9,6 +9,16 @@ from .tasks import read_tasks
 from .program_checks import mask
 from .workflow import source_manifest
 
+# Exact native empty GB emitted by MotionWorks IEC 3 Pro / Ade 1.19.
+# Independently observed in two LD and two FBD creations. Unknown versions,
+# truncated bodies and populated bodies must not be inferred to be empty.
+EMPTY_GRAPH_SHA256 = '09985918e42e9108dd10f5d67cbafa125bd4938821c6c6efe160e735b49492bb'
+
+def body_is_blank(language, raw, text=None):
+    if language == 'ST':
+        return text is not None and not text.strip()
+    return language in ('LD', 'FBD') and len(raw) == 292 and hashlib.sha256(raw).hexdigest() == EMPTY_GRAPH_SHA256
+
 def snapshot(root):
     project=Project(root)
     document=parse_document(CompoundFile(root/'src.st1').read_stream('PROJECT.TRE').decode('latin1'))
@@ -39,7 +49,7 @@ def snapshot(root):
         return_type=document.lines[parents[0].line+3].strip() if kind=='FUNCTION' else ''
         if kind=='FUNCTION' and not return_type:raise ValueError('Missing function return type in saved tree')
         pous.append(dict(name=pou.name,type=kind,return_type=return_type,language=body_stream[1],
-                         body_sha256=hashlib.sha256(raw).hexdigest(),body_blank=body is not None and not body.strip(),
+                         body_sha256=hashlib.sha256(raw).hexdigest(),body_blank=body_is_blank(body_stream[1],raw,body),
                          variables=variables,identifiers=sorted(set(re.findall(r'[A-Za-z_][A-Za-z_0-9]*',mask(body or '').upper()))),
                          reference_scan_complete=body is not None))
     if len(pous)!=len(registry):raise ValueError('Missing registered POU source')

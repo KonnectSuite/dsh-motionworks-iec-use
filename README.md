@@ -89,7 +89,7 @@ Example requests:
 |---|---|
 | Source/declaration/task inspection and engineering guidance | Available; installed interfaces take precedence over historical FB references |
 | Native COM variable lifecycle and named worksheet navigation | Local/global/external add/edit/delete and code/local/global navigation passed in a disposable stage; see implementation status |
-| Native POU/task structure | Blank ST creation; populated ST copy/code edit/rename/delete; populated LD copy/rename/delete; task lifecycle passed with saved/native and collateral checks |
+| Native POU/task structure | Blank ST/FBD/LD creation; populated ST copy/code edit/rename/delete; populated LD copy/rename/delete; task lifecycle passed with saved/native and collateral checks. Functions need their input signature before compiling |
 | Native ST code editing | Public body replacement and clearing, exact comment read-back, stale-body refusal and fresh Build/Make passed on a disposable POU; printable ASCII input |
 | Native ST POU creation, local variable edits, existing-task assignment | Live IDE, saved readback and reopen evidence |
 | Global add/edit/remove with external consumer | Live compilation and removal/reopen persistence evidence |

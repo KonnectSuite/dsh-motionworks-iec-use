@@ -48,9 +48,15 @@ MotionWorks ST uses post-call assignments from instance output fields. The nativ
 FB insertion tool emits that form; do not substitute `=>` output arguments, which
 the live compiler rejected here. If compilation marks the project modified, save
 and independently compare source/translation hashes before accepting clean state.
-For POU structure use `mw_ide_pou_change`: create blank ST PROGRAM/FUNCTION_BLOCK/
-FUNCTION (explicit return_type for FUNCTION), copy, rename or delete. Copy/rename
-uses `new_name`. Reconcile saved edits and require `verification.accepted`.
+For POU structure use `mw_ide_pou_change`: create blank PROGRAM/FUNCTION_BLOCK/
+FUNCTION (explicit return_type for FUNCTION), copy, rename or delete. Creation
+accepts language ST (default), FBD or LD. Copy/rename uses `new_name` and retains
+the source language. Graphical creation requires the verified native empty body;
+unknown defaults fail verification. It does not place or wire graphical blocks.
+Reconcile saved edits and require `verification.accepted`.
+Blank FUNCTION creation is only a structural operation. Define its VAR_INPUT
+signature and return logic before Build/Make; the tested compiler rejects a
+function without VAR_INPUT declarations.
 Rename/delete requires references_reviewed, including graphical and indirect
 calls; the automatic ST scan cannot prove their absence. Delete also requires
 explicit user approval. Review task assignments and remaining type/call references.

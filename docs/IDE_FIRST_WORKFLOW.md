@@ -2,7 +2,7 @@
 
 For supported operations, prefer native APIs: `mw_ide_open_worksheet` resolves
 the exact code/variable document; `mw_ide_variable_change` manages declarations;
-`mw_ide_pou_change` manages blank ST POU creation/copy/rename/delete; and
+`mw_ide_pou_change` creates blank ST/FBD/LD POUs and manages copy/rename/delete; and
 `mw_ide_task_change` manages tasks, settings and exact program instances.
 `mw_ide_code_change` replaces existing ST bodies through native ChangeCodeWS:
 read `mw_code_read_st`, supply exact `expected_body` and complete ASCII `code`,
@@ -12,6 +12,16 @@ These
 use the running IDE and verify saved/native results without mouse input. Require
 their accepted verdict, retain the verification report and finish Build/Make.
 The UI recipes below remain fallbacks for editor operations not yet automated.
+
+For POU creation, set `language` to `ST`, `FBD` or `LD` (default `ST`).
+Copy retains the source language. FBD and LD share the `.GB` extension, so the
+reader uses the exact saved tree record to distinguish them. Graphical creation
+accepts only the native empty body observed on MotionWorks IEC 3 Pro / Ade 1.19;
+an unknown default fails verification. This does not insert or connect graphical
+blocks. Inspect retained evidence on failure before taking another action.
+Blank FUNCTIONs still need a VAR_INPUT signature and return logic. In the tested
+IDE, compiling a function without inputs reports `VAR_INPUT declaration missing!`.
+Use the native declaration tool to define the intended interface before compiling.
 
 ## Architecture and dependency
 

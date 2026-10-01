@@ -24,13 +24,16 @@ export function structurePlan(scope,args,saved,live){
   const plan={native,target,affected:[]};
   if(scope==='pou'){
     if(!['create','copy','rename','delete'].includes(op))throw new Error('Unknown POU operation');
+    if(op!=='create'&&args.language!==undefined)throw new Error('Language applies only to POU creation');
     if(op==='create'){
       if(target)throw new Error('POU already exists');
       const type=args.pou_type??'PROGRAM';
       if(!['PROGRAM','FUNCTION_BLOCK','FUNCTION'].includes(type))throw new Error('Unknown POU type');
       if(type==='FUNCTION'&&!identifier(args.return_type))throw new Error('Function requires a simple explicit return type');
       if(type!=='FUNCTION'&&args.return_type)throw new Error('Return type applies only to functions');
-      native.pous.push({name:args.name,type,language:2,plc_type:'',processor_type:'',read_only:false});
+      const language=args.language??'ST',languages={ST:2,FBD:3,LD:4};
+      if(!Object.hasOwn(languages,language))throw new Error('Unsupported POU language');
+      native.pous.push({name:args.name,type,language:languages[language],plc_type:'',processor_type:'',read_only:false});
       plan.affected=[args.name];
     }else{
       if(!target||target.read_only)throw new Error('POU missing or read-only');
@@ -119,7 +122,7 @@ export async function nativeStructureChange(scope,args,{status,saved,snapshot,mu
   }
   if(scope==='pou'){
     const created=byName(after.pous,args.operation==='create'?args.name:args.new_name);
-    if(args.operation==='create'&&(!created?.body_blank||created.variables.length||created.return_type!==(args.return_type??'')))errors.push('New POU defaults/return type not proven');
+    if(args.operation==='create'&&(!created?.body_blank||created.variables.length||created.return_type!==(args.return_type??'')||created.language!==(args.language??'ST')))errors.push('New POU language/defaults/return type not proven');
     if(['rename','copy'].includes(args.operation)){
       const old=byName(before.pous,args.name);
       if(!created||!same({...old,name:created.name},created))errors.push('Renamed/copied POU source differs from retained source');
@@ -135,5 +138,6 @@ export async function nativeStructureChange(scope,args,{status,saved,snapshot,mu
     if(expected&&!same(expected,actual?.settings))errors.push('Task settings differ from plan');
   }
   return {scope,operation:args.operation,action_performed:true,native_result:result,verification:{accepted:!errors.length,errors},
-    baseline:before,saved_result:after,expected_native:plan.native,next_step:errors.length?'STOP: inspect retained evidence; no automatic retry/repair.':'Run fresh Build/Make after intended edits.'};
+    baseline:before,saved_result:after,expected_native:plan.native,next_step:errors.length?'STOP: inspect retained evidence; no automatic retry/repair.':
+      scope==='pou'&&args.operation==='create'&&args.pou_type==='FUNCTION'?'Define the function VAR_INPUT interface and return logic before fresh Build/Make; a blank function is not a compiled implementation.':'Run fresh Build/Make after intended edits.'};
 }

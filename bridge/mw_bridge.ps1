@@ -1472,7 +1472,10 @@ while ($true) {
                         $types=@{PROGRAM=7;FUNCTION_BLOCK=6;FUNCTION=24}
                         $kind=if($req.pou_type){[string]$req.pou_type}else{'PROGRAM'}
                         if(-not $types.ContainsKey($kind)){throw 'REFUSED: invalid POU type'}
-                        $created=$pous.Create($name,[int]$types[$kind],2,[string]$req.return_type,'','')
+                        $languages=@{ST=2;FBD=3;LD=4}
+                        $language=if($req.language){[string]$req.language}else{'ST'}
+                        if(-not $languages.ContainsKey($language)){throw 'REFUSED: invalid POU language'}
+                        $created=$pous.Create($name,[int]$types[$kind],[int]$languages[$language],[string]$req.return_type,'','')
                         # New native variable storage is lazy. Initialize it as
                         # part of this authorized creation, before its Save,
                         # so a later read does not dirty the new empty POU.

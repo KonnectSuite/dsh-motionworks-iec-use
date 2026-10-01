@@ -83,8 +83,8 @@ class PouInfo:
     def body_stream(self) -> tuple[str, str] | None:
         """Return ``(stream_name, language)`` for the POU body.
 
-        Language is ``"ST"`` for a ``.STB`` stream and ``"LD"`` for a ``.GB``
-        (graphical ladder/FBD) stream.
+        Graphical streams share the .GB extension. Resolve LD/FBD from the
+        saved worksheet node; the extension alone cannot distinguish them.
         """
         streams = self.stream_names()
         for name in streams:
@@ -92,7 +92,18 @@ class PouInfo:
                 return name, "ST"
         for name in streams:
             if name.upper().endswith(".GB"):
-                return name, "LD"
+                from .tree import parse_document
+                root = self.directory.parent.parent
+                document = parse_document(CompoundFile(root / 'src.st1').read_stream('PROJECT.TRE').decode('latin1'))
+                expected = ('POE/' + self.name + '/' + name).casefold()
+                matches = [node for node, _ in document.walk_with_ancestors()
+                           if node.path.split('\t')[0].replace('\\', '/').casefold() == expected]
+                if document.warnings or len(matches) != 1:
+                    raise ValueError('Graphical worksheet tree identity absent or ambiguous')
+                # The leading record kind is 11=LD / 12=FBD. node_id is
+                # the separate, project-specific handle in the params line.
+                record_kind = document.lines[matches[0].start_line].strip()
+                return name, {'11': 'LD', '12': 'FBD'}.get(record_kind, 'GRAPHICAL')
         return None
 
     def language(self) -> str | None:

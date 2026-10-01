@@ -10,6 +10,13 @@
 
 ## 0.5.5
 
+- Add native blank FBD/LD creation for PROGRAM, FUNCTION_BLOCK and FUNCTION,
+  with explicit language selection and independent saved-language/default checks.
+- Distinguish FBD from LD using the saved graphical worksheet record, rather
+  than treating every `.GB` stream as ladder. Accept only the exact observed
+  native empty graphical body; unknown or populated bodies cannot pass as blank.
+- Explain the tested compiler's function input requirement and verify graphical
+  function declarations through the native variable API before Build/Make.
 - Verify populated ST copy/code edit/rename/delete and populated LD copy/rename/
   delete through native APIs, with fresh Build/Make and exact cleanup manifests.
 - Detect unrelated translation-file additions/deletions/changes and new unrelated

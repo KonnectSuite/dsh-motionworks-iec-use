@@ -71,7 +71,7 @@ do not generalize them to arbitrary populated or protected POU conversions.
 |---|---|
 | Startup and trial | Passed disposable launch; install reload still required |
 | Named worksheet navigation | Native code/local/global navigation passed; exact saved-tree URNs and active views verified in two POUs |
-| POU add/edit/delete | Public native blank ST create/rename/copy/delete passed with independent saved/native inventory and collateral checks; populated/graphical conversions remain unverified |
+| POU add/edit/delete | Native blank ST/FBD/LD creation and populated ST/LD lifecycles passed with independent saved/native inventory and collateral checks; graphical body editing/wiring remains unverified |
 | Local/global/external variables | Public native add/edit/delete and full saved/native comparisons passed for all three scopes; group moves remain refused |
 | Tasks and POU assignment | Public native create/settings edit/assign/exact-instance unassign/delete passed; controller-specific timing acceptance remains separate |
 | POU code editing | Public native ST import/replacement/clear passed with exact saved code/comments, declaration/flag and collateral checks; stale-body refusal; fresh Build/Make passed. Printable ASCII input; graphical/IL routes remain incomplete |
@@ -160,10 +160,12 @@ Deployment: help follow-up commit 6780d09 was pushed to main and installed as
 0.5.5, with 123 package files copied and hash-verified. A fresh installed module
 exposed 57 tools and its bundled Python helper successfully searched the installed
 Edit Wizard shortcut topic in the disposable session workspace. Backup:
-`Arya-restored-hotfix-20261001-183752-22c86879`. The currently visible Arya session
-showed disabled Send and inactive child agents before a reload attempt; Alt+F4 did
-not remove its window/process. Therefore the live host catalog/reload and an
-Arya-led operation remain unverified; no forced termination was performed.
+`Arya-restored-hotfix-20261001-183752-22c86879`. The visible Arya session
+showed disabled Send and inactive child agents before a reload attempt. Follow-up
+inspection found that Alt+F4 hid its window but left the process alive. Launching
+its installed app entry restored the same window/process, not a cold restart.
+The live host catalog/reload and an Arya-led operation remain unverified;
+no forced termination was performed.
 
 ## Populated POU acceptance and collateral verification
 
@@ -202,3 +204,38 @@ Build transition (4.7 s) and Make (2.3 s), compiled=true and modified=false.
 Complete source/translation and inventory comparisons passed before/after this
 compile. Evidence: `native-populated-cleanup-build.json`. The full regression suite
 passes with 57 definitions and 22 programming/reference tests.
+
+## Native graphical POU creation
+
+The public POU tool now accepts creation language ST (default), FBD or LD.
+MotionWorks IEC 3 Pro / Ade 1.19 created two independent blank PROGRAMs per
+graphical language with identical 292-byte GB bodies and SHA-256
+`09985918e42e9108dd10f5d67cbafa125bd4938821c6c6efe160e735b49492bb`.
+The saved reader now distinguishes the leading worksheet record kind (11 LD,
+12 FBD) from its project-specific node handle; a GB extension alone is insufficient.
+Graphical blank verification accepts only this exact observed body, not arbitrary
+short, zero-filled or unknown-version graphical streams. Unknown defaults fail
+verification and retain evidence for inspection.
+
+The complete public workflow passed for PROGRAM, FUNCTION_BLOCK and FUNCTION in
+both languages: six creations, exact saved/native language and blank-body checks,
+function input declarations through the native variable API, fresh Build (5.1 s),
+Make (2.2 s), and all six deletions. Complete original seven-POU inventories,
+five tasks, globals and program/translation manifests matched after cleanup.
+Evidence: `native-graph-creation-live-1375ce21-594c-4912-94c4-075bf76a0fc1.json`.
+The initially blank functions produced `VAR_INPUT declaration missing!`; adding
+the test signature natively resolved this. Creation remains a structural operation,
+not proof of function return behavior. Guidance now requires the intended interface
+and return logic before compiling. Regressions cover saved graphical identity,
+unknown bodies, unsupported languages and incorrect saved-language verification.
+The full regression suite passes with 57 tools. Graphical body editing/wiring and
+an end-to-end Arya-led operation remain open; the overall goal is not complete.
+
+The original seven POUs compiled after cleanup with fresh Build (4.8 s) and
+Make (2.2 s), compiled=true and modified=false. All program/translation hashes
+and inventories remained unchanged. Evidence: `native-graph-creation-cleanup-build.json`.
+Deployment copied and hash-verified all 123 package files as 0.5.5; backup:
+`Arya-restored-hotfix-20261001-192540-d941e40f`. A fresh installed module exposes
+57 tools with ST/FBD/LD creation and its installed helper correctly reads the
+three original LD POUs. This does not prove the current Arya process reloaded
+its tool catalog.
