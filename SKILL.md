@@ -338,6 +338,10 @@ is heuristic and must not be presented as a verified source revision.
 
 Call `mw_code_check_program` for existing ST or pass `pou` and proposed `body` before
 writing. Check scope/type/range findings, named FB arguments and task candidates.
+On the verified clean open project, set `installed_interfaces: true` to resolve
+vendor FBs from its bound installed libraries. For duplicate names select the
+intended library explicitly, e.g. `interface_libraries: { "TON": "IEC" }`.
+Installed ambiguity stays unresolved instead of falling back to an older manual.
 Read coverage and unresolved interfaces as well as error counts. A missing instance
 name match does not prove a program never runs. Preserve native task execution order;
 inspect actual bindings, startup/cyclic context and timing in the IDE. This advisory review supplements compiler acceptance and performs no automatic repairs.

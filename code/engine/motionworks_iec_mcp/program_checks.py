@@ -74,7 +74,9 @@ def expression_type(expr, types):
         if expr.upper() in ('TRUE', 'FALSE'): return 'BOOL'
         return types.get(expr.upper())
     typed = re.fullmatch(r'('+IDENT+r')#[A-Za-z_0-9.+-]+', expr)
-    if typed: return typed[1].upper()
+    if typed:
+        literal_type = typed[1].upper()
+        return {'T': 'TIME', 'D': 'DATE', 'TIME_OF_DAY': 'TOD', 'DATE_AND_TIME': 'DT'}.get(literal_type, literal_type)
     return None  # Untyped literals, conversions, arrays and compound expressions need compiler context.
 
 
@@ -136,11 +138,14 @@ def review(body, declarations, globals_text=None, *, signatures=None):
         variable = variables.get(instance.upper())
         if not variable: continue
         type_name = variable.type_name
-        spec = (signatures or {}).get(type_name.upper()) or signature(type_name)
+        # An explicit unresolved installed interface must not silently fall back
+        # to a historical signature for a different library revision.
+        key = type_name.upper()
+        spec = signatures[key] if signatures is not None and key in signatures else signature(type_name)
         if spec is None:
             unresolved.add(type_name); continue
         call_counts[instance.upper()] += 1
-        local = spec.get('authority') == 'project_declaration'
+        local = spec.get('authority') in ('project_declaration', 'bound_installed_declaration')
         severity = 'error' if local else 'warning'
         evidence = spec.get('citation') or reference('execute')
         pins = {n.upper(): (direction, norm(t)) for direction in ('inputs', 'outputs', 'inouts') for n, t in spec[direction].items()}
@@ -159,7 +164,7 @@ def review(body, declarations, globals_text=None, *, signatures=None):
             if (direction == 'outputs' and operator == ':=') or (direction != 'outputs' and operator == '=>'):
                 add('fb-parameter-direction', f'{instance}.{name} is {direction}; review {operator} binding.', 'execute', severity, line, evidence)
             actual = expression_type(expr, types)
-            if actual and actual != expected:
+            if actual and actual != expected and not expected.startswith('ANY'):
                 add('fb-parameter-type', f'{instance}.{name}: expected {expected}, found {actual}.', 'strict-types', severity, line, evidence)
             if direction == 'inouts' and (expr.upper() in ('TRUE', 'FALSE') or integer_literal(expr) is not None):
                 add('fb-inout-needs-variable', f'{instance}.{name} needs a compatible variable, not a constant.', 'execute', severity, line, evidence)
@@ -191,11 +196,36 @@ def task_review(programs, assignments, *, exact_bindings=False):
     return findings
 
 
-def check_project(root, *, pou=None, body=None):
+def interface_signature(interface):
+    """Keep the exact bound interface and source hashes in review citations."""
+    if interface.get('kind') != 'FUNCTION_BLOCK' or interface.get('hidden') or interface.get('evidence_kind') != 'installed-declared-block-interface':
+        raise ValueError('Requires a visible declared function-block interface')
+    spec = {key: {} for key in ('inputs', 'outputs', 'inouts')}
+    directions = {'input': 'inputs', 'output': 'outputs', 'in_out': 'inouts'}
+    seen = set()
+    for pin in interface['pins']:
+        key = pin['name'].upper()
+        if key in seen or pin['direction'] not in directions or not pin['type']:
+            raise ValueError('Ambiguous interface pin')
+        seen.add(key); spec[directions[pin['direction']]][pin['name']] = pin['type']
+    spec.update(complete=True, authority='bound_installed_declaration', citation={
+        key: interface[key] for key in ('library', 'binding', 'origin', 'source_file', 'source_stream',
+                                       'source_sha256', 'reference_registry', 'registry_sha256')})
+    return spec
+
+
+def check_project(root, *, pou=None, body=None, native_libraries=None, interface_libraries=None):
     from .project import Project
     root = Path(root)
     if root.suffix.lower() == '.mwt': root = root.with_suffix('')
     project = Project(root=root)
+    selected = {}
+    for name, library in (interface_libraries or {}).items():
+        if not re.fullmatch(IDENT, name) or not isinstance(library, str) or not re.fullmatch(IDENT, library) or name.upper() in selected:
+            raise ValueError('Invalid or duplicate interface library selector')
+        selected[name.upper()] = library
+    if selected and native_libraries is None:
+        raise ValueError('Interface library selection requires bound installed review')
     findings, coverage = [], []
     globals_text = None
     try:
@@ -217,6 +247,7 @@ def check_project(root, *, pou=None, body=None):
                 signatures[item.name.upper()] = {'inputs': pins['VAR_INPUT'], 'outputs': pins['VAR_OUTPUT'], 'inouts': pins['VAR_IN_OUT'],
                     'complete': True, 'authority': 'project_declaration', 'citation': {'path': str(item.source_path), 'section': 'native POU declaration', 'version_match': 'project_source'}}
         except Exception: continue
+    interface_coverage = {}
     for item in ([project.pou(pou)] if pou else project.pous()):
         try:
             if item.language() == 'IL':
@@ -227,6 +258,20 @@ def check_project(root, *, pou=None, body=None):
                 coverage.append({'pou': item.name, 'status': 'graphical_body_not_analyzed'}); continue
             cfb = item.source()
             declaration = next(n for n in cfb.stream_names() if n.upper().endswith('.VB'))
+            if native_libraries is not None:
+                from .block_interfaces import inspect
+                variables = {v.name.upper(): v for v in item.declarations().variables}
+                for instance, _, _ in calls(text):
+                    variable = variables.get(instance.upper())
+                    if not variable or variable.type_name.upper() in signatures: continue
+                    type_name = variable.type_name
+                    try:
+                        spec = interface_signature(inspect(root, native_libraries, type_name, selected.get(type_name.upper())))
+                        signatures[type_name.upper()] = spec
+                        interface_coverage[type_name.upper()] = {'type': type_name, 'status': 'bound_installed_interface', 'citation': spec['citation']}
+                    except Exception as exc:
+                        signatures[type_name.upper()] = None
+                        interface_coverage[type_name.upper()] = {'type': type_name, 'status': 'unresolved', 'error': str(exc)}
             report = review(text, cfb.read_stream(declaration).decode('latin1'), globals_text, signatures=signatures)
             findings.extend({**f, 'pou': item.name} for f in report['findings'])
             coverage.append({'pou': item.name, 'status': 'ST_reviewed', 'unresolved_signatures': report['unresolved_signatures']})
@@ -239,6 +284,8 @@ def check_project(root, *, pou=None, body=None):
         findings.extend(task_review(programs, assignments))
     except Exception as exc: coverage.append({'tasks': 'unresolved', 'error': str(exc)})
     return {'project': str(root), 'findings': findings, 'coverage': coverage,
+            'interface_resolution': 'bound_installed_requested' if native_libraries is not None else 'project_and_historical',
+            'installed_interfaces': list(interface_coverage.values()),
             'errors': sum(f['severity'] == 'error' for f in findings),
             'warnings': sum(f['severity'] == 'warning' for f in findings),
             'verification': 'static_review_only', 'automatic_changes': False,

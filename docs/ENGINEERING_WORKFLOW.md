@@ -6,6 +6,26 @@ It is an original engineering checklist, not a vendor-approved machine design.
 Items marked **Judgment** are our review criteria, not quoted Yaskawa requirements.
 Installed help and applicable controller/drive manuals determine actual interfaces.
 
+For ST FB diagnosis on the verified saved open project, run
+`mw_code_check_program` with `installed_interfaces: true`. Supply the target POU
+and proposed body to review a change before writing it. This resolves vendor FB
+pins from the project's native-bound installed firmware/toolbox declarations,
+retains source/registry hashes in findings, and keeps project-defined interfaces
+as the first authority. An absent or ambiguous installed interface is unresolved;
+it does not silently use an older manual's signature. Review `coverage`,
+`installed_interfaces` and `unresolved_signatures`, not just the error count.
+Without this option, vendor signatures remain historical advisory evidence.
+For duplicate installed names, choose the intended bound library explicitly
+with `interface_libraries`, for example `{ "TON": "IEC" }`. The installed IEC
+and eCLR catalogs can both expose TON. An unselected duplicate stays unresolved;
+the selector does not override a project-defined interface.
+
+Check the exact declaration and expression for every reported pin name, direction
+or type mismatch. IEC short literals such as `T#100ms` mean TIME. In-out pins
+need compatible variable storage. The review is read-only and is not a complete
+IEC compiler or machine-behavior proof. Use native guarded editing for the
+reviewed correction, then fresh Build/Make and full source preservation checks.
+
 ## Contents
 
 - [Authority and evidence](#authority-and-evidence)

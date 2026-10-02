@@ -753,3 +753,28 @@ translation files matched the retained baseline exactly. Evidence:
 `native-fbd-lifecycle-ed53b00f-1f61-469e-aa4f-a36a02591553.json`, phase cleaned,
 accepted=true. No controller action occurred. This proves one populated TON FBD
 lifecycle; arbitrary toolbox graphs and running Arya chat acceptance remain open.
+
+## Bound installed-interface engineering review
+
+`mw_code_check_program` now supports `installed_interfaces:true` on the verified
+clean open project. Vendor FB signatures come from its bound firmware parameter
+tables or toolbox declaration streams, with source/registry hashes in findings.
+Project-defined interfaces keep precedence. Failed or ambiguous installed
+resolution stays unresolved, without historical fallback. `interface_libraries`
+selects the intended bound library for duplicate names; IEC and eCLR both expose
+TON in the live fixture. TIME short literals and generic ANY pins no longer
+produce false exact-type mismatch findings.
+
+Live public acceptance created a disposable TON plus TON_Retentive ST POU.
+Read-only proposed calls exposed wrong pin names, BOOL/TIME mismatches and an
+in-out constant as errors with installed source citations. The initial harness
+stopped because unselected TON correctly remained ambiguous; it resumed only
+once the complete saved sources and corrected body matched the retained state.
+The selected IEC/Toolbox review then passed; the corrected calls had zero review
+errors and no unresolved interfaces. Native Build/Make compiled successfully.
+The erroneous proposed code was never written. Full before/after snapshots
+prove review made no source changes, and cleanup restored the original seven
+POUs, tasks, globals, source streams and translations before final Build/Make.
+Evidence: `native-engineering-eb30827d-3d21-4789-978f-04c6f1f60b2e.json`, phase
+cleaned, accepted=true. This is static diagnostic/compile acceptance, not proof
+of complete machine behavior or the already-running Arya chat's catalog.

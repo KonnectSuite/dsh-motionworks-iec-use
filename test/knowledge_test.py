@@ -105,6 +105,51 @@ class References(unittest.TestCase):
 
 
 class Programming(unittest.TestCase):
+    def test_installed_selector_validation_and_no_historical_fallback(self):
+        for selectors, libraries in [({'TON':'IEC'},None),({'TON':'IEC','ton':'eCLR'},[]),({'TON':'bad/path'},[])]:
+            with self.assertRaises(ValueError):
+                C.check_project(Path('fixture'),native_libraries=libraries,interface_libraries=selectors)
+        text='VAR\nfb:MC_Power;\nEND_VAR'
+        table=C.parse_declarations(text)
+        container=SimpleNamespace(stream_names=lambda:['Main.VB'],read_stream=lambda name:text.encode())
+        item=SimpleNamespace(name='Main',language=lambda:'ST',declarations=lambda:table,
+            st_body=lambda:'fb(Unknown:=TRUE);',source=lambda:container,source_path=Path('Main/src.st1'))
+        project=SimpleNamespace(pous=lambda:[item],pou=lambda name:item,
+            global_variables=lambda:SimpleNamespace(warnings=[],variables=[]),task_assignments=lambda:{})
+        with patch('motionworks_iec_mcp.project.Project',return_value=project), patch('motionworks_iec_mcp.block_interfaces.inspect',side_effect=ValueError('ambiguous')) as resolve:
+            report=C.check_project(Path('fixture'),pou='Main',native_libraries=[],interface_libraries={'mc_power':'Firmware'})
+        self.assertEqual(resolve.call_args.args[-1],'Firmware')
+        self.assertEqual(report['coverage'][0]['unresolved_signatures'],['MC_Power'])
+        self.assertEqual(report['installed_interfaces'][0]['status'],'unresolved')
+        self.assertFalse(any(f['code']=='unknown-fb-parameter' for f in report['findings']))
+
+    def test_bound_interface_authority_literals_and_unresolved(self):
+        interface = dict(name='Timer', kind='FUNCTION_BLOCK', hidden=False,
+            evidence_kind='installed-declared-block-interface', pins=[
+                dict(name='IN',type='BOOL',direction='input'),
+                dict(name='PT',type='TIME',direction='input'),
+                dict(name='Q',type='BOOL',direction='output')],
+            library='IEC',binding='saved_implicit_reference',origin='firmware_parameter_table',
+            source_file='tmp.sto',source_stream='Timer.PT',source_sha256='bodyhash',
+            reference_registry='IEC.POU',registry_sha256='registryhash')
+        spec=C.interface_signature(interface)
+        declarations='VAR\nfb:Timer;\nrun:BOOL;\nEND_VAR'
+        good=C.review('fb(IN:=run, PT:=T#100ms);',declarations,signatures={'TIMER':spec})
+        self.assertFalse(good['findings'])
+        bad=self.codes('fb(PT:=run, Wrong:=TRUE);',declarations,signatures={'TIMER':spec})
+        for code in ('unknown-fb-parameter','fb-parameter-type'):
+            self.assertEqual(bad[code]['severity'],'error')
+            self.assertEqual(bad[code]['reference']['source_sha256'],'bodyhash')
+        unresolved=C.review('fb(Enable:=TRUE);','VAR\nfb:MC_Power;\nEND_VAR',signatures={'MC_POWER':None})
+        self.assertEqual(unresolved['unresolved_signatures'],['MC_Power'])
+        self.assertFalse(unresolved['findings'])
+        self.assertEqual(C.expression_type('D#2026-10-01',{}),'DATE')
+        self.assertEqual(C.expression_type('TIME#100ms',{}),'TIME')
+        any_spec={**spec,'inputs':{'Value':'ANY'}}
+        self.assertNotIn('fb-parameter-type',self.codes('fb(Value:=run);',declarations,signatures={'TIMER':any_spec}))
+        with self.assertRaises(ValueError): C.interface_signature({**interface,'hidden':True})
+        with self.assertRaises(ValueError): C.interface_signature({**interface,'pins':interface['pins']+[interface['pins'][0]]})
+
     def test_session_failures_are_candidates_not_repairs(self):
         for message in ['File error!: (POE\\Main\\MainV.vbc)',
                         'Internal error! MSILv2ResManager.cpp(1048)',

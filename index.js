@@ -2825,12 +2825,24 @@ function defineTools() {
     },
     {
       name: 'mw_code_check_program',
-      description: 'Read-only source-linked programming review: external/global scope and types, integer bounds, named function-block pin direction/types, and task-binding candidates. Pass pou and body to check proposed ST before writing; omit them to review existing ST POUs. Project-defined interfaces take precedence over historical vendor signatures. Reports unresolved library and graphical coverage; does not replace the compiler or modify files.',
+      description: 'Read-only source-linked programming review: external/global scope and types, integer bounds, named function-block pin direction/types, and task-binding candidates. Pass pou and body to check proposed ST before writing; omit them to review existing ST POUs. Set installed_interfaces:true for the verified clean open project: resolves vendor FBs from its native-bound installed libraries with exact source hashes; unresolved/ambiguous interfaces stay unresolved instead of falling back to historical signatures. Project-defined interfaces take precedence. Without this option vendor signatures are historical advisories. Reports library and graphical coverage; does not replace the compiler or modify source.',
       parameters: { type: 'object', additionalProperties: false, properties: {
-        project: { type: 'string' }, pou: { type: 'string' }, body: { type: 'string' },
+        project: { type: 'string' }, pou: { type: 'string' }, body: { type: 'string' }, installed_interfaces: { type: 'boolean' },
+        interface_libraries: {type:'object',description:'Explicit type-to-library selection for duplicate installed FB names, e.g. {TON: "IEC"}. Requires installed_interfaces:true; project-defined interfaces still take precedence.',additionalProperties:{type:'string'}},
       } },
       output: { schema: WRITE_SCHEMA, render: renderWrite },
-      execute: (args) => runCode('check_program', { ...(args ?? {}), project: projectOf(args) }),
+      execute: async (args) => {
+        const project=projectOf(args),request={...(args??{}),project};
+        if(args?.installed_interfaces===true){
+          const identity=await assertIdeProjectProven();
+          if(resolve(identity.active_project).replace(/\.mwt$/i,'').toLowerCase()!==project.toLowerCase())throw Error('REFUSED: wrong open project');
+          if((await verb('compile_state',{},30000)).is_modified!==false)throw Error('Reconcile/save native edits before installed-interface review');
+          const snapshot=await verb('library_snapshot',{},30000);
+          if(!Array.isArray(snapshot.libraries))throw Error('REFUSED: native library inventory unavailable');
+          request.native_libraries=snapshot.libraries;
+        }
+        return runCode('check_program',request);
+      },
     },
     {
       name: 'mw_code_diagnose',
