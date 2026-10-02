@@ -520,3 +520,36 @@ routes present and variable guide returned. Evidence is
 `arya-electron-plugin-load.json` in the parent workspace. Installed files were
 hash-verified (131 files); backup `Arya-restored-hotfix-20261001-214336-3e88a652`.
 This is an independent host-runtime import, not a reload of the active chat.
+
+### Graphical symbol identities and UI boundary (2026-10-01)
+
+A fresh target selection and screenshot recovery still failed with
+`FrameArrived timed out: timed out waiting on channel`, then
+`window capture timed out`. Accessibility exposes panes and toolbox controls,
+but clicking the observed toolbox dropdown returned
+`coordinate input geometry is unavailable`. Only Alt menu activation was sent;
+no canvas input, document text, placement or wiring was attempted.
+
+The compiler reader now maps implicit local `@IV` declaration ordinals and
+`@IFB` instance ordinals, checks complete compiler declaration names/scopes
+against the saved worksheet, and rejects duplicate ordinals/names/bindings.
+`@IFBP` operands expose the known instance and raw pin ordinal while leaving
+the pin declaration unresolved. No pin names, runtime behavior or canvas
+geometry are inferred. Unknown external bindings remain unresolved.
+
+All three original ladder POUs passed the public fresh-Build listing route
+with unchanged source/declaration/task/global/translation baselines. Evidence:
+`graphical-symbol-ordinals-live.json` in the disposable verification directory.
+ServoTaskSlow has 11 bindings and 5 networks, ServoHoming 47 bindings and 25
+networks, and EIP_ToCLX 20 bindings and 10 networks. The complete automated
+60-tool suite passes, including missing/ambiguous declaration checks.
+
+The additional disposable FBD probe stopped before conversion when native
+`pou_package_snapshot` timed out (30 seconds); it was not retried. Inspection
+confirmed the probe was still ST and the native project was saved. Explicit
+unassignment/deletion succeeded; the original seven-POU source baseline matched
+exactly, and fresh Build/Make returned compiled and unmodified. Evidence:
+`public-conversion-live-98efd4ac-59fa-4f52-8e36-ad10344ab8cf.json` and
+`graphical-symbol-fbd-probe-cleanup.json`. New FBD symbol annotations remain
+unverified live. Graphical canvas control and active Arya-chat acceptance remain
+outstanding; the full support-engineer goal stays active.

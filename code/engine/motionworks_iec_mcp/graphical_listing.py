@@ -8,7 +8,8 @@ import re
 from pathlib import Path, PureWindowsPath
 
 HEADER = re.compile(r'\A\(\*\s*T: (PROGRAM|FUNCTION_BLOCK|FUNCTION) ([A-Za-z_][A-Za-z_0-9]*)\s', re.S)
-SYMBOL = re.compile(r'@(RV|IV) (\d+)(?!\d)')
+SYMBOL = re.compile(r'@IFBP (\d+)\.(\d+)(?![\d.])|@(RV|IV|IFB) (\d+)(?!\d)')
+DECLARATION = re.compile(r'^([A-Za-z_][A-Za-z_0-9]*)\t(\d+)\t(VAR[A-Z_]*)\t([^\r\n]+)\r?\n([^;]*);', re.M)
 MAX_BYTES = 2_000_000
 
 
@@ -32,16 +33,35 @@ def identity(text):
     return match.groups()
 
 
-def symbols(text):
-    result = {}
-    # A declaration name/ordinal/section/type is followed by its compiler token.
-    pattern = re.compile(r'^([A-Za-z_][A-Za-z_0-9]*)\t\d+\t(VAR[A-Z_]*)\t[^\r\n]+\r?\n@(RV|IV) (\d+)(?:\s|$)', re.M)
-    for match in pattern.finditer(text):
-        name, section, kind, number = match.groups()
-        key = '@' + kind + ' ' + number
-        if key in result and result[key]['name'] != name:
+def symbols(text, saved=None):
+    result, rows, ordinals, names = {}, [], set(), set()
+    def bind(token, row):
+        if token in result and result[token] != row:
             raise ValueError('Ambiguous compiler symbol')
-        result[key] = dict(name=name, section=section)
+        result[token] = row
+    for match in DECLARATION.finditer(text):
+        name, ordinal, section, type_token, detail = match.groups()
+        if ordinal in ordinals or name.casefold() in names or int(ordinal) < 1:
+            raise ValueError('Ambiguous compiler declaration ordinal/name')
+        ordinals.add(ordinal); names.add(name.casefold())
+        row = dict(name=name, section=section)
+        rows.append((name, section))
+        explicit = re.findall(r'^@(RV|IV) (\d+)(?:\s|$)', detail, re.M)
+        if len(explicit) > 1:
+            raise ValueError('Ambiguous compiler declaration token')
+        if explicit:
+            kind, number = explicit[0]
+            bind('@' + kind + ' ' + number, row)
+        elif section in ('VAR', 'VAR_INPUT', 'VAR_OUTPUT', 'VAR_IN_OUT', 'VAR_TEMP'):
+            # Local operands use the declaration ordinal. FB instances use the
+            # same ordinal under IFB; the type ID remains raw compiler evidence.
+            if re.fullmatch(r'@FB:\d+\s*', type_token):
+                bind('@IFB ' + ordinal, row)
+            elif re.match(r'@TYP:\d+(?:\s|$)', type_token):
+                bind('@IV ' + ordinal, row)
+    if saved is not None:
+        if sorted(rows) != sorted((v.name, v.section) for v in saved):
+            raise ValueError('Compiler declarations differ from saved worksheet')
     return result
 
 
@@ -65,7 +85,12 @@ def networks(text, bindings):
             refs = []
             for match in SYMBOL.finditer(line):
                 token = match.group()
-                refs.append(dict(token=token, declaration=bindings.get(token), resolved=token in bindings))
+                if match.group(1) is not None:
+                    instance = bindings.get('@IFB ' + match.group(1))
+                    refs.append(dict(token=token, declaration=None, resolved=False,
+                                     instance=instance, pin_ordinal=int(match.group(2))))
+                else:
+                    refs.append(dict(token=token, declaration=bindings.get(token), resolved=token in bindings))
             current.append(dict(raw=line, symbols=refs))
     if current is not None:
         raise ValueError('Truncated compiler network')
@@ -102,7 +127,10 @@ def inspect(project, name, start=1, limit=10, *, source_only=False):
     # Compiler Windows paths are compared as paths even in portable unit tests.
     if paths and any(PureWindowsPath(p) != PureWindowsPath(expected_file) for p in paths):
         raise ValueError('Compiler source mapping points to another project/worksheet')
-    bindings = symbols(declarations)
+    table = pou.declarations()
+    if table.warnings:
+        raise ValueError('Saved declaration worksheet is incomplete')
+    bindings = symbols(declarations, table.variables)
     parsed = [] if source_only else networks(code, bindings)
     if source_only and not paths:
         raise ValueError('Compiled source has no worksheet mapping')

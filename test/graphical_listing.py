@@ -1,11 +1,12 @@
 import sys, tempfile, unittest
 from pathlib import Path
 from unittest.mock import patch
+from types import SimpleNamespace
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]/'code'/'engine'))
 from motionworks_iec_mcp.graphical_listing import inspect, networks, symbols
 
 CODE='(*\nT: PROGRAM Main\nCI#: 1\n*)\n\t@NETWORK_BEGIN\n@BPV 1 4 0\tLD\t@IV 1\n@BPV 1 5 0\tST\t@RV 2\n\t@NETWORK_END\n'
-DIT='(*\nT: PROGRAM Main\n*)\nInput\t1\tVAR\t@TYP:1\n@IV 1\n\nOutput\t2\tVAR_EXTERNAL\t@TYP:1\n@RV 2\n'
+DIT='(*\nT: PROGRAM Main\n*)\nInput\t1\tVAR\t@TYP:1\n@IV 1\n;\n\nOutput\t2\tVAR_EXTERNAL\t@TYP:1\n@RV 2\n;\n'
 class Listing(unittest.TestCase):
     def test_networks_annotations_unknowns_and_truncation(self):
         parsed=networks(CODE,symbols(DIT))
@@ -13,6 +14,21 @@ class Listing(unittest.TestCase):
         self.assertFalse(networks(CODE.replace('@IV 1','@IV 9'),symbols(DIT))[0]['lines'][0]['symbols'][0]['resolved'])
         for bad in [CODE.replace('@NETWORK_END',''),CODE.replace('@NETWORK_BEGIN',''),CODE.replace('@NETWORK_BEGIN','@NETWORK_BEGIN\n@NETWORK_BEGIN')]:
             with self.assertRaises(ValueError):networks(bad,{})
+    def test_implicit_local_and_fb_instances_keep_pin_names_unknown(self):
+        dit = 'Local\t10\tVAR\t@TYP:11\n\t\n;\nTimer\t3\tVAR\t@FB:76\n\n;\n'
+        bindings = symbols(dit)
+        self.assertEqual(bindings['@IV 10']['name'], 'Local')
+        self.assertEqual(bindings['@IFB 3']['name'], 'Timer')
+        code = CODE.replace('@IV 1', '@IFBP 3.2').replace('@RV 2', '@IFB 3')
+        pin, call = [line['symbols'][0] for line in networks(code, bindings)[0]['lines']]
+        self.assertFalse(pin['resolved']);self.assertEqual(pin['instance']['name'],'Timer')
+        self.assertEqual(pin['pin_ordinal'],2);self.assertTrue(call['resolved'])
+        with self.assertRaisesRegex(ValueError,'ordinal/name'):symbols(dit+dit)
+        with self.assertRaisesRegex(ValueError,'saved worksheet'):
+            symbols(dit,[SimpleNamespace(name='Wrong',section='VAR')])
+        # No ordinal fallback for an external without its resource binding.
+        self.assertEqual(symbols('Outside\t1\tVAR_EXTERNAL\t@TYP:1\n\n;\n'), {})
+
     def fixture(self, root):
         directory=root/'C'/'Configuration'/'R'/'Resource';directory.mkdir(parents=True)
         path=directory/'ICI00001.CIC';path.write_text(CODE)
@@ -22,6 +38,7 @@ class Listing(unittest.TestCase):
         class Pou:
             name='Main'
             def body_stream(self):return ('Main.GB','LD')
+            def declarations(self):return SimpleNamespace(warnings=[],variables=[SimpleNamespace(name='Input',section='VAR'),SimpleNamespace(name='Output',section='VAR_EXTERNAL')])
         class Project:
             def pou(self,name):return Pou()
         project=Project();project.root=root
