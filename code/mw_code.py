@@ -414,33 +414,23 @@ def verb_pou_delete(req):
 
 
 def verb_tasks(req):
-    """List task instances in native execution order; unmatched names need review."""
-    from motionworks_iec_mcp.cfb import CompoundFile
-    from motionworks_iec_mcp.tree import load_tree, task_assignments
-
+    """List exact saved instance/type bindings and settings in native order."""
+    from motionworks_iec_mcp.task_bindings import inspect
     root = Path(req["project"])
-    roots = load_tree(root)[0]
-    assignments = task_assignments(roots)
-
-    # Which POUs exist at all, from the registry, so "unassigned" can be computed.
-    known = []
-    for line in (root / "LIST.POU").read_text(encoding="latin-1", errors="replace").splitlines():
-        parts = line.split("\t")
-        if len(parts) > 1 and parts[0].strip().upper() == "PROGRAM" and parts[1].strip():
-            known.append(parts[1].strip())
-    assigned = {p for programs in assignments.values() for p in programs}
-
+    report = inspect(root)
+    duplicate_names=len({t['name'].casefold() for t in report['bindings']})!=len(report['bindings'])
+    assignments={t['path'] if duplicate_names else t['name']:[x['name'] for x in t['instances']] for t in report['bindings']}
     return _ok(
         project=str(root),
         tasks={k: list(v) for k, v in assignments.items()},
         task_count=len(assignments),
-        unassigned=sorted(set(known) - assigned),
+        unassigned=report['unassigned'],bindings=report['bindings'],
+        binding_resolution=report['binding_resolution'],source_hashes=report['source_hashes'],
         unassigned_note=(
-            "Candidates based on program and instance names, which may differ. "
-            "Confirm the program type and indirect calls before concluding a program is unused. "
-            "Task entries retain native tree execution order. Task assignment writing remains refused."
+            "PROGRAM types without direct saved task instances; instance names are resolved to their types. "
+            "Indirect calls and current unsaved IDE state still require inspection. This does not prove runtime execution."
         ),
-        next_step="Inspect task bindings in the IDE and confirm the intended cyclic or startup execution context.",
+        next_step="Compare mw_code_task_model for the live IDE state. Use mw_ide_task_change for authorized native assignment/settings changes; then verify saved bindings and fresh Build/Make.",
     )
 
 

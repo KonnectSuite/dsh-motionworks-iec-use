@@ -778,3 +778,24 @@ POUs, tasks, globals, source streams and translations before final Build/Make.
 Evidence: `native-engineering-eb30827d-3d21-4789-978f-04c6f1f60b2e.json`, phase
 cleaned, accepted=true. This is static diagnostic/compile acceptance, not proof
 of complete machine behavior or the already-running Arya chat's catalog.
+
+## Exact saved task ownership and timing context
+
+`mw_code_tasks` and programming review now resolve each saved task instance to
+its registered PROGRAM type instead of comparing type names to instance names.
+The task result includes configuration/resource identity, native instance order,
+cycle kind and exact SET fields (interval, priority and watchdog), plus source
+hashes and changed-during-read refusal. Tree warnings, unknown program types,
+duplicate identities and task/settings mismatches cannot claim exact ownership.
+The obsolete instruction that task assignment is refused was replaced with the
+public guarded `mw_ide_task_change` workflow. Saved ownership remains distinct
+from current unsaved IDE state, indirect calls and runtime execution.
+
+Read-only public acceptance compared all five saved tasks to the live native
+COM task model, including a differently named instance. Names, types, order,
+cycle kinds and complete settings agreed. No original PROGRAM is without a
+direct task assignment. The former instance-name heuristic falsely reported
+EIP_ToCLX; that warning is absent from the new programming review. Complete
+before/after POU, task, global, program-stream and translation snapshots match.
+Evidence: `native-task-ownership-cec2827e-382a-4bfc-9e3d-e46842d4588b.json`,
+phase accepted, accepted=true. No IDE source or controller mutation occurred.

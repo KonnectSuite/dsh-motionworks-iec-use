@@ -83,6 +83,16 @@ Capture baseline compiler messages and source manifests; preserve unrelated edit
 
 ## Tasks and function blocks
 
+Use `mw_code_tasks` for exact saved PROGRAM instance-to-type bindings and native
+order, with configuration/resource, cycle kind, interval, priority and watchdog
+settings. An instance name can differ from its PROGRAM type. Compare
+`mw_code_task_model` for the live IDE state; reconcile unsaved changes before
+using saved ownership. `unassigned` identifies types with no direct saved task
+instance, not code proven unused: indirect calls and runtime execution need
+separate evidence. `mw_code_check_program` uses these exact saved bindings for
+its task review. Use `mw_ide_task_change` for authorized native settings and
+assignment operations, then verify saved/live bindings and fresh Build/Make.
+
 **Judgment:** inventory actual resource/task bindings, instance order, startup versus
 cyclic execution, period, priority and watchdog. A PROGRAM that is unassigned or
 never called may not be checked/executed as expected. Compare native task model with

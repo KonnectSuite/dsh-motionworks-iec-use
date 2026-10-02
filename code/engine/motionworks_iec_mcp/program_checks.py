@@ -191,7 +191,7 @@ def task_review(programs, assignments, *, exact_bindings=False):
     for program in programs:
         if program.casefold() not in assigned:
             findings.append({'code': 'program-task-binding-review', 'severity': 'warning',
-                'message': f'{program} has no matching task entry; confirm program type versus instance name and indirect calls.',
+                'message': (f'{program} has no direct PROGRAM instance in the saved task tree; inspect indirect calls and current IDE state.' if exact_bindings else f'{program} has no matching task entry; confirm program type versus instance name and indirect calls.'),
                 'reference': reference('task-order'), 'binding_resolution': 'exact' if exact_bindings else 'instance_names_only'})
     return findings
 
@@ -277,11 +277,11 @@ def check_project(root, *, pou=None, body=None, native_libraries=None, interface
             coverage.append({'pou': item.name, 'status': 'ST_reviewed', 'unresolved_signatures': report['unresolved_signatures']})
         except Exception as exc: coverage.append({'pou': item.name, 'status': 'unresolved', 'error': str(exc)})
     try:
-        assignments = project.task_assignments()
-        registry = root / 'LIST.POU'
-        programs = [line.split('\t')[1] for line in registry.read_text(encoding='latin1').splitlines()
-                    if line.startswith('PROGRAM\t') and len(line.split('\t')) > 1]
-        findings.extend(task_review(programs, assignments))
+        from .task_bindings import inspect
+        task_bindings = inspect(root)
+        assignments = {task['path']: [x['type'] for x in task['instances']] for task in task_bindings['bindings']}
+        findings.extend(task_review(task_bindings['program_types'], assignments, exact_bindings=True))
+        coverage.append({'tasks': 'exact_saved_tree', 'bindings': task_bindings['bindings'], 'source_hashes': task_bindings['source_hashes']})
     except Exception as exc: coverage.append({'tasks': 'unresolved', 'error': str(exc)})
     return {'project': str(root), 'findings': findings, 'coverage': coverage,
             'interface_resolution': 'bound_installed_requested' if native_libraries is not None else 'project_and_historical',
@@ -289,4 +289,4 @@ def check_project(root, *, pou=None, body=None, native_libraries=None, interface
             'errors': sum(f['severity'] == 'error' for f in findings),
             'warnings': sum(f['severity'] == 'warning' for f in findings),
             'verification': 'static_review_only', 'automatic_changes': False,
-            'limitations': ['No arbitrary LD/FBD analysis', 'No IL static syntax/semantic review; require native compilation', 'No complete IEC type inference', 'Task instance names may differ from program types', 'Historical vendor signatures require installed-version confirmation']}
+            'limitations': ['No arbitrary LD/FBD analysis', 'No IL static syntax/semantic review; require native compilation', 'No complete IEC type inference', 'Saved task ownership is not runtime execution proof', 'Historical vendor signatures require installed-version confirmation']}

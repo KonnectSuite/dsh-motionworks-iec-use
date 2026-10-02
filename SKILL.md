@@ -343,8 +343,11 @@ vendor FBs from its bound installed libraries. For duplicate names select the
 intended library explicitly, e.g. `interface_libraries: { "TON": "IEC" }`.
 Installed ambiguity stays unresolved instead of falling back to an older manual.
 Read coverage and unresolved interfaces as well as error counts. A missing instance
-name match does not prove a program never runs. Preserve native task execution order;
-inspect actual bindings, startup/cyclic context and timing in the IDE. This advisory review supplements compiler acceptance and performs no automatic repairs.
+name match does not prove a program never runs. `mw_code_tasks` resolves the exact
+saved instance-to-PROGRAM-type ownership and exposes task settings and native
+order; compare `mw_code_task_model` for live IDE state. Preserve execution order
+and inspect startup/cyclic context and timing. This advisory review supplements
+compiler acceptance and performs no automatic repairs.
 
 Pass exact diagnostic text to `mw_code_diagnose`. Its documented causes are candidates,
 not diagnoses proven by the message alone. Correlate with source locations, types,

@@ -26,6 +26,7 @@ const commands = [
   [i.pythonExe(), ['-B', 'test/workspace_engine.py']],
   [i.pythonExe(), ['-B', 'test/navigation_target.py']],
   [i.pythonExe(), ['-B', 'test/task_settings.py']],
+  [i.pythonExe(), ['-B', 'test/task_bindings.py']],
   [i.pythonExe(), ['-B', 'test/structure_reader.py']],
   [i.pythonExe(), ['-B', 'test/st_comments.py']],
   [i.pythonExe(), ['-B', 'test/block_interfaces.py']],

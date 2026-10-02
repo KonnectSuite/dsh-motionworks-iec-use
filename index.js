@@ -3607,7 +3607,7 @@ function defineTools() {
         + 'the IDE wrote at the last save; this is what the IDE holds in memory now, so when the '
         + 'two agree the assignment is both made and saved. Each task reports its name, its cycle '
         + '(DEFAULT, CYCLIC, SYSTEM) and every program instance with its instance name, program '
-        + 'type and logical name. Use it to confirm an assignment made by mw_code_pou_assign. '
+        + 'type and logical name. Use it to confirm an assignment made by mw_ide_task_change. '
         + 'Read-only.',
       parameters: { type: 'object', additionalProperties: false, properties: {} },
       output: {
@@ -3637,7 +3637,7 @@ function defineTools() {
 
     {
       name: 'mw_code_tasks',
-      description: 'List native task instances in execution order and program names without matching instance names. Unmatched names are review candidates: an instance name can differ from its program type, and indirect calls need inspection. Confirm actual bindings and startup/cyclic context in the IDE; this tool does not create task assignments.',
+      description: 'Read exact saved task ownership: PROGRAM instance names, resolved program types and native execution order, configuration/resource identity, cycle kind and task settings (interval, priority, watchdog). Validates PROJECT.TRE against LIST.POU and matching SET files; source hashes and changed-during-read guards accompany the result. unassigned lists PROGRAM types without direct saved task instances, not unmatched instance names. Indirect calls and unsaved/live state need separate review. Compare mw_code_task_model and use mw_ide_task_change for authorized native changes. Saved ownership is not runtime execution proof.',
       parameters: {
         type: 'object',
         additionalProperties: false,
@@ -3654,8 +3654,11 @@ function defineTools() {
           properties: {
             project: { type: 'string' },
             task_count: { type: 'integer' },
-            // task name -> list of assigned POU names
+            // task name (or resource path if names repeat) -> instance names
             tasks: { type: 'object', additionalProperties: true },
+            bindings: {type:'array',items:{type:'object',additionalProperties:true}},
+            binding_resolution: {type:'string'},
+            source_hashes: {type:'object',additionalProperties:{type:'string'}},
             unassigned: { type: 'array', items: { type: 'string' } },
             unassigned_note: { type: 'string' },
             // DECLARED because the engine RETURNS it, and an undeclared field under
@@ -3670,11 +3673,15 @@ function defineTools() {
         },
         render: (_a, v) => {
           const lines = [`${v.task_count} task(s):`];
-          for (const [task, programs] of Object.entries(v.tasks ?? {})) {
+          if(v.bindings)for(const task of v.bindings){
+            const settings=task.settings??{};
+            lines.push(`  ${task.configuration}/${task.resource}/${task.name} [${task.kind}] interval=${settings.INTERVAL??'?'} priority=${settings.PRIORITY??'?'} watchdog=${settings.WATCHDOG??'?'} enabled=${settings.WATCHDOG_ENABLED??'?'}: `
+              +(task.instances.map(x=>`${x.order}. ${x.name}: ${x.type}`).join(', ')||'(nothing assigned)'));
+          }else for (const [task, programs] of Object.entries(v.tasks ?? {})) {
             lines.push(`  ${task}: ${programs.join(', ') || '(nothing assigned)'}`);
           }
           if ((v.unassigned ?? []).length) {
-            lines.push(`TASK BINDING NEEDS REVIEW (instance names may differ): ${v.unassigned.join(', ')}`);
+            lines.push(`PROGRAM TYPES WITHOUT DIRECT SAVED TASK INSTANCES: ${v.unassigned.join(', ')}`);
           }
           if (v.unassigned_note) lines.push(v.unassigned_note);
           if (v.next_step) lines.push(`NEXT: ${v.next_step}`);
