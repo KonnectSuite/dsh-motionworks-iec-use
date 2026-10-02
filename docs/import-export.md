@@ -86,6 +86,51 @@ these probes. Do not generalize this to every native entry point: the follow-up
 code/comments and collateral source. `ExecuteCommand` and `ExecuteDdeCommand`
 are separate interfaces.
 
+## Verified native POU exchange investigation
+
+On MotionWorks IEC 3 Pro / Ade 1.19, the installed DDE dispatcher additionally
+binds `ExportPou <POU-name> "<existing-destination-directory>"` and
+`ImportPou "<native-export-directory>"`. The binding was established before
+execution by inspecting the installed command table and handlers: name table
+base `this+0x598`, ExportPou index 73 / handler RVA `0x1c22f`, ImportPou index 72 /
+handler RVA `0x1c091`. Export formats the first argument as `@POUS.%s`, checks
+the second argument with `_access(path,0)`, and passes the POU object plus that
+destination to its export interface. Import passes its existing path to the
+corresponding import interface. This inspection did not invoke private vtables.
+Installed `dde.dll` SHA-256:
+`6f0cd69b9601a3f7c0d637e3174dffff6442a402533b05b7d5233080474535e4`.
+
+Exporting the original ServoTaskSlow to a new empty directory inside the
+disposable workspace returned 0, left modified=false, and preserved all project
+sources, translations and inventories. Output was a native POU exchange package:
+binary `pou.tre`, a POU directory with `src.st1`, native field data, metadata and
+translations. This is not PLCopen XML or an editable graphical text format.
+Do not rewrite these native binaries to manufacture graphical edits.
+
+A populated LD copy, CodexGraphExchange, then completed an export/delete/import
+round-trip. Both DDE calls returned 0; import marked the project modified and
+native Save cleared it. Saved graph bytes, all eleven declarations, translations,
+tasks/globals and original sources matched the pre-export copy exactly. Temporary
+native task assignment allowed a fresh Build and verified five compiler networks;
+unassignment/deletion and cleanup Build/Make restored the complete original
+seven-POU baseline. Evidence lives in the disposable verification directory:
+`native-export-pou-probe.json`, `native-export-pou-preservation.json`,
+`native-exchange-copied.json` and `native-exchange-roundtrip.json`.
+
+`test/native_pou_exchange_live.mjs` is an opt-in reproduction on a disposable
+smoke fixture. It permits only its newly exported, hash-checked package and absent
+test POU identity; it never imports an arbitrary package or overwrites a POU.
+Set `MOTIONWORKS_MCP_WORKSPACE` to that fixture and
+`MOTIONWORKS_NATIVE_PROBE_PYTHON` to an existing Python with pywin32. The probe
+checks the COM runtime before any mutation; the bundled file-reader Python does
+not contain COM bindings. This dependency belongs to the opt-in investigation,
+not to the installed plugin's native bridge.
+These commands are investigation evidence, not an exposed public exchange tool.
+General import still needs collision, package/provenance, dependency, native flag,
+source-preservation and partial-action guards. The observed argument buffers are
+bounded; the probe keeps each path below 128 characters. Graphical placement and
+wiring remain separate, unverified operations.
+
 The practical routes that DO work, and what the plugin uses instead:
 
 - **Reading a POU** — `mw_code_read_st` returns the body and declarations straight from
@@ -94,7 +139,8 @@ The practical routes that DO work, and what the plugin uses instead:
   with type, group, IEC address and description).
 - **Writing ST code** — `mw_ide_code_change` uses native DDE ChangeCodeWS with
   exact expected-body preconditions and full read-back; finish fresh Build/Make.
-- **Other POU edits** — native IDE editors and project-tree commands. Offline POU,
+- **Other POU edits** — prefer `mw_ide_pou_change` and `mw_ide_variable_change` for
+  their supported native lifecycle/declaration operations. Offline POU,
   variable and ST writers are retired. Inspect inherited externals if using a native
   copy/import, then Save All, read back, Build/Make and verify approved reopen.
 - **Cross-reference** — inspect the native IDE cross-reference and saved source.
@@ -115,7 +161,9 @@ The probes are in the scratch directory:
   `Execute` takes no parameters
 - `probe_evc.ps1` — `ExportEvcObject` across all eight object types
 
-All run under the 32-bit host, which is required for `Ade.Application.550`:
+The historical provider probes ran under the 32-bit PowerShell host used by the
+plugin bridge. The follow-up DDE exchange probe also succeeded through an
+existing 64-bit Python/pywin32 out-of-process COM client.
 
 ```powershell
 & "$env:SystemRoot\SysWOW64\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -File <probe>.ps1

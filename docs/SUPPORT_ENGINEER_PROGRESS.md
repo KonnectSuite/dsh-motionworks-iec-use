@@ -351,3 +351,41 @@ artifact verification and complete source preservation. Evidence:
 `installed-graphical-listing.json` and
 `graphical-listing-0318da1f-198d-4104-b35a-cdfdc6198909.json`.
 This does not prove the currently running Arya process reloaded its catalog.
+
+## Native populated graphical POU exchange investigation
+
+Activating and refreshing the returned MotionWorks window still failed screenshot
+capture with `FrameArrived timed out` and `window capture timed out`. No graphical
+input was sent. Read-only inspection of the installed DDE command dispatcher then
+established exact ExportPou and ImportPou argument bindings before execution;
+details and installed DLL identity are in `docs/import-export.md`.
+
+ExportPou returned 0 for the original ServoTaskSlow, writing only a fresh native
+exchange directory in the disposable workspace and leaving the project unmodified.
+Complete original source, translation and inventory preservation passed. The
+package contains binary tree/native POU data, not editable XML or graphical text.
+Evidence: `native-export-pou-probe.json` and `native-export-pou-preservation.json`.
+
+A populated LD copy CodexGraphExchange passed native export/delete/import/Save.
+The restored graph body, eleven declarations, translations and complete other
+sources/tasks/globals matched its pre-export copy. Temporary native assignment
+allowed fresh Build (9.1 s) and a verified five-network compiler listing. Native
+unassignment/deletion followed by Build (7.2 s)/Make (2.7 s) restored the original
+seven-POU baseline with compiled=true and modified=false.
+Evidence: `native-exchange-copied.json` and `native-exchange-roundtrip.json`.
+
+Added a bounded opt-in reproduction, `test/native_pou_exchange_live.mjs`. It only
+imports its own untouched, hash-checked export into an absent test identity, and
+retains phase evidence on failure. Its initial bundled-Python attempt stopped
+because pywin32 was absent, before export/import. The unused test copy was removed
+through the native API. The script now requires and checks an explicit existing
+COM-capable Python before project mutation. This probe dependency is separate
+from the installed plugin bridge.
+
+The corrected reproduction subsequently passed its complete export/delete/import,
+source comparison, temporary assignment, fresh graphical listing, unassignment,
+deletion, Build/Make and complete original-baseline restoration. Evidence:
+`native-pou-exchange-live-967bd849-0254-4d05-b0b0-942a81394b9e.json`.
+
+General public exchange guards, graphical placement/wiring and Arya-led live
+host acceptance remain unfinished. The support-engineer goal remains active.
