@@ -72,7 +72,11 @@ instructions. Compiler pin ordinals are not necessarily the order of pins in
 the installed parameter table or on screen. The observed TON compiler
 declarations numbered IN=1, PT=2, ET=3, Q=4, while the installed interface listed
 IN, PT, Q, ET. Read the matching compiler block declaration before interpreting
-an `@IFBP` ordinal; unresolved pin names must remain unresolved.
+an `@IFBP` ordinal. `mw_ide_graphical_listing` resolves public pin names and
+directions from the exact matching FB compiler dependency, requires its type to
+match the saved instance declaration and checks that Build regenerated it.
+Inspect `dependency_artifacts` and `compiler_dependency_freshness_verified`.
+Private compiler declarations and unknown ordinals remain unresolved.
 
 The disposable probe placed TON, connected Run→IN, T#100ms→PT, Q→Ready and
 ET→Elapsed, then edited PT to T#200ms. Both versions compiled as one network.

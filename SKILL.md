@@ -54,7 +54,12 @@ For saved LD/FBD diagnosis, use `mw_ide_graphical_listing` with the exact POU,
 fresh Build and requires unchanged complete sources plus clean native state.
 The listing, declarations, worksheet and source map must match the POU and have
 been regenerated during that Build. It returns raw compiler networks and symbol
-annotations. The compiler can omit unused POUs; a missing listing stops the
+annotations. FB pin names/directions come from matching compiler dependency
+declarations, checked against the saved instance type and fresh Build. Inspect
+`dependency_artifacts` and `compiler_dependency_freshness_verified`; compiler
+ordinals can differ from the installed interface order. Private compiler rows
+are counted for completeness but never exposed as public pins. Unknown pin
+ordinals remain unresolved. The compiler can omit unused POUs; a missing listing stops the
 operation. Do not assign a customer POU just to manufacture diagnostic evidence.
 Unknown tokens remain unresolved. This is compiler diagnostic
 evidence, not proof of canvas placement, pin wiring or runtime behavior. Inspect

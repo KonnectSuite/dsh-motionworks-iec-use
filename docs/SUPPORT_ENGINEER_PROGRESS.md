@@ -640,3 +640,30 @@ bounded to this TON FBD graph and constant edit; general LD/contact/coil/branch
 editing, general IL editing and actual running Arya acceptance remain incomplete.
 The generic graphical listing still reports layout/wiring unverified because it
 cannot independently inspect a canvas. The full support-engineer goal is active.
+
+## Compiler FB pin read-back
+
+The graphical reader now follows each referenced local FB instance's compiler
+type ID to its exact same-resource DIT file. It validates FUNCTION_BLOCK identity,
+CI number, the saved instance type, total declaration count and complete unique
+ordinals/names before exposing public input/output/in-out names and directions.
+Compiler-generated private names such as Code@@80 count toward completeness but
+remain private. Unknown ordinals remain unresolved. Every dependency retains its
+hash and is checked again before returning; the public tool requires dependency
+timestamps from the fresh Build as well as the four original POU artifacts.
+
+The first live run found a parser gap in graphical library private declarations;
+it stopped rather than inventing pin names. The repaired run accepted all three
+original LD programs: ServoTaskSlow resolved 44 pin references through four FB
+dependencies; ServoHoming resolved 11 through Home_LS, including its private
+compiler rows; EIP_ToCLX has function calls and correctly returned zero FB pins.
+Make was compiled/unmodified, and the complete seven-POU, task/global, program
+stream and translation baseline matched exactly after these read-only checks.
+
+Evidence: graphical-pins-live-f22ff0b3-25ca-43a5-941b-7886f979d363.json in the
+disposable verification directory. Eight reader regressions cover the reversed
+TON output ordinals, internal/unknown fields, wrong type/CI/kind, incomplete and
+duplicate declarations, missing dependencies and changed dependency contents.
+The native live harness is test/graphical_pins_live.mjs. This improves graph
+diagnosis; canvas placement/wiring and controller behavior remain separate
+checks. General LD editing, IL editing and active Arya acceptance are still open.

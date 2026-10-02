@@ -38,7 +38,7 @@ class Listing(unittest.TestCase):
         class Pou:
             name='Main'
             def body_stream(self):return ('Main.GB','LD')
-            def declarations(self):return SimpleNamespace(warnings=[],variables=[SimpleNamespace(name='Input',section='VAR'),SimpleNamespace(name='Output',section='VAR_EXTERNAL')])
+            def declarations(self):return SimpleNamespace(warnings=[],variables=[SimpleNamespace(name='Input',section='VAR',type_name='BOOL'),SimpleNamespace(name='Output',section='VAR_EXTERNAL',type_name='BOOL')])
         class Project:
             def pou(self,name):return Pou()
         project=Project();project.root=root
@@ -78,5 +78,60 @@ class Listing(unittest.TestCase):
             with self.assertRaisesRegex(ValueError,'graphical'):inspect(project,'Main')
             path.with_suffix('.SP').write_text('')
             with self.assertRaisesRegex(ValueError,'no worksheet mapping'):inspect(project,'Main',source_only=True)
+
+    def fb_fixture(self, root):
+        project,path=self.fixture(root)
+        path.write_text(CODE.replace('@IV 1','@IFBP 3.4').replace('@RV 2','@IFBP 3.3'))
+        path.with_suffix('.DIT').write_text('(*\nT: PROGRAM Main\n*)\nTimer\t3\tVAR\t@FB:76\n\n;\n')
+        pou=project.pou('Main')
+        pou.declarations=lambda:SimpleNamespace(warnings=[],variables=[SimpleNamespace(name='Timer',section='VAR',type_name='TON')])
+        project.pou=lambda name:pou
+        dependency=path.with_name('ICI00076.DIT')
+        text='(*\nT: FUNCTION_BLOCK TON\nCI#: 76\nQVE: 5\n*)\n'
+        for ordinal,name,section in [(1,'IN','VAR_INPUT'),(2,'PT','VAR_INPUT'),(3,'ET','VAR_OUTPUT'),(4,'Q','VAR_OUTPUT'),(5,'Code@@80','VAR')]:
+            text+=f'{name}\t{ordinal}\t{section}\t@TYP:1\n\n;\n'
+        dependency.write_text(text)
+        return project,path,dependency,text
+
+    def test_fb_pins_use_matching_compiler_ordinals_and_ignore_internal_fields(self):
+        with tempfile.TemporaryDirectory() as temp:
+            project,path,dependency,text=self.fb_fixture(Path(temp))
+            result=inspect(project,'Main')
+            pins=[line['symbols'][0] for line in result['networks'][0]['lines']]
+            self.assertEqual([p['declaration']['name'] for p in pins],['Q','ET'])
+            self.assertTrue(all(p['resolved'] and p['pin_direction']=='output' for p in pins))
+            self.assertEqual(pins[0]['instance']['name'],'Timer')
+            self.assertEqual(pins[0]['dependency_sha256'],result['dependency_artifacts'][0]['sha256'])
+            self.assertEqual(len(result['artifacts']),4)
+            self.assertEqual(len(result['dependency_artifacts']),1)
+            for ordinal in (5,99):
+                path.write_text(CODE.replace('@IV 1',f'@IFBP 3.{ordinal}'))
+                pin=inspect(project,'Main')['networks'][0]['lines'][0]['symbols'][0]
+                self.assertFalse(pin['resolved']);self.assertIsNone(pin['declaration'])
+
+    def test_fb_dependency_wrong_identity_partial_and_duplicate_declarations_refused(self):
+        with tempfile.TemporaryDirectory() as temp:
+            project,path,dependency,text=self.fb_fixture(Path(temp))
+            for bad in [text.replace('CI#: 76','CI#: 77'),text.replace('FUNCTION_BLOCK TON','FUNCTION TON'),
+                        text.replace('TON','Other'),text.replace('QVE: 5','QVE: 6'),
+                        text.replace('*)',''),text.replace('Code@@80\t5','Code@@80\t3'),
+                        text.replace('Q\t4','Q\t3'),text.replace('Q\t4','ET\t4'),
+                        text.replace('Q\t4','Q\t9')]:
+                dependency.write_text(bad)
+                with self.assertRaises(ValueError):inspect(project,'Main')
+            dependency.unlink()
+            with self.assertRaises(FileNotFoundError):inspect(project,'Main')
+
+    def test_fb_dependency_changed_after_read_refused(self):
+        with tempfile.TemporaryDirectory() as temp:
+            project,path,dependency,text=self.fb_fixture(Path(temp))
+            from motionworks_iec_mcp import graphical_listing as module
+            original=module.read_text
+            def read_then_change(candidate,root):
+                result=original(candidate,root)
+                if candidate==dependency:dependency.write_text(text+'\n')
+                return result
+            with patch.object(module,'read_text',side_effect=read_then_change):
+                with self.assertRaisesRegex(ValueError,'set changed'):inspect(project,'Main')
 
 if __name__=='__main__':unittest.main()

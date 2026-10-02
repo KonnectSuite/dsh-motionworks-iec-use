@@ -20,12 +20,15 @@ export async function graphicalListing(args, deps) {
   if(!Array.isArray(listing.artifacts)||listing.artifacts.length!==4||listing.artifacts.some(a=>
     !Number.isFinite(a.modified_ms)||a.modified_ms<build_started_ms||a.modified_ms>Date.now()))
     throw Error('Compiler artifacts were not regenerated during this Build; cached listing freshness is unverified');
+  if(!Array.isArray(listing.dependency_artifacts)||listing.dependency_artifacts.some(a=>
+    !Number.isFinite(a.modified_ms)||a.modified_ms<build_started_ms||a.modified_ms>Date.now()))
+    throw Error('Compiler FB dependencies were not regenerated during this Build; pin freshness is unverified');
   const final=await deps.saved(),finalStatus=await deps.status();
   for(const key of ['pous','tasks','globals','program_sources','translation_files'])
     if(!isDeepStrictEqual(after[key],final[key]))throw Error('Saved source changed during listing read');
   if(finalStatus.is_compiled!==true||finalStatus.is_modified!==false)throw Error('Native state changed during listing read');
   return {...listing,build,accepted:true,evidence_kind:'fresh-build-graphical-instruction-listing',
-    source_baseline_unchanged:true,compiler_cache_freshness_verified:true,build_started_ms,
+    source_baseline_unchanged:true,compiler_cache_freshness_verified:true,compiler_dependency_freshness_verified:true,build_started_ms,
     action_performed:true,code_edit_performed:false,layout_verified:false,wiring_verified:false,
     next_step:'Use compiler networks and symbols for diagnosis. Unknown tokens stay raw. Inspect the actual canvas to verify placement/wiring; this tool does not edit graphical code.'};
 }
