@@ -630,7 +630,8 @@ function Get-VariableSheet($app,[string]$pou) {
 function Get-VariableRows($vars) {
     $sections=@{1='VAR';2='VAR_INPUT';3='VAR_OUTPUT';4='VAR_IN_OUT';5='VAR_EXTERNAL';6='VAR_GLOBAL'}
     $rows=@()
-    for($i=1;$i -le $vars.Count;$i++) {
+    $count=[int]$vars.Count
+    for($i=1;$i -le $count;$i++) {
         $v=$vars.Item($i); $section=$sections[[int]$v.BlockType]
         if(-not $section){throw 'Unsupported native declaration usage; no mutation allowed'}
         $row=[ordered]@{name=[string]$v.Name;type=[string]$v.DataType;section=$section;group=[string]$v.Group.Name;
@@ -639,6 +640,7 @@ function Get-VariableRows($vars) {
         foreach($field in @('address','initial_value','description')){if($row[$field] -eq ''){$row[$field]=$null}}
         $rows+=,$row
     }
+    if([int]$vars.Count -ne $count){throw 'Native declaration count changed during inspection'}
     return ,$rows
 }
 function Assert-VariableBaseline($expected,$actual) {
@@ -714,16 +716,36 @@ function Assert-NoLinkedPath([string]$path) {
 }
 
 function Get-PouPackageState($app) {
+    $timing=[Diagnostics.Stopwatch]::StartNew()
+    Log 'package snapshot begin'
+    $project=$app.ActiveProject
     $structure=Get-NativeStructure $app
-    $declarations=[ordered]@{}
-    foreach($name in @('')+@($structure.pous | ForEach-Object {$_.name})) {
-        $sheet=Get-VariableSheet $app $name;$groups=@()
-        for($i=1;$i -le $sheet.Groups.Count;$i++){$group=$sheet.Groups.Item($i);$groups+=,[ordered]@{name=[string]$group.Name;read_only=[bool]$group.ReadOnly}}
-        $key=if($name){'pou:'+$name}else{'globals'}
-        $declarations[$key]=[ordered]@{variables=(Get-VariableRows $sheet);groups=$groups}
+    Log ("package snapshot structure elapsed_ms={0}" -f $timing.ElapsedMilliseconds)
+    $pous=$project.Pous
+    $pouCount=[int]$pous.Count
+    if($pouCount -ne $structure.pous.Count){throw 'Native POU count changed during inspection'}
+    $resource=$project.GetObjectByLogicalName('Hardware/Configuration/Resource',10)
+    if(-not $resource){throw 'Exact resource not found'}
+    $sheets=[ordered]@{globals=$resource.Variables}
+    for($i=1;$i -le $pouCount;$i++){
+        $pou=$pous.Item($i);$name=[string]$pou.Name
+        if($name -cne $structure.pous[$i-1].name){throw 'Native POU identity changed during inspection'}
+        $sheets['pou:'+$name]=$pou.Variables
     }
-    $libraries=@()
-    for($i=1;$i -le $app.ActiveProject.Libraries.Count;$i++){$library=$app.ActiveProject.Libraries.Item($i);$libraries+=,[ordered]@{name=[string]$library.Name;full_name=[string]$library.FullName;logical_name=[string]$library.LogicalName}}
+    $declarations=[ordered]@{}
+    foreach($key in $sheets.Keys) {
+        $sheet=$sheets[$key];$groups=@();$collection=$sheet.Groups
+        $groupCount=[int]$collection.Count
+        Log ("package snapshot sheet={0} begin elapsed_ms={1}" -f $key,$timing.ElapsedMilliseconds)
+        for($i=1;$i -le $groupCount;$i++){$group=$collection.Item($i);$groups+=,[ordered]@{name=[string]$group.Name;read_only=[bool]$group.ReadOnly}}
+        if([int]$collection.Count -ne $groupCount){throw 'Native declaration groups changed during inspection'}
+        $declarations[$key]=[ordered]@{variables=(Get-VariableRows $sheet);groups=$groups}
+        Log ("package snapshot sheet={0} complete rows={1} elapsed_ms={2}" -f $key,$declarations[$key].variables.Count,$timing.ElapsedMilliseconds)
+    }
+    $libraries=@();$collection=$project.Libraries;$libraryCount=[int]$collection.Count
+    for($i=1;$i -le $libraryCount;$i++){$library=$collection.Item($i);$libraries+=,[ordered]@{name=[string]$library.Name;full_name=[string]$library.FullName;logical_name=[string]$library.LogicalName}}
+    if([int]$collection.Count -ne $libraryCount -or [int]$pous.Count -ne $pouCount){throw 'Native inventory changed during inspection'}
+    Log ("package snapshot complete elapsed_ms={0}" -f $timing.ElapsedMilliseconds)
     return [ordered]@{structure=$structure;declarations=$declarations;libraries=$libraries}
 }
 

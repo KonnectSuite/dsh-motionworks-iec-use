@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import {writeFileSync} from 'node:fs';
+import {readFileSync,writeFileSync} from 'node:fs';
 import {randomUUID} from 'node:crypto';
 import {join} from 'node:path';
 import {__internals as i} from '../index.js';
@@ -36,6 +36,10 @@ try{
  record.native_conversion=await act('mw_ide_pou_convert',{pou,language,expected_body_sha256,conversion_reviewed:true});
  record.after_conversion=await i.runCode('structure_snapshot',{project});verifyConversion(record.before_conversion,record.after_conversion);retain();
  assert.equal(record.native_conversion.network_count,1);
+ const conversionReceipt=JSON.parse(readFileSync(record.native_conversion.evidence_path,'utf8'));
+ const bindings=conversionReceipt.result.listing.symbol_bindings;
+ for(const [token,name] of [['@IV 1','Run'],['@IV 2','Ready'],['@IV 3','Elapsed'],['@IFB 4','ProbeTimer']])assert.equal(bindings[token]?.name,name,token);
+ record.graphical_symbols_verified=true;retain();
  await act('mw_ide_task_change',{operation:'unassign',name:'BG',instance:'CodexConvertInstance',user_approved:true});
  await act('mw_ide_pou_change',{operation:'delete',name:pou,user_approved:true,references_reviewed:true});
  for(const tool of ['mw_ide_build','mw_ide_make']){const result=await tools.get(tool).execute({});record.events.push({tool,result});retain();assert.equal(result.is_compiled,true);assert.equal(result.is_modified,false);}

@@ -1351,7 +1351,7 @@ function defineTools() {
           const result=await convertPou(args,{
             status:()=>observe('status',()=>verb('compile_state',{},30000)),
             saved:()=>observe('saved',()=>runCode('structure_snapshot',{project})),
-            snapshot:()=>observe('native',()=>verb('pou_package_snapshot',{},30000)),
+            snapshot:()=>observe('native',()=>verb('pou_package_snapshot',{},60000)),
             build:()=>{action_performed=true;record.phase='build_requested';retain();return observe('build',()=>defineTools().find(t=>t.name==='mw_ide_build').execute({}));},
             source:()=>observe('compiled_source',()=>runCode('compiled_source_evidence',{project,pou:args.pou})),
             mutate:request=>{conversion_attempted=true;record.phase='conversion_requested';retain();return observe('conversion',()=>verb('pou_convert',{...request,project,conversion_reviewed:args.conversion_reviewed},60000));},
@@ -1393,7 +1393,7 @@ function defineTools() {
           const deps={
             status:()=>observe('status',()=>verb('compile_state',{},30000)),
             saved:()=>observe('saved',()=>runCode('structure_snapshot',{project})),
-            snapshot:()=>observe('native',()=>verb('pou_package_snapshot',{},30000)),
+            snapshot:()=>observe('native',()=>verb('pou_package_snapshot',{},60000)),
             manifest:async()=>nativePackageManifest(directory),
             consume:async()=>{receipt.used=true;record.phase='import_token_consumed';retain();},
             mutate:request=>{attempted=true;record.phase=request.operation+'_requested';retain();return observe('mutation',()=>verb('pou_package_mutate',{...request,project,package_directory:directory},60000));},

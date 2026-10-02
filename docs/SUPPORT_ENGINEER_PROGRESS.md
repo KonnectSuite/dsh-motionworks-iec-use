@@ -553,3 +553,50 @@ exactly, and fresh Build/Make returned compiled and unmodified. Evidence:
 `graphical-symbol-fbd-probe-cleanup.json`. New FBD symbol annotations remain
 unverified live. Graphical canvas control and active Arya-chat acceptance remain
 outstanding; the full support-engineer goal stays active.
+
+### Bounded full native snapshot timing (2026-10-01)
+
+A read-only seven-POU native snapshot took 25,213 ms including bridge startup,
+close to the prior 30-second limit. The reader now caches POU/group/library
+collections, visits each POU once instead of repeatedly looking it up by name,
+and caches variable counts with before/after drift checks. New checks refuse
+changed POU count/order, group counts and library counts. Phase timings go only
+to the private bridge log, preserving deterministic snapshot comparison data.
+Both public package/conversion routes allow a bounded 60 seconds for this full
+read; no retries or mutation timeouts were added.
+
+The revised read took 24,252 ms and returned byte-equivalent JSON data after
+parsing (all declarations, flags, groups, structure and libraries) to the earlier
+snapshot. Evidence: `snapshot-timing-before.json` / `snapshot-timing-after.json`.
+This single measurement is a modest improvement, not a general performance
+benchmark. Logs show variable rows dominate the inspection cost. Synthetic
+collection tests execute the actual reader functions, checking bounded lookups,
+exact values/flags, empty sheets and inventory drift. The full 60-tool suite
+passes with those tests included.
+
+The companion `konnect_computer_use` screenshot service captured the actual
+Windows desktop and IDE successfully. It provides an available observation
+path distinct from the failed Sky capture. One attempt to inspect Arya's plugin
+page instead selected an IDE tree item because native automation brought the
+IDE forward between observation and input. Further UI input was stopped while
+the native workflow was active. This does not establish placement/wiring or
+active-chat plugin reload; serialize native operations and UI input.
+
+The revised complete FBD workflow passed through all native snapshots, conversion,
+fresh generated listing and cleanup. `Run`, `Ready`, `Elapsed` and `ProbeTimer`
+matched compiler ordinals @IV 1/2/3 and @IFB 4. The original seven-POU baseline
+was restored exactly, with clean Build/Make. Evidence:
+`public-conversion-live-42aaba2e-dcb8-4c4e-a80b-5112772035c5.json` and
+`pou-conversion-b873dcd5-9b7c-402f-b6fc-41bf7444d0cb.json`. The reproduction
+harness now asserts those identities from the retained conversion receipt.
+
+After native work stopped, public native navigation opened ServoTaskSlow with
+two settled observations. Companion capture displayed the real populated graph
+(MC_Power, MC_Reset, MC_ReadStatus, MC_ReadActualPosition) and its FB toolbox.
+Opening the observed Group dropdown showed the available groups; Escape closed
+it. Independent full source comparison and native state confirm no source edits,
+compiled=true and modified=false. Evidence:
+`toolbox-observation-source-preservation.json`. This proves graphical observation
+and toolbox dropdown access; placement, wiring and active-chat reload remain
+outstanding. The next graphical probe can use this working companion capture
+path with native and UI operations serialized.
