@@ -31,7 +31,7 @@ export function structurePlan(scope,args,saved,live){
       if(!['PROGRAM','FUNCTION_BLOCK','FUNCTION'].includes(type))throw new Error('Unknown POU type');
       if(type==='FUNCTION'&&!identifier(args.return_type))throw new Error('Function requires a simple explicit return type');
       if(type!=='FUNCTION'&&args.return_type)throw new Error('Return type applies only to functions');
-      const language=args.language??'ST',languages={ST:2,FBD:3,LD:4};
+      const language=args.language??'ST',languages={IL:1,ST:2,FBD:3,LD:4};
       if(!Object.hasOwn(languages,language))throw new Error('Unsupported POU language');
       native.pous.push({name:args.name,type,language:languages[language],plc_type:'',processor_type:'',read_only:false});
       plan.affected=[args.name];

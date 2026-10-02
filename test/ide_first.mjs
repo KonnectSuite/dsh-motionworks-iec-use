@@ -17,7 +17,7 @@ try {
       assert.equal(catalog.has(name),false,name);
     }
   }
-  for (const operation of ['st','variables','pou','graphical','tasks','libraries','engineering']) {
+  for (const operation of ['st','il','variables','pou','graphical','tasks','libraries','engineering']) {
     const guide = await tools.get('mw_ide_edit_guide').execute({operation});
     assert.equal(guide.mode,'ide-first');
     assert.equal(guide.action_performed,false);
@@ -27,7 +27,7 @@ try {
     assert.ok(Array.isArray(tools.get('mw_ide_edit_guide').output.render({},guide)));
   }
   await assert.rejects(tools.get('mw_ide_edit_guide').execute({operation:'download'}),/Unknown/);
-  console.log('Nine retired tools absent even with legacy opt-in; seven read-only IDE guides passed');
+  console.log('Nine retired tools absent even with legacy opt-in; eight read-only IDE guides passed');
 } finally {
   if (old===undefined) delete process.env.MOTIONWORKS_ALLOW_OFFLINE_WRITES;
   else process.env.MOTIONWORKS_ALLOW_OFFLINE_WRITES=old;

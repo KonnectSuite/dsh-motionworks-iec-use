@@ -15,7 +15,7 @@ from .workflow import source_manifest
 EMPTY_GRAPH_SHA256 = '09985918e42e9108dd10f5d67cbafa125bd4938821c6c6efe160e735b49492bb'
 
 def body_is_blank(language, raw, text=None):
-    if language == 'ST':
+    if language in ('ST', 'IL'):
         return text is not None and not text.strip()
     return language in ('LD', 'FBD') and len(raw) == 292 and hashlib.sha256(raw).hexdigest() == EMPTY_GRAPH_SHA256
 
@@ -37,7 +37,7 @@ def snapshot(root):
         if table.warnings:raise ValueError('Declaration parse warnings')
         body_stream=pou.body_stream()
         if not body_stream:raise ValueError('Missing POU body')
-        body=pou.st_body() if body_stream[1]=='ST' else None
+        body=(pou.st_body() if body_stream[1]=='ST' else pou.text_body()) if body_stream[1] in ('ST','IL') else None
         raw=body.encode('utf-8') if body is not None else pou.source().read_stream(body_stream[0])
         variables=[dict(name=v.name,type=v.type_name,section=v.section,group=v.group,
                         address=v.address,initial_value=v.initial_value,description=v.description) for v in table.variables]
@@ -75,7 +75,7 @@ def snapshot(root):
     global_rows=[dict(name=v.name,type=v.type_name,section=v.section,group=v.group,
                       address=v.address,initial_value=v.initial_value,description=v.description) for v in globals.variables]
     manifest=source_manifest(root)
-    program_sources={file:{name:sha for name,sha in streams.items() if name.upper().endswith(('.VB','.VGR','.STB','.GB','.TXT'))}
+    program_sources={file:{name:sha for name,sha in streams.items() if name.upper().endswith(('.VB','.VGR','.STB','.AB','.GB','.TXT'))}
                      for file,streams in manifest['streams'].items()}
     file_hashes=dict(manifest['files'])
     for setting in settings.values():

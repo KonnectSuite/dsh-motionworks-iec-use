@@ -35,6 +35,10 @@ try {
   assert.match(graphicalGuide.graphical_guidance, /block type/);
   assert.match(graphicalGuide.graphical_guidance, /Compiler pin ordinals/);
   assert.match(graphicalGuide.graphical_guidance, /source baseline matched exactly/);
+  assert.ok(tools.has('mw_code_read_text'));
+  const ilGuide = await tools.get('mw_ide_edit_guide').execute({operation:'il'});
+  assert.match(ilGuide.text_guidance, /Bridge protocol 4/);
+  assert.match(ilGuide.text_guidance, /\.AB/);
   const workspace = join(root, 'workspace');
   mkdirSync(join(workspace, 'Machine'), { recursive: true });
   writeFileSync(join(workspace, 'Machine.mwt'), mwtFixture(join(workspace, 'Machine')));

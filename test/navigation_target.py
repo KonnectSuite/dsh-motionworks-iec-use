@@ -31,6 +31,9 @@ class Navigation(unittest.TestCase):
         self.assertEqual(r['document_logical_name'],'/Pous/Main/RenamedBody')
     def test_globals(self):
         self.assertEqual(self.resolve('variables')['urn'],'@HW.Configuration.Resource.Global_Variables')
+    def test_il_code_uses_actual_ab_child(self):
+        self.body.path='POE\\Main\\RenamedBody.AB'
+        self.assertEqual(self.resolve('code','Main')['urn'],'@POUS.Main.RenamedBody')
     def test_bad_scope_or_missing(self):
         for kind,pou in [('code',None),('variables','Missing'),('other','Main')]:
             with self.assertRaises(ValueError):self.resolve(kind,pou)

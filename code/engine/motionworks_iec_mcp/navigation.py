@@ -16,7 +16,7 @@ def worksheet_target(project, kind, pou=None):
         if len(parents) != 1:
             raise ValueError('Exact POU tree identity is absent or ambiguous')
         parent = parents[0]
-        extensions = ('.VGR',) if kind == 'variables' else ('.STB', '.GB')
+        extensions = ('.VGR',) if kind == 'variables' else ('.STB', '.AB', '.GB')
         matches = [n for n in parent.children if parts(n)[-1].upper().endswith(extensions)]
         if len(matches) != 1:
             raise ValueError('Exact worksheet is absent or ambiguous')

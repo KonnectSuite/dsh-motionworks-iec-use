@@ -437,7 +437,7 @@ async function bridgeAlive(timeoutMs = 4000) {
   if (!existsSync(BRIDGE_SCRIPT)) return false;
   try {
     const reply = await call('ping', {}, timeoutMs);
-    if (reply?.workspace_protocol !== 3) {
+    if (reply?.workspace_protocol !== 4) {
       throw new Error('OUTDATED_BRIDGE: restart the MotionWorks bridge before using workspace-bound tools.');
     }
     return true;
@@ -1491,7 +1491,7 @@ function defineTools() {
     },
     {
       name:'mw_ide_code_change',
-      description:'Replace an existing writable ST worksheet through MotionWorks native ChangeCodeWS API. Requires exact expected_body from mw_code_read_st, reconciled saved baseline, and printable ASCII code. Retains the plan, guards complete saved/native source baselines, imports once, saves and verifies full code including comments, unchanged declarations/native flags, tasks, globals and other POUs. No mouse input, clipboard, disk source editing, controller action or automatic retry. Check verification.accepted, then fresh Build/Make. Graphical/IL edits are not supported by this tool.',
+      description:'Replace an existing writable ST or IL worksheet through MotionWorks native ChangeCodeWS API. Requires exact expected_body from mw_code_read_text (mw_code_read_st also works for ST), reconciled saved baseline, and printable ASCII code. Retains the plan, guards complete saved/native source baselines, imports once, saves and verifies full code including comments, unchanged declarations/native flags, tasks, globals and other POUs. No mouse input, clipboard, disk source editing, controller action or automatic retry. Check verification.accepted, then fresh Build/Make. Graphical body editing is not supported by this tool; IL uses its native AB text worksheet.',
       parameters:{type:'object',additionalProperties:false,required:['project','pou','baseline_saved','expected_body','code'],properties:{project:{type:'string'},pou:{type:'string'},baseline_saved:{type:'boolean'},expected_body:{type:'string'},code:{type:'string'}}},
       output:{schema:{type:'object',additionalProperties:true,required:['pou','action_performed','method','native_result','verification','body','evidence_path','next_step']},render:(_a,v)=>text(JSON.stringify(v,null,2))},
       execute:async args=>{
@@ -1504,14 +1504,14 @@ function defineTools() {
         let plan,result;
         try{result=await nativeCodeChange(args,{
           status:()=>verb('compile_state',{},30000),saved:()=>runCode('structure_snapshot',{project}),
-          snapshot:()=>verb('structure_snapshot',{},30000),read:()=>runCode('read_st',{project,pou:args.pou}),
+          snapshot:()=>verb('structure_snapshot',{},30000),read:()=>runCode('read_text',{project,pou:args.pou}),
           document:async()=>({...await runCode('worksheet_target',{project,pou:args.pou,kind:'code'}),variable_worksheet:(await runCode('worksheet_target',{project,pou:args.pou,kind:'variables'})).urn.split('.').at(-1)}),
           declarations:()=>verb('variable_snapshot',{pou:args.pou},30000),
-          prepare:async input_text=>{
+          prepare:async (input_text,language)=>{
             const dir=join(workspaceRoot(),'.motionworks','native-input');
             if(!isInsideWorkspace(dir))throw new Error('REFUSED: linked input directory');
             mkdirSync(dir,{recursive:true});
-            const code_import_path=join(dir,randomUUID()+'.ST');
+            const code_import_path=join(dir,randomUUID()+'.'+language);
             writeFileSync(code_import_path,input_text,{encoding:'ascii',flag:'wx'});
             return {code_import_path};
           },
@@ -1527,11 +1527,11 @@ function defineTools() {
     ...['pou','task'].map(scope=>({
       name:`mw_ide_${scope}_change`,
       description:scope==='pou'?
-        'Native COM POU create/copy/rename/delete with complete saved/native inventories, source baseline guards and unrelated source/translation checks. Creates blank PROGRAM, FUNCTION_BLOCK or FUNCTION (explicit simple return_type), with language ST (default), FBD or LD. Graphical defaults must match the independently observed native empty body; unknown bodies fail verification. Copy/rename uses new_name and preserves source language; populated ST and LD copy/rename/delete passed with body/declaration preservation. This does not prove graphical body editing or wiring. Rename/delete requires references_reviewed including graphical/indirect calls; delete additionally requires user_approved. Refuses detected ST/declaration/task references and read-only POUs. Evidence lists graphical POUs the ST scan cannot cover. Full baseline retained in evidence_path. Reconcile/save first, check verification.accepted, then fresh Build/Make. No mouse input, disk-source editing, download or automatic retry.':
+        'Native COM POU create/copy/rename/delete with complete saved/native inventories, source baseline guards and unrelated source/translation checks. Creates blank PROGRAM, FUNCTION_BLOCK or FUNCTION (explicit simple return_type), with language ST (default), IL, FBD or LD. Graphical defaults must match the independently observed native empty body; unknown bodies fail verification. Copy/rename uses new_name and preserves source language; populated ST and LD copy/rename/delete passed with body/declaration preservation. This does not prove graphical body editing or wiring. Rename/delete requires references_reviewed including graphical/indirect calls; delete additionally requires user_approved. Refuses detected ST/declaration/task references and read-only POUs. Evidence lists graphical POUs the ST scan cannot cover. Full baseline retained in evidence_path. Reconcile/save first, check verification.accepted, then fresh Build/Make. No mouse input, disk-source editing, download or automatic retry.':
         'Native COM task create/edit/delete/assign/unassign with full saved/native structural/source checks. Edit imports a generated settings file through Task.ImportSettingsFile, preserving all existing fields; settings_changes keys must exist in the saved task. Task names max 7 characters. Assignment requires PROGRAM and optionally an exact instance name. Unassignment requires exact instance and user_approved; task deletion requires approval and an empty task. Reconcile/save first, check verification.accepted, then fresh Build/Make. No download or automatic retry.',
       parameters:{type:'object',additionalProperties:false,required:['project','operation','name','baseline_saved'],properties:{
         project:{type:'string'},operation:{type:'string',enum:scope==='pou'?['create','copy','rename','delete']:['create','edit','delete','assign','unassign']},name:{type:'string'},baseline_saved:{type:'boolean'},user_approved:{type:'boolean'},
-        ...(scope==='pou'?{new_name:{type:'string'},pou_type:{type:'string',enum:['PROGRAM','FUNCTION_BLOCK','FUNCTION']},language:{type:'string',enum:['ST','FBD','LD'],description:'Creation language; defaults to ST. Copy retains its source language.'},return_type:{type:'string'},references_reviewed:{type:'boolean'}}:
+        ...(scope==='pou'?{new_name:{type:'string'},pou_type:{type:'string',enum:['PROGRAM','FUNCTION_BLOCK','FUNCTION']},language:{type:'string',enum:['ST','IL','FBD','LD'],description:'Creation language; defaults to ST. Copy retains its source language.'},return_type:{type:'string'},references_reviewed:{type:'boolean'}}:
           {kind:{type:'string',enum:['CYCLIC','DEFAULT','SYSTEM']},pou:{type:'string'},instance:{type:'string'},settings_changes:{type:'object',additionalProperties:{type:'string'}}})}},
       output:{schema:{type:'object',additionalProperties:true,required:['scope','operation','action_performed','native_result','verification','baseline','expected_native','next_step']},render:(_a,v)=>text(JSON.stringify(v,null,2))},
       execute:args=>executeNativeStructure(scope,args),
@@ -1606,7 +1606,7 @@ function defineTools() {
       name: 'mw_ide_edit_guide',
       description: 'IDE-first editing and engineering checklists. Read-only: does not type or edit anything. Use engineering before designing motion logic and read docs/ENGINEERING_WORKFLOW.md. Use the connected computer tool for observed editor actions; never report a checklist as completed work.',
       parameters: { type: 'object', additionalProperties: false, properties: {
-        operation: { type: 'string', enum: ['st', 'variables', 'pou', 'graphical', 'tasks', 'libraries', 'engineering'] },
+        operation: { type: 'string', enum: ['st', 'il', 'variables', 'pou', 'graphical', 'tasks', 'libraries', 'engineering'] },
       }, required: ['operation'] },
       output: {
         schema: { type: 'object', properties: {
@@ -1616,15 +1616,17 @@ function defineTools() {
           engineering_guidance: { type: 'string' },
           variable_guidance: { type: 'string' },
           graphical_guidance: { type: 'string' },
+          text_guidance: { type: 'string' },
         }, required: ['mode', 'operation', 'steps', 'action_performed'], additionalProperties: false },
         render: (_a, v) => text(JSON.stringify(v, null, 2)),
       },
       execute: args => {
         const instructions = {
           engineering: ['Read docs/ENGINEERING_WORKFLOW.md and collect operation, controller/drive/IDE/library versions, axis units, task timing and interface ownership before choosing FBs.', 'Resolve the installed FB interface and firmware release-note applicability. Historical manuals and this checklist are not proof of compatibility.', 'Define state transitions, completion evidence, continuous target sequence, registration qualification, PLC authority, stop/park and home invalidation; review numeric ranges and timing at maximum speed.', 'Create a behavioral test matrix and retain diagnostics. Edit in the IDE, finish compile/persistence verification, and explicitly separate bench/field acceptance from compiler acceptance.'],
-          st: ['Open the exact POU body in the IDE and observe its language and existing text.', 'Click inside the ST editor, verify focus, then select only the intended text and type the reviewed ST.', 'Multiline input requires explicit line-break support in the computer server; Enter can submit a dialog, so use it only in a confirmed multiline editor. Inspect indentation, line count and the entire saved body.', 'Inspect the resulting text before Save; do not type into a terminal or variable-name cell.'],
+          st: ['Read docs/NATIVE_TEXT_WORKFLOW.md. Prefer native mw_ide_code_change for ST instead of editor typing.', 'Read mw_code_read_text or mw_code_read_st and retain the exact readable body/comments as expected_body. Reconcile saved edits, prepare declarations natively, then import the reviewed complete code once.', 'Require verification.accepted and fresh Build/Make with source preservation. For FB insertion use the installed interface and mw_ide_fb_insert, which emits supported ST syntax.', 'For unsupported editor actions, navigate to the exact worksheet, inspect editable focus and selection through the companion before input, then independently verify full saved body and collateral sources.'],
+          il: ['Read docs/NATIVE_TEXT_WORKFLOW.md and installed il001 language help. Native IL creation uses mw_ide_pou_change with language IL; copy/rename retains language.', 'Read mw_code_read_text, confirm IL and no body_error, and retain its exact readable body/comments as expected_body. The saved IL worksheet is an AB stream; do not substitute ST or graphical bytes.', 'Prepare declarations through mw_ide_variable_change. Use mw_ide_code_change once for the full reviewed IL text, or an empty string to clear code while preserving declarations.', 'Require verification.accepted, inspect retained failure phases before further actions, and run fresh Build/Make. The ST FB insertion helper does not emit IL calls. Native import needs no keyboard focus.'],
           variables: ['Read docs/VARIABLE_WORKSHEET_WORKFLOW.md before any local/global/external edit; retain the full saved baseline. The bold Default/group row and column headers are NOT variable data rows.', 'Prefer mw_ide_variable_change for add/edit/delete through native COM without navigation or grid input. Supply all seven desired fields for add/edit, reconcile saved edits, and require verification.accepted. Deletion requires explicit approval/reference review. Use mw_ide_open_worksheet for exact code/variables navigation and require accepted before editor input.', 'For dialog fallback ADD, call mw_ide_active_view and obtain mw_ide_variable_plan while no dialog is open. Wait for success before invoking the observed native Create Variable Set dialog from a data row in the intended group. Planning tools do not navigate or send input.', 'Verify each labelled dialog field separately. Clear inherited addresses, initializers and descriptions absent from the plan. Use an exact single name without #; confirm scope/type and every field before OK. Never blind-Tab through fields. Inline Insert Variable is a separately proven fallback only.', 'For fallback EDIT identify the exact existing variable and field, confirm editor focus and selection, then commit and refresh. If activation closes the cell editor, stop rather than typing into unknown selection.', 'Native changes save and verify the complete declarations automatically. For dialog changes save through the IDE then require mw_ide_variable_verify accepted:true using the retained token, or mw_code_verify_variables with the complete planned final list. Missing/extra rows or changed existing names/groups/metadata require inspection before building. Verification is not an input interlock.', 'Globals referenced by a POU need matching VAR_EXTERNAL declarations without physical address or initializer; verify both worksheets independently. Run fresh Build/Make after the intended edits.'],
-          pou: ['Prefer mw_ide_pou_change for blank create, copy, rename or delete through native COM. Use PROGRAM, FUNCTION_BLOCK or FUNCTION with explicit return_type for functions; create language ST (default), FBD or LD. Copy/rename uses new_name and retains source language.', 'For rename/delete inspect task, declaration, ST, graphical and indirect references. references_reviewed must cover them all; the automatic ST scan cannot prove graphical/indirect absence. Delete also requires user_approved.', 'Reconcile saved edits and require verification.accepted. Graphical creation checks the exact observed native empty body, not just a GB extension. Full before/after sources remain in evidence_path. Verify assignment and fresh Build/Make; never patch PROJECT.TRE or retry a partial action automatically. Use observed IDE commands only for unsupported operations/languages.'],
+          pou: ['Prefer mw_ide_pou_change for blank create, copy, rename or delete through native COM. Use PROGRAM, FUNCTION_BLOCK or FUNCTION with explicit return_type for functions; create language ST (default), IL, FBD or LD. Copy/rename uses new_name and retains source language.', 'For rename/delete inspect task, declaration, ST, graphical and indirect references. references_reviewed must cover them all; the automatic ST scan cannot prove graphical/indirect absence. Delete also requires user_approved.', 'Reconcile saved edits and require verification.accepted. Graphical creation checks the exact observed native empty body, not just a GB extension. Full before/after sources remain in evidence_path. Verify assignment and fresh Build/Make; never patch PROJECT.TRE or retry a partial action automatically. Use observed IDE commands only for unsupported operations/languages.'],
           graphical: ['Read docs/GRAPHICAL_EDITOR_WORKFLOW.md. Prepare declarations with native APIs and inspect the installed block interface; serialize native workflows and desktop input.', 'For FBD blocks, use exact native worksheet navigation, then confirm the actual canvas and focus. At a free position, observed Tab opens inline insertion: enter the block type, then choose the instance in the properties dialog. An instance name alone can insert a variable operand instead.', 'Select and observe each pin before Tab insertion of its operand; confirm the committed label and connection. For an existing operand, verify inline text selection before replacing it.', 'Save through mw_ide_save and compare complete declarations, native flags and collateral sources. Require fresh Build/listing and Make; compiler pin ordinals can differ from installed parameter-table order.', 'For LD, inspect the current Objects menu: observed F6 inserts a basic network, F7 a serial contact and Ctrl+F7 a single parallel contact. Name declared BOOL operands through a focused inline editor or inspected Contact/Coil Properties, preserving fields and flags. Match the intended expression to fresh compiler instructions. Live proof covers one TON FBD graph/constant edit and one basic LD parallel/serial rung; verify unsupported operations individually and retain separate controller acceptance.'],
           tasks: ['Prefer mw_ide_task_change for create/edit/delete/assign/unassign. Inspect native task properties and current instance order before editing; reconcile saved edits.', 'Edit settings_changes uses existing field names and native ImportSettingsFile, preserving other fields. Assignment requires PROGRAM; unassignment uses exact instance, which can differ from the POU name. Unassign/delete requires user_approved and deletion refuses a nonempty task.', 'Require verification.accepted and inspect evidence_path on failure. Confirm exact resource, task, instance, cycle/priority and order; run fresh Build/Make. A clean compile does not prove an unassigned POU executes.'],
           libraries: ['Inspect current library versions and dependent POUs first.', 'Use the native Libraries command to select the operator-approved local library and observe the imported interface.', 'Do not remove a referenced library or silently substitute another version; compile all consumers.'],
@@ -1633,7 +1635,8 @@ function defineTools() {
         return { mode: 'ide-first', operation: args.operation, action_performed: false,
           ...(args.operation === 'engineering' ? { engineering_guidance: readFileSync(join(HERE, 'docs', 'ENGINEERING_WORKFLOW.md'), 'utf8') } : {}),
           ...(args.operation === 'variables' ? { variable_guidance: readFileSync(join(HERE, 'docs', 'VARIABLE_WORKSHEET_WORKFLOW.md'), 'utf8') } : {}),
-          ...(args.operation === 'graphical' ? { graphical_guidance: readFileSync(join(HERE, 'docs', 'GRAPHICAL_EDITOR_WORKFLOW.md'), 'utf8') } : {}), steps: [
+          ...(args.operation === 'graphical' ? { graphical_guidance: readFileSync(join(HERE, 'docs', 'GRAPHICAL_EDITOR_WORKFLOW.md'), 'utf8') } : {}),
+          ...(args.operation === 'st' || args.operation === 'il' ? { text_guidance: readFileSync(join(HERE, 'docs', 'NATIVE_TEXT_WORKFLOW.md'), 'utf8') } : {}), steps: [
           'Run mw_project_find and inspect mw_ide_state/mw_ide_status. If the requested verified stage is already open, continue it without restaging, closing or reopening. Otherwise stage/open only with the required exact-project consent. Preserve unsaved IDE changes before relying on disk reads.',
           'Observe MotionWorks with the computer tool. One action, then a fresh screenshot; confirm focus before typing. Stop on unexpected dialogs or project identity changes.',
           ...instructions[args.operation],
@@ -2979,10 +2982,10 @@ function defineTools() {
         return compareVariables(args.expected_variables, saved.variables);
       },
     },
-    {
-      name: 'mw_code_read_st',
+    ...['st','text'].map(kind=>({
+      name: 'mw_code_read_'+kind,
       description:
-        'Read one POU\'s Structured Text body, exactly as the container holds it, plus its '
+        (kind==='text'?'Read one supported ST or IL POU body, restoring native comments, plus its ':'Read one POU\'s Structured Text body, restoring native comments, plus its ')
         + 'variable declarations. This is how the agent sees the code it is about to change. '
         + 'Pass reference: true and a project path to read a POU from another program, including '
         + 'one outside the workspace. That read does not stage, open, or modify it.',
@@ -3015,11 +3018,11 @@ function defineTools() {
             summary: {},
           },
         },
-        render: (_a, v) => text(`POU ${v.pou} (${v.language ?? '?'}):\n${v.body ?? '(no ST body)'}`),
+        render: (_a, v) => text(`POU ${v.pou} (${v.language ?? '?'}):\n${v.body ?? '(no supported text body)'}`),
       },
       presentCall: (a) => ({ card: 'generic', title: `Read ${a.pou}`, kind: 'read' }),
-      execute: (args) => runCode('read_st', projectRequest(args, { pou: String(args.pou) })),
-    },
+      execute: (args) => runCode('read_'+kind, projectRequest(args, { pou: String(args.pou) })),
+    })),
     {
       name: 'mw_code_export_pou',
       description:

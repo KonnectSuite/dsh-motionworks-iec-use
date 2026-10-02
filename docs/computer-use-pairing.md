@@ -3,8 +3,8 @@
 Use this plugin for workspace-bound project staging, native IDE editing, source
 inspection, COM project identity, Build and compiler diagnostics. Prefer
 `mw_ide_variable_change` for local/global/external declarations,
-`mw_ide_code_change` for ST bodies, `mw_ide_fb_insert` for ST block calls,
-`mw_ide_pou_change` for ST/FBD/LD creation and POU copy/rename/delete, and
+`mw_ide_code_change` for ST/IL bodies, `mw_ide_fb_insert` for ST block calls,
+`mw_ide_pou_change` for ST/IL/FBD/LD creation and POU copy/rename/delete, and
 `mw_ide_task_change` for task settings and program instances. These operations do
 not need worksheet focus or mouse input. Inspect their accepted verification
 verdicts and retained evidence; finish intended edits with fresh Build/Make.

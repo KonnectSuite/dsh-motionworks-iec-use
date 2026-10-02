@@ -1,7 +1,7 @@
 ---
 name: motionworks-iec-use
-description: Operate a running Yaskawa MotionWorks IEC 3 Pro IDE and edit its code — stage and open a project, read the live object model, read and rewrite POU Structured Text, add variable declarations, compile, and read the compiler's verdict and error text. START HERE: run mw_project_find before anything else, and work only on a project inside the workspace — never on one from elsewhere on the machine, even if you know where it is. Use when the user wants the agent to actually drive MotionWorks IEC rather than only inspect files. Never downloads to a controller and never commands motion.
-whenToUse: The user has MotionWorks IEC 3 Pro open or asks for work in it — a real build, a compile verdict, the live project model, reading or changing POU Structured Text, or reading the IDE's error list. ALSO USE WHEN a MotionWorks project is mentioned at all, even to ask a question about it, because the first step is always to find which project is actually in the workspace. For pure offline `.mwt` inspection without the IDE, the file-level tools alone are enough.
+description: Operate a running Yaskawa MotionWorks IEC 3 Pro IDE and edit its code — stage and open a project, read the live object model, read and rewrite POU Structured Text and Instruction List, add variable declarations, compile, and read the compiler's verdict and error text. START HERE: run mw_project_find before anything else, and work only on a project inside the workspace — never on one from elsewhere on the machine, even if you know where it is. Use when the user wants the agent to actually drive MotionWorks IEC rather than only inspect files. Never downloads to a controller and never commands motion.
+whenToUse: The user has MotionWorks IEC 3 Pro open or asks for work in it — a real build, a compile verdict, the live project model, reading or changing POU Structured Text or Instruction List, or reading the IDE's error list. ALSO USE WHEN a MotionWorks project is mentioned at all, even to ask a question about it, because the first step is always to find which project is actually in the workspace. For pure offline `.mwt` inspection without the IDE, the file-level tools alone are enough.
 ---
 
 # MotionWorks IEC workspace editing
@@ -70,7 +70,7 @@ the live compiler rejected here. If compilation marks the project modified, save
 and independently compare source/translation hashes before accepting clean state.
 For POU structure use `mw_ide_pou_change`: create blank PROGRAM/FUNCTION_BLOCK/
 FUNCTION (explicit return_type for FUNCTION), copy, rename or delete. Creation
-accepts language ST (default), FBD or LD. Copy/rename uses `new_name` and retains
+accepts language ST (default), IL, FBD or LD. Copy/rename uses `new_name` and retains
 the source language. Graphical creation requires the verified native empty body;
 unknown defaults fail verification. It does not place or wire graphical blocks.
 Reconcile saved edits and require `verification.accepted`.
@@ -122,15 +122,15 @@ channel is not verified for concurrent independent harness processes.
 
 ## Default: code inside the MotionWorks IDE
 
-For an existing writable ST worksheet, prefer `mw_ide_code_change`. Read the
-current body with `mw_code_read_st`, supply it as exact `expected_body`, and pass
+For an existing writable ST or IL worksheet, prefer `mw_ide_code_change`. Read the
+current body with `mw_code_read_text` (or `mw_code_read_st` for ST), supply it as exact `expected_body`, and pass
 the complete replacement `code` with `baseline_saved:true` only after native
 edits are reconciled/saved. This uses the native DDE ChangeCodeWS API, not
 keyboard input or a disk-source writer. Comments are resolved from the native
 translation XML for full saved read-back. Input currently supports printable
 ASCII plus tabs/newlines. Inspect `verification.accepted` and `evidence_path`,
 then fresh Build/Make. A failed or uncertain import requires inspection before
-another action. Graphical/IL/toolbox workflows still use observed native editors.
+another action. Read `docs/NATIVE_TEXT_WORKFLOW.md` and use the ST/IL native route before editor typing. Graphical/toolbox workflows use observed native editors; the ST FB insertion helper does not emit IL calls.
 
 Read `docs/IDE_FIRST_WORKFLOW.md` before editing. The companion KonnectSuite
 `computer-use-mcp` provides `computer` actions for screenshots, clicks, keys and typing.

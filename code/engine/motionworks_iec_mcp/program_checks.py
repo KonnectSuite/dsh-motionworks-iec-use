@@ -219,6 +219,9 @@ def check_project(root, *, pou=None, body=None):
         except Exception: continue
     for item in ([project.pou(pou)] if pou else project.pous()):
         try:
+            if item.language() == 'IL':
+                coverage.append({'pou': item.name, 'language': 'IL', 'status': 'IL_static_review_not_supported'})
+                continue
             text = body if body is not None and pou else item.st_body()
             if text is None:
                 coverage.append({'pou': item.name, 'status': 'graphical_body_not_analyzed'}); continue
@@ -239,4 +242,4 @@ def check_project(root, *, pou=None, body=None):
             'errors': sum(f['severity'] == 'error' for f in findings),
             'warnings': sum(f['severity'] == 'warning' for f in findings),
             'verification': 'static_review_only', 'automatic_changes': False,
-            'limitations': ['No arbitrary LD/FBD analysis', 'No complete IEC type inference', 'Task instance names may differ from program types', 'Historical vendor signatures require installed-version confirmation']}
+            'limitations': ['No arbitrary LD/FBD analysis', 'No IL static syntax/semantic review; require native compilation', 'No complete IEC type inference', 'Task instance names may differ from program types', 'Historical vendor signatures require installed-version confirmation']}

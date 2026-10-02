@@ -21,6 +21,27 @@ class Reader(unittest.TestCase):
                 self.assertFalse(body_is_blank(language,raw))
         self.assertTrue(body_is_blank('ST',b' \r\n',' \r\n'))
         self.assertFalse(body_is_blank('ST',b'X := 1;','X := 1;'))
+        self.assertTrue(body_is_blank('IL',b'',''))
+        self.assertFalse(body_is_blank('IL',b'RET','RET'))
+    def test_il_requires_exact_ab_tree_identity_and_preserves_st_reader_scope(self):
+        pou=PouInfo('Main',Path('fixture/POE/Main'))
+        document=S(warnings=[],lines=['9'],walk_with_ancestors=lambda:[(S(start_line=0,path='POE\\Main\\Renamed.AB'),[])])
+        with patch.object(PouInfo,'stream_names',return_value=['Renamed.AB']),patch('motionworks_iec_mcp.project.CompoundFile'),patch('motionworks_iec_mcp.tree.parse_document',return_value=document):
+            self.assertEqual(pou.body_stream(),('Renamed.AB','IL'))
+            self.assertIsNone(pou.st_body_text())
+            document.lines=['11']
+            with self.assertRaisesRegex(ValueError,'IL worksheet'):pou.body_stream()
+        with patch.object(PouInfo,'stream_names',return_value=['Renamed.AB','Main.STB']):
+            with self.assertRaisesRegex(ValueError,'ambiguous'):pou.body_stream()
+    def test_il_override_cannot_be_reported_as_st_reviewed(self):
+        from motionworks_iec_mcp.program_checks import check_project
+        table=S(warnings=[],variables=[])
+        pou=S(name='Probe',language=lambda:'IL',declarations=lambda:table)
+        project=S(pous=lambda:[pou],pou=lambda name:pou,global_variables=lambda:table,task_assignments=lambda:{})
+        with patch('motionworks_iec_mcp.project.Project',return_value=project):
+            result=check_project(Path('fixture'),pou='Probe',body='LD TRUE')
+        self.assertIn({'pou':'Probe','language':'IL','status':'IL_static_review_not_supported'},result['coverage'])
+        self.assertFalse(any(c.get('status')=='ST_reviewed' for c in result['coverage']))
     def test_function_return_type_comes_from_tree_not_blank_registry_column(self):
         parent=S(name='Fn',path='POE\\Fn\t\t',line=1,children=[])
         document=S(warnings=[],lines=['24','params','Fn','POE\\Fn','INT'],walk_with_ancestors=lambda:[(parent,[])])

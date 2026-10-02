@@ -71,11 +71,11 @@ do not generalize them to arbitrary populated or protected POU conversions.
 |---|---|
 | Startup and trial | Passed disposable launch; install reload still required |
 | Named worksheet navigation | Native code/local/global navigation passed; exact saved-tree URNs and active views verified in two POUs |
-| POU add/edit/delete | Native blank ST/FBD/LD creation and populated ST/LD lifecycles passed with independent saved/native inventory and collateral checks; graphical body editing/wiring remains unverified |
+| POU add/edit/delete | Native blank ST/IL/FBD/LD creation and populated ST/IL/LD lifecycles passed with independent saved/native inventory and collateral checks; arbitrary graphical lifecycles remain unproven |
 | Local/global/external variables | Public native add/edit/delete and full saved/native comparisons passed for all three scopes; group moves remain refused |
 | Tasks and POU assignment | Public native create/settings edit/assign/exact-instance unassign/delete passed; controller-specific timing acceptance remains separate |
-| POU code editing | Public native ST import/replacement/clear passed with exact saved code/comments, declaration/flag and collateral checks; stale-body refusal; fresh Build/Make passed. Printable ASCII input; graphical/IL routes remain incomplete |
-| Toolbox and FB insertion | Installed interface/pin inspection, editor insertion/wiring, declaration and build verification; incomplete |
+| POU code editing | Native ST/IL import/replacement/clear, exact comments/flags/collateral, stale-body refusal and fresh Build/Make passed. One FBD TON placement/wiring/edit and one LD parallel/serial rung passed; arbitrary graphs remain unproven |
+| Toolbox and FB insertion | Installed interfaces, native ST FB insertion, graphical TON placement/wiring and compiler FB pin resolution passed; arbitrary toolbox objects remain unproven |
 | Support-engineering judgment | Version-aware reference lookup, engineering diagnosis and tested operation workflows; existing guidance alone is insufficient |
 
 Native code follow-up: `mw_ide_code_change` uses
@@ -694,3 +694,37 @@ phase cleaned, in the disposable verification directory; the opt-in harness is
 test/ld_canvas_live.mjs. The graphical guide now carries this tested path.
 Multi-object branches, arbitrary LD graph lifecycles, IL editing and actual
 running Arya acceptance remain unproven. The support-engineer goal stays active.
+
+## Native IL text lifecycle
+
+An exact disposable native creation confirmed language 1, the .AB text body and
+saved worksheet record kind 9. Native ChangeCodeWS with the IL language returned
+0 and saved; its comment used the same worksheet translation reference format
+as ST. The new mw_code_read_text resolves complete ST/IL comments, while the
+existing mw_code_read_st remains ST-only. IL bodies now participate in complete
+source/structural hashes, blank-body checks and exact worksheet navigation.
+
+The public lifecycle accepted IL blank creation/deletion, four BOOL declarations,
+full-body import, stale expected_body refusal, body replacement, native copy and
+rename, clearing and deletion. Native imports preserved all declaration fields,
+groups/flags, unrelated POUs, tasks/globals and translation collateral. The
+assigned test program compiled before and after its edit; Make was clean, and
+complete source snapshots stayed unchanged across compilation. Explicit cleanup
+restored the original seven-POU source/task/global/translation baseline exactly.
+Evidence: native-il-live-6916bbf5-cd3b-4cb4-a273-4c47e5fcacf3.json, phase cleaned,
+in the disposable verification directory; harness test/native_il_live.mjs.
+
+The existing native ST lifecycle additionally passed after the import language
+became explicit: comments, stale-body refusal, replacement/clear and Build/Make
+with source preservation. Its compile evidence is
+native-code-live-build-831c5268-0dfd-488c-9f4a-8083299c8c1e.json. The final
+cross-language cleanup/source check is test/native_text_final_live.mjs.
+
+The catalog now has 61 tools, including mw_code_read_text. ST/IL edit guides
+return the packaged NATIVE_TEXT_WORKFLOW.md and prefer native imports over
+typing. Bridge protocol 4 refuses a stale import handler. IL text input retains
+the same printable ASCII restriction. Static ST review explicitly reports IL
+as unsupported, even for a supplied body, and must not label IL as ST reviewed.
+The ST FB insertion helper remains ST-only. This establishes the tested IL text
+lifecycle; arbitrary graphic/toolbox objects and actual running Arya acceptance
+remain open. The full support-engineer goal stays active.

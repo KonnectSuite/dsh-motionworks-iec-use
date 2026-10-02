@@ -8,7 +8,7 @@ const live={pous:[meta],tasks:[{name:task.name,kind:task.kind,instances:[]}]};
 const args={operation:'create',name:'NewPou',baseline_saved:true};
 const plan=(scope,input,saved=before,native=live)=>structurePlan(scope,input,structuredClone(saved),structuredClone(native));
 assert.equal(plan('pou',args).native.pous.length,2);
-for(const [language,nativeLanguage] of [['ST',2],['FBD',3],['LD',4]])assert.equal(plan('pou',{...args,language}).native.pous.at(-1).language,nativeLanguage);
+for(const [language,nativeLanguage] of [['IL',1],['ST',2],['FBD',3],['LD',4]])assert.equal(plan('pou',{...args,language}).native.pous.at(-1).language,nativeLanguage);
 assert.throws(()=>plan('pou',{...args,language:'SFC'}),/language/);
 assert.throws(()=>plan('pou',{operation:'copy',name:'Main',new_name:'Copy',language:'FBD'}),/creation/);
 assert.throws(()=>plan('pou',{...args,name:'Main'}),/exists/);

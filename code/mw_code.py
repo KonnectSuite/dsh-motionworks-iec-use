@@ -118,14 +118,14 @@ def verb_pous(req):
     return _ok(project=req["project"], count=len(out), pous=out)
 
 
-def verb_read_st(req):
+def verb_read_st(req, text=False):
     """Read one POU: language, ST body text, and its variable declarations."""
     proj = _project(req["project"])
     info = proj.pou(req["pou"])
     body = None
     body_error = None
     try:
-        body = info.st_body_text()
+        body = info.text_body_text() if text else info.st_body_text()
     except Exception as exc:
         body_error = str(exc)
 
@@ -165,7 +165,7 @@ def verb_unsupported(req):
     blocked = []
     for info in proj.pous():
         try:
-            if info.st_body() is None:
+            if info.text_body() is None:
                 stream = None
                 try:
                     bs = info.body_stream()
@@ -174,7 +174,7 @@ def verb_unsupported(req):
                     pass
                 blocked.append({
                     "name": info.name,
-                    "reason": "no ST body stream (graphical LD/FBD or compressed)",
+                    "reason": "no supported ST/IL text body (graphical LD/FBD or compressed)",
                     "body_stream": stream,
                 })
         except Exception as exc:
@@ -720,7 +720,7 @@ def verb_check_mwt(req):
 READ_VERBS = frozenset({
     "worksheet_target",
     "structure_snapshot", "block_interface",
-    "pous", "read_st", "unsupported", "globals", "tasks", "types", "library",
+    "pous", "read_st", "read_text", "unsupported", "globals", "tasks", "types", "library",
 })
 
 def verb_sync_back(req):
@@ -1089,6 +1089,7 @@ VERBS = {
     "library": verb_library,
     "pous": verb_pous,
     "read_st": verb_read_st,
+    "read_text": lambda req: verb_read_st(req, text=True),
     "worksheet_target": verb_worksheet_target,
     "graphical_listing": verb_graphical_listing,
     "compiled_source_evidence": verb_compiled_source_evidence,

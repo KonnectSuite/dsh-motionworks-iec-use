@@ -87,6 +87,19 @@ class PouInfo:
         saved worksheet node; the extension alone cannot distinguish them.
         """
         streams = self.stream_names()
+        il = [name for name in streams if name.upper().endswith('.AB')]
+        if il:
+            if len(il) != 1 or any(name.upper().endswith(('.STB', '.GB')) for name in streams):
+                raise ValueError('IL body stream is ambiguous')
+            from .tree import parse_document
+            root = self.directory.parent.parent
+            document = parse_document(CompoundFile(root/'src.st1').read_stream('PROJECT.TRE').decode('latin1'))
+            expected = ('POE/'+self.name+'/'+il[0]).casefold()
+            matches = [node for node,_ in document.walk_with_ancestors()
+                       if node.path.split('\t')[0].replace('\\','/').casefold() == expected]
+            if document.warnings or len(matches) != 1 or document.lines[matches[0].start_line].strip() != '9':
+                raise ValueError('IL worksheet tree identity absent or ambiguous')
+            return il[0], 'IL'
         for name in streams:
             if name.upper().endswith(".STB"):
                 return name, "ST"
@@ -155,11 +168,25 @@ class PouInfo:
 
     def st_body_text(self) -> str | None:
         """Return readable ST, restoring comments from native translations."""
-        body = self.st_body()
+        return self.text_body_text() if self.language() == 'ST' else None
+
+    def text_body(self) -> str | None:
+        """Read supported ST/IL source without interpreting graphical bytes."""
+        found = self.body_stream()
+        if not found or found[1] not in ('ST', 'IL'):
+            return None
+        body = self.source().read_stream(found[0]).decode('latin1')
+        if '\0' in body:
+            raise ValueError('Text worksheet contains unsupported binary data')
+        return body
+
+    def text_body_text(self) -> str | None:
+        """Return readable ST/IL with exact native comment translations."""
+        body = self.text_body()
         if body is None or '\x07' not in body:
             return body
         from .st_comments import resolve_comments
-        worksheet = self.body_stream()[0][:-4]
+        worksheet = self.body_stream()[0].rsplit('.', 1)[0]
         matches = [p for p in self.directory.iterdir()
                    if p.name.casefold() == (worksheet + 'Translation.xml').casefold()]
         if len(matches) != 1:

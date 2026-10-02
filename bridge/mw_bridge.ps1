@@ -891,7 +891,7 @@ while ($true) {
 
             'ping' {
                 $ok = $true
-                $data = [ordered]@{ alive = $true; workspace_protocol = 3; ide_window = (Get-IdeWindow -ne $null) }
+                $data = [ordered]@{ alive = $true; workspace_protocol = 4; ide_window = (Get-IdeWindow -ne $null) }
             }
 
             'stop' {
@@ -1582,7 +1582,9 @@ while ($true) {
                 $name=[string]$req.pou;$worksheet=[string]$req.worksheet
                 if($name -notmatch '^[A-Za-z_][A-Za-z0-9_]{0,29}$' -or $worksheet -notmatch '^[A-Za-z_][A-Za-z0-9_]{0,29}$'){throw 'REFUSED: unsupported native code identity'}
                 $target=$app.ActiveProject.Pous.Item($name)
-                if([bool]$target.ReadOnly -or [int]$target.PouLanguage -ne 2){throw 'REFUSED: code import requires writable ST POU'}
+                $language=[string]$req.language
+                $languages=@{ST=2;IL=1}
+                if(-not $languages.ContainsKey($language) -or [bool]$target.ReadOnly -or [int]$target.PouLanguage -ne $languages[$language]){throw 'REFUSED: code import requires matching writable ST/IL POU'}
                 $now=Get-NativeStructure $app
                 if(($now | ConvertTo-Json -Depth 20 -Compress) -cne ($req.before_native | ConvertTo-Json -Depth 20 -Compress)){throw 'REFUSED: native baseline changed'}
                 Assert-VariableBaseline $req.before_declarations.variables (Get-VariableRows (Get-VariableSheet $app $name))
@@ -1599,7 +1601,7 @@ while ($true) {
                 if(-not $inputFile.StartsWith($inputRoot.TrimEnd('\')+'\',[StringComparison]::OrdinalIgnoreCase) -or $inputFile -match '["\r\n]'){throw 'REFUSED: invalid code input path'}
                 Assert-NoLinkedPath $inputFile
                 if([string]$req.input_text -match '[^\x09\x0a\x0d\x20-\x7e]' -or [IO.File]::ReadAllText($inputFile) -cne [string]$req.input_text){throw 'REFUSED: code input changed or unsupported encoding'}
-                $command='ChangeCodeWS '+$name+' ST '+$worksheet+' "'+$inputFile+'"'
+                $command='ChangeCodeWS '+$name+' '+$language+' '+$worksheet+' "'+$inputFile+'"'
                 $returnCode=$app.ExecuteDdeCommand($command)
                 if([int]$returnCode -ne 0){throw ('Native code import returned '+$returnCode+'; inspect state before another action')}
                 $app.ActiveProject.Save()
@@ -1634,7 +1636,7 @@ while ($true) {
                         $types=@{PROGRAM=7;FUNCTION_BLOCK=6;FUNCTION=24}
                         $kind=if($req.pou_type){[string]$req.pou_type}else{'PROGRAM'}
                         if(-not $types.ContainsKey($kind)){throw 'REFUSED: invalid POU type'}
-                        $languages=@{ST=2;FBD=3;LD=4}
+                        $languages=@{IL=1;ST=2;FBD=3;LD=4}
                         $language=if($req.language){[string]$req.language}else{'ST'}
                         if(-not $languages.ContainsKey($language)){throw 'REFUSED: invalid POU language'}
                         $created=$pous.Create($name,[int]$types[$kind],[int]$languages[$language],[string]$req.return_type,'','')

@@ -45,3 +45,18 @@ assert.equal((await run({mutate:async()=>({saved:true,is_modified:true,snapshot:
   assert.ok(result.verification.errors.includes('Native declaration flags changed'));
 }
 console.log('Native code guards, stale bodies, readonly targets, save failures, declaration/source/comment collateral and exact saved body checks passed');
+{
+ const before=structuredClone(baseline),after=structuredClone(baseline),native=structuredClone(live);
+ before.pous[0].language=after.pous[0].language='IL';native.pous[0].language=1;
+ delete before.program_sources['POE/Main/src.st1']['Main.STB'];delete after.program_sources['POE/Main/src.st1']['Main.STB'];
+ before.program_sources['POE/Main/src.st1']['Main.AB']='old';after.program_sources['POE/Main/src.st1']['Main.AB']='new';
+ let reads=0;
+ const deps={saved:async()=>structuredClone(reads++?after:before),snapshot:async()=>structuredClone(native),mutate:async r=>{
+  assert.equal(r.language,'IL');return {saved:true,is_modified:false,snapshot:native};}};
+ assert.equal((await run(deps)).verification.accepted,true);
+ native.pous[0].language=2;reads=0;
+ await assert.rejects(()=>run({...deps,noMutation:true}),/matching/);
+ native.pous[0].language=1;reads=0;
+ after.program_sources['POE/Main/src.st1']['Unexpected.STB']='extra';
+ assert.equal((await run(deps)).verification.accepted,false);
+}
