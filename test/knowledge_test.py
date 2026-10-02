@@ -163,6 +163,13 @@ class Programming(unittest.TestCase):
         self.assertEqual(disabled.description,'disabled variable')
         self.assertTrue(disabled.disabled)
         self.assertTrue(disabled.to_dict()['disabled'])
+        combined=C.parse_declarations("VAR RETAIN\n(*<x:INT := 7 {CSV,PDD,RDT,NOP};>*)(*all flags*)\ns:STRING := '{CSV,PDD,RDT,NOP}' {CSV,PDD,RDT,NOP};\nu:INT := 7 {CSV,UNKNOWN};\nEND_VAR")
+        self.assertFalse(combined.warnings)
+        self.assertEqual(combined.by_name('x').initial_value,'7')
+        self.assertTrue(combined.by_name('x').disabled)
+        self.assertEqual(combined.by_name('x').description,'all flags')
+        self.assertEqual(combined.by_name('s').initial_value,"'{CSV,PDD,RDT,NOP}'")
+        self.assertEqual(combined.by_name('u').initial_value,'7 {CSV,UNKNOWN}')
 
     def test_writable_fb_bindings_literals_and_unresolved_storage(self):
         spec={'authority':'bound_installed_declaration','complete':True,

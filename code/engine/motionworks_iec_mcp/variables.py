@@ -237,7 +237,7 @@ def _split_type_initial_comment(body: str) -> tuple[str, str | None, str | None]
     # Native publication/PLC flags follow the initializer/type as brace attributes.
     # Strip only these observed attributes outside strings; they are not IEC value
     # text. Native flag read-back remains the authority for its boolean state.
-    attribute = re.search(r'\s*\{(?:PDD|CSV|NOP|RDT)\}\s*$', body, re.I)
+    attribute = re.search(r'\s*\{(?:PDD|CSV|NOP|RDT)(?:\s*,\s*(?:PDD|CSV|NOP|RDT))*\}\s*$', body, re.I)
     if attribute:
         quote = None
         pos = 0

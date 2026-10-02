@@ -20,8 +20,11 @@ For explicit native flag changes, pass optional `flags` on add/edit, for example
 existing values (new declarations default false). Review retention, publication
 and execution effects before selecting flags. The tool verifies all six flags
 on every native row; an ignored setter or collateral flag change fails acceptance.
-Live proof covers each flag separately on one local INT, not all combinations,
-external/global flags or controller behavior. Saved brace metadata and the
+Live proof covers each flag separately on one local INT. Follow-up combined
+local INT/STRING and global/external INT edits passed native flag/declaration
+verification, but strict cleanup detected a changed global VGR grid hash;
+full source restoration for that matrix remains unproven. Controller behavior
+is separate. Saved brace metadata and the
 native disabled wrapper must not be mistaken for initializer/name text.
 
 Use `mw_ide_open_worksheet` for inspection or when an editor operation is needed.
