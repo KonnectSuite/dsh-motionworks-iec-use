@@ -49,6 +49,16 @@ all in-out pins must be bound. The tool declares the instance and inserts the
 call through native APIs, retaining completed phases on failure. Inspect that
 evidence before another action; never retry blindly. Require accepted read-back
 and fresh Build/Make. Graphical insertion remains outside this tool's scope.
+For saved LD/FBD diagnosis, use `mw_ide_graphical_listing` with the exact POU,
+`baseline_saved:true` and a bounded network range (`start`, `limit`). It runs a
+fresh Build and requires unchanged complete sources plus clean native state.
+The listing, declarations, worksheet and source map must match the POU and have
+been regenerated during that Build. It returns raw compiler networks and symbol
+annotations. The compiler can omit unused POUs; a missing listing stops the
+operation. Do not assign a customer POU just to manufacture diagnostic evidence.
+Unknown tokens remain unresolved. This is compiler diagnostic
+evidence, not proof of canvas placement, pin wiring or runtime behavior. Inspect
+the actual graphical editor before graphical edits or reference-clearance claims.
 MotionWorks ST uses post-call assignments from instance output fields. The native
 FB insertion tool emits that form; do not substitute `=>` output arguments, which
 the live compiler rejected here. If compilation marks the project modified, save

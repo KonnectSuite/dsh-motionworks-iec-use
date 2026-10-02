@@ -16,6 +16,10 @@ Use `mw_code_block_interface` to inspect installed block pins and directions,
 then `mw_ide_fb_insert` to declare a new instance and insert its ST call with
 explicit bindings. Check the retained phase evidence on partial failure and
 compile after successful insertion.
+Use `mw_ide_graphical_listing` to diagnose saved LD/FBD compiler networks without
+desktop input. It runs a fresh Build, checks unchanged sources and regenerated
+matching artifacts, and annotates known declaration symbols. Raw compiler tokens
+remain available for inspection; this does not verify canvas placement or wiring.
 Use `mw_code_installed_help` to search the actual installed CHM editor and
 programming help, including shortcut and toolbox workflows. Text is cached in
 the calling workspace with source/topic hashes; vendor help is not bundled.

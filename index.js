@@ -60,6 +60,7 @@ import { retainPlan, lookupPlan, requireVariableView } from './edit-session.js';
 import { nativeVariableChange } from './native-variables.js';
 import { nativeStructureChange } from './native-structure.js';
 import { nativeCodeChange } from './native-code.js';
+import { graphicalListing } from './graphical-listing.js';
 import { fbInsertionPlan } from './fb-insertion.js';
 
 export const name = 'motionworks-iec-use';
@@ -1304,6 +1305,33 @@ async function executeNativeStructure(scope,args) {
 }
 function defineTools() {
   return [
+    {
+      name:'mw_ide_graphical_listing',
+      description:'Inspect one exact saved LD/FBD POU through its compiler-generated networks. Runs a fresh native Build; requires baseline_saved:true and a clean native saved state. Checks full source/declaration/task/translation preservation, matching listing/declaration/worksheet/source-map identities, and returns bounded raw instructions with declaration symbol annotations and artifact hashes. Unknown compiler tokens remain raw. Does not decode/write GB files, open/focus the editor, verify canvas placement/wiring, or command a controller. A failed/unverified Build or changed baseline stops inspection; do not retry automatically.',
+      parameters:{type:'object',additionalProperties:false,required:['project','pou','baseline_saved'],properties:{project:{type:'string'},pou:{type:'string'},baseline_saved:{type:'boolean'},start:{type:'integer',minimum:1},limit:{type:'integer',minimum:1,maximum:50}}},
+      output:{schema:{type:'object',additionalProperties:true,required:['accepted','evidence_path']},render:(_a,v)=>text(JSON.stringify(v,null,2))},
+      execute:async args=>{
+        const project=projectOf(args),identity=await assertIdeProjectProven();
+        if(resolve(identity.active_project).replace(/\.mwt$/i,'').toLowerCase()!==project.toLowerCase())throw Error('REFUSED: wrong open project');
+        const directory=join(workspaceRoot(),'.motionworks','verification');
+        if(!isInsideWorkspace(directory))throw Error('REFUSED: linked verification directory');
+        mkdirSync(directory,{recursive:true});
+        const evidence_path=join(directory,'graphical-listing-'+randomUUID()+'.json');
+        const record={args,phase:'requested',events:[]};
+        const retain=()=>{if(!isInsideWorkspace(evidence_path))throw Error('REFUSED: linked evidence');writeFileSync(evidence_path,JSON.stringify(record,null,2),'utf8');};
+        retain();
+        const observe=async(name,fn)=>{const result=await fn();record.events.push({name,result});retain();return result;};
+        try{
+          const result=await graphicalListing(args,{
+            saved:()=>observe('saved',()=>runCode('structure_snapshot',{project})),
+            status:()=>observe('status',()=>verb('compile_state',{},30000)),
+            build:()=>observe('build',()=>defineTools().find(t=>t.name==='mw_ide_build').execute({})),
+            read:()=>observe('listing',()=>runCode('graphical_listing',{project,pou:args.pou,start:args.start,limit:args.limit})),
+          });
+          record.phase='accepted';record.result=result;retain();return {...result,evidence_path};
+        }catch(error){record.phase='stopped';record.error=error.message;retain();return {accepted:false,evidence_path,error:error.message,next_step:'Inspect retained native/build/source evidence before another action; no automatic retry.'};}
+      },
+    },
     {
       name:'mw_code_installed_help',
       description:'Read/search actual installed English MotionWorks CHM help as inert text. Omit module to list installed archives; then use an exact module to list topics, query words, or read an exact topic. Provides archive/topic hashes and native help links, caches text in this session workspace, and never opens help or edits the IDE. Use for shortcut/editor/toolbox and programming semantics instead of guessing keys or signatures. Images may contain diagrams or key symbols omitted from text. Installed help is source evidence, not proof of live operation or controller/library compatibility. Refuses absent/ambiguous roots, unknown modules and cache integrity changes.',

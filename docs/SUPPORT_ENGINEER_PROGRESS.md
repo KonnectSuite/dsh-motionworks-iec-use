@@ -309,3 +309,45 @@ available; the full support-engineer goal remains active.
 Cleanup fresh Build (6.9 s) and Make (2.5 s) passed with compiled=true and
 modified=false. All complete baseline inventories and program/translation
 manifests matched. Evidence: `graph-keyboard-cleanup-build.json`.
+
+## Graphical compiler-network inspection
+
+Added `mw_ide_graphical_listing` for saved LD/FBD diagnosis without desktop input.
+It requires a reconciled saved baseline, performs a fresh observed native Build,
+checks clean compiled state and complete source/inventory preservation before
+and after reading, and requires all four compiler artifacts to have been written
+during that Build. Exact listing/declaration POU headers, worksheet identity and
+source-map paths must agree. Hashes/timestamps and full baselines are retained.
+Compiler networks are bounded by start/limit; known declaration tokens receive
+name/section annotations. Unknown tokens remain verbatim, with no inferred pin,
+layout, wiring or runtime verdict. The tool never edits or decodes graphical GB.
+The reader does not combine unrelated neighboring `.DIP` cache records; one
+observed record had a different block header despite sharing the listing stem.
+
+The final public guard passed all three populated LD POUs: EIP_ToCLX (10 networks,
+Build 4.7 s), ServoHoming (25, 4.7 s), ServoTaskSlow (5, 4.3 s). Evidence respectively:
+`graphical-listing-d976b197-8eec-4bde-8229-cb15defc1dd3.json`,
+`graphical-listing-ef2edd63-ae2e-4440-a78c-1aa94d9db10a.json`,
+`graphical-listing-27f16be7-1b78-4edc-8b0c-f2caf2add5c9.json`.
+An unused disposable blank FBD PROGRAM was omitted by the compiler and inspection
+stopped. After explicit native assignment in the disposable fixture, the reader
+accepted its regenerated zero-network listing; this is not populated FBD or
+graphical insertion acceptance. Native unassignment/deletion then restored all
+original seven-POU, five-task, global, program and translation baselines. Fresh
+cleanup Build (4.4 s)/Make (2.2 s) passed, compiled=true and modified=false.
+Evidence: `native-graph-listing-fbd-live.json` and
+`graphical-listing-8639cd55-7cad-4093-9835-3a774af898be.json`.
+
+Regressions cover stale/missing artifacts, unverified Build, unknown/modified native
+state, collateral source changes, mismatched declaration/worksheet/source paths,
+ambiguous listings, unknown symbols, truncated networks and bounded ranges.
+The full regression suite passes with 58 tools. Graphical placement/wiring and
+an end-to-end Arya-led engineering operation remain unverified; the goal is active.
+
+Deployment copied and hash-verified 127 package files as 0.5.5; backup:
+`Arya-restored-hotfix-20261001-201615-5db0d00b`. A fresh process loaded the installed
+module's 58 tools and accepted EIP_ToCLX listing after Build (4.3 s), regenerated
+artifact verification and complete source preservation. Evidence:
+`installed-graphical-listing.json` and
+`graphical-listing-0318da1f-198d-4104-b35a-cdfdc6198909.json`.
+This does not prove the currently running Arya process reloaded its catalog.

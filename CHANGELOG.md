@@ -10,6 +10,10 @@
 
 ## 0.5.5
 
+- Add guarded LD/FBD compiler-network inspection after a fresh Build, with exact
+  source-map identities, regenerated artifact timestamps/hashes, declaration
+  annotations and complete source preservation. Unknown tokens remain raw;
+  graphical placement and wiring are not inferred from compiler listings.
 - Require responsive, settled editor frames and matching captions after native
   navigation; distinguish COM view verification from keyboard focus. Refuse
   unresponsive/unknown frames and report unsettled navigation without retries.

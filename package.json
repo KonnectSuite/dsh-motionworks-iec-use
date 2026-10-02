@@ -25,6 +25,7 @@
     "native-variables.js",
     "native-structure.js",
     "native-code.js",
+    "graphical-listing.js",
     "fb-insertion.js",
     "preflight.mjs",
     "SKILL.md",
@@ -80,6 +81,8 @@
     "test/fb_insertion.mjs",
     "test/block_interfaces.py",
     "test/installed_help.py",
+    "test/graphical_listing.py",
+    "test/graphical_listing.mjs",
     "test/trial_dialog.ps1",
     "test/ide_ui_session.mjs",
     "!bridge/*.lock"

@@ -62,6 +62,11 @@ def verb_worksheet_target(req):
     return _ok(**worksheet_target(_project(req['project']), req['kind'], req.get('pou')))
 
 
+def verb_graphical_listing(req):
+    from motionworks_iec_mcp.graphical_listing import inspect
+    return _ok(**inspect(_project(req['project']), req['pou'], req.get('start', 1), req.get('limit', 10)))
+
+
 def verb_structure_snapshot(req):
     from motionworks_iec_mcp.structure import snapshot
     return _ok(**snapshot(Path(req['project'])))
@@ -1075,6 +1080,7 @@ VERBS = {
     "pous": verb_pous,
     "read_st": verb_read_st,
     "worksheet_target": verb_worksheet_target,
+    "graphical_listing": verb_graphical_listing,
     "structure_snapshot": verb_structure_snapshot,
     "block_interface": verb_block_interface,
     "installed_help": verb_installed_help,

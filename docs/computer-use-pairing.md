@@ -12,6 +12,10 @@ verdicts and retained evidence; finish intended edits with fresh Build/Make.
 Use Arya's computer-use tools for graphical placement/wiring, library-manager
 operations and unsupported editor actions, visual inspection and dialogs.
 Resolve keyboard commands from the installed help with `mw_code_installed_help`.
+For graphical diagnosis, `mw_ide_graphical_listing` runs a fresh Build and returns
+matching regenerated compiler networks and declaration symbols. It can inspect
+saved LD/FBD logic without desktop input. Raw compiler tokens do not prove visual
+placement or wiring; use current canvas observation for those checks.
 At startup, use `mw_ide_trial` / `mw_ide_start` for the offered Use Trial control
 before attempting desktop clicks.
 
