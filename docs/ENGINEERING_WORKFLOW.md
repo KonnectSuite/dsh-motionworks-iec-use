@@ -22,7 +22,10 @@ the selector does not override a project-defined interface.
 
 Check the exact declaration and expression for every reported pin name, direction
 or type mismatch. IEC short literals such as `T#100ms` mean TIME. In-out pins
-need compatible variable storage. The review is read-only and is not a complete
+and outputs need writable variable storage; literal output/in-out bindings are
+reported even for TIME, date, real and string constants. Direct declared variables
+are resolved; member/index expressions remain explicit writable-storage warnings
+until their declarations and compiler results are inspected. The review is read-only and is not a complete
 IEC compiler or machine-behavior proof. Use native guarded editing for the
 reviewed correction, then fresh Build/Make and full source preservation checks.
 

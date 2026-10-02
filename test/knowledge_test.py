@@ -150,6 +150,24 @@ class Programming(unittest.TestCase):
         with self.assertRaises(ValueError): C.interface_signature({**interface,'hidden':True})
         with self.assertRaises(ValueError): C.interface_signature({**interface,'pins':interface['pins']+[interface['pins'][0]]})
 
+    def test_writable_fb_bindings_literals_and_unresolved_storage(self):
+        spec={'authority':'bound_installed_declaration','complete':True,
+              'inputs':{},'outputs':{'Q':'ANY'},'inouts':{'State':'ANY'},
+              'citation':{'source_sha256':'installed-interface-hash'}}
+        declarations='VAR\nfb:Timer;\nvalue:TIME;\nEND_VAR'
+        for literal in ['T#100ms','TIME#1s','D#2026-10-02','REAL#1.25',
+                        'TRUE','16#FF','-1.25E+3','1E3',"'text'",'"wide"',"'can''t'", "'$'quoted$''"]:
+            report=C.review(f'fb(State:={literal}, Q=>{literal});',declarations,signatures={'TIMER':spec})
+            invalid=[f for f in report['findings'] if f['code'] in ('fb-inout-needs-variable','fb-output-needs-variable')]
+            self.assertEqual(len(invalid),2,literal)
+            self.assertTrue(all(f['severity']=='error' and f['reference']['source_sha256']=='installed-interface-hash' for f in invalid))
+        good=C.review('fb(State:=value, Q=>value);',declarations,signatures={'TIMER':spec})
+        self.assertFalse(good['findings'])
+        for target in ['state.Value','buffer[1]','missing','value + T#1s']:
+            report=C.review(f'fb(State:={target});',declarations,signatures={'TIMER':spec})
+            self.assertTrue(any(f['code']=='fb-writable-binding-unresolved' and f['severity']=='warning' for f in report['findings']),target)
+            self.assertFalse(any(f['code']=='fb-inout-needs-variable' for f in report['findings']),target)
+
     def test_session_failures_are_candidates_not_repairs(self):
         for message in ['File error!: (POE\\Main\\MainV.vbc)',
                         'Internal error! MSILv2ResManager.cpp(1048)',

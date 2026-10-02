@@ -19,6 +19,28 @@ IDE was enabled, unblocked and had no trial prompt or other dialog. Evidence:
 `arya-electron-startup-state.json` in the parent workspace. This ready-state read
 does not prove a new live trial dismissal or the existing Arya chat's catalog.
 
+## Writable FB parameter review
+
+Programming review now diagnoses literal output and in-out bindings, including
+TIME/date/real/string constants. A parsing fix preserves string values after
+named argument operators; masked literal text was previously consumed as
+whitespace. Direct declared variables resolve as writable storage. Members,
+indexes and other unproven expressions remain explicit warnings rather than
+being silently accepted or rejected as constants. Findings retain the resolved
+interface citation and its authority level.
+
+The full regression suite passed. Read-only installed Electron ASAR acceptance
+used the original TopCutterCamSetup's `fbCamSelect` and its native-bound
+PLCopenPlus_v_2_2a Y_CamStructSelect interface. Three proposed TIME/string/REAL
+literal cases each produced both output and in-out errors with interface hashes;
+the valid CamTable/TopCutterCamReady bindings produced zero errors. Complete
+before/after POUs, tasks, globals, source streams and translation snapshots
+matched; native modified state remained false. No proposed code was written.
+Evidence: `native-writable-bindings-423f8485-8ac9-4e52-bb3f-919f210f851e.json`
+in the disposable fixture's verification directory. The opt-in harness is
+`test/native_writable_bindings_live.mjs`. These are static review results,
+not a runtime cam-table acceptance or proof of the running Arya chat's tools.
+
 ## Proven follow-up patch for 0.5.5
 
 - Trial detection selects only mwctVerify-owned Windows Forms dialogs containing

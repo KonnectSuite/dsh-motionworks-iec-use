@@ -58,7 +58,9 @@ def calls(body):
         if depth: continue
         args = []
         for first, last in parts:
-            param = re.match(r'\s*('+IDENT+r')\s*(:=|=>)\s*', clean[first:last])
+            # Masked strings look like whitespace. Stop at the operator so its
+            # original literal is not consumed as trailing whitespace.
+            param = re.match(r'\s*('+IDENT+r')\s*(:=|=>)', clean[first:last])
             if param:
                 args.append((param[1], param[2], body[first+param.end():last].strip()))
         yield match[1], args, clean.count('\n', 0, match.start())+1
@@ -87,6 +89,20 @@ def integer_literal(expr):
     if not match: return None
     try: return int(match[2], int(match[1] or 10))
     except ValueError: return None
+
+
+def constant_expression(expr):
+    """Recognize complete IEC literals, without treating members/indexes as constants."""
+    value = expr.strip()
+    if value.upper() in ('TRUE', 'FALSE') or integer_literal(value) is not None:
+        return True
+    if re.fullmatch(r'[+-]?\d[\d_]*(?:\.[\d_]+(?:[Ee][+-]?\d[\d_]*)?|[Ee][+-]?\d[\d_]*)', value):
+        return True
+    # A typed literal cannot designate writable storage. Its validity is still
+    # the compiler's job; DATE/TIME spelling must not hide a non-variable binding.
+    if re.fullmatch(r'(?:'+IDENT+r')#[^;\r\n]+', value):
+        return True
+    return bool(re.fullmatch(r"'(?:\$[^\r\n]|''|[^'$])*'|\"(?:\$[^\r\n]|\"\"|[^\"$])*\"", value))
 
 
 def review(body, declarations, globals_text=None, *, signatures=None):
@@ -166,8 +182,12 @@ def review(body, declarations, globals_text=None, *, signatures=None):
             actual = expression_type(expr, types)
             if actual and actual != expected and not expected.startswith('ANY'):
                 add('fb-parameter-type', f'{instance}.{name}: expected {expected}, found {actual}.', 'strict-types', severity, line, evidence)
-            if direction == 'inouts' and (expr.upper() in ('TRUE', 'FALSE') or integer_literal(expr) is not None):
-                add('fb-inout-needs-variable', f'{instance}.{name} needs a compatible variable, not a constant.', 'execute', severity, line, evidence)
+            if direction in ('inouts', 'outputs'):
+                if constant_expression(expr):
+                    code = 'fb-inout-needs-variable' if direction == 'inouts' else 'fb-output-needs-variable'
+                    add(code, f'{instance}.{name} needs writable variable storage, not a constant.', 'execute', severity, line, evidence)
+                elif not (re.fullmatch(IDENT, expr) and expr.upper() in variables):
+                    add('fb-writable-binding-unresolved', f'{instance}.{name}: writable storage for {expr} is not resolved; inspect member/index declarations and compiler diagnostics.', 'execute', 'warning', line, evidence)
         for name in spec['inouts']:
             if name.upper() not in seen:
                 add('fb-inout-binding-review', f'{instance}.{name} is not bound in this call; confirm its existing binding.', 'execute', line=line, evidence=evidence)
