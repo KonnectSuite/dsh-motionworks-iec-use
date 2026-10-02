@@ -413,3 +413,40 @@ The automated suite passes with 59 tools. Deployment copied and hash-verified
 `Arya-restored-hotfix-20261001-210055-61408607`. A fresh installed-module process
 loads all 59 tools including the package route. The running Arya process's reload,
 graphical placement/wiring and Arya-led complete host acceptance remain unverified.
+
+## Native ST-to-FBD conversion investigation
+
+Fresh desktop selection and activation still produced `FrameArrived timed out`,
+then `window capture timed out` on the one allowed refreshed-target retry. No
+editor input was sent. Installed `il001` help topic
+`sourceconversionforil.fbdandld.htm` documents compiled ST/IL/FBD/LD conversion
+to IL/FBD/LD using intermediate code; conversion to ST is not supported.
+Archive SHA-256: `86c10a2227b260b15eeca2e1a4dba6f65294014e8a7b927db4188ea0091d7cda`.
+Topic SHA-256: `a5fa1fb9bbefc3a68b1dd3536cf2aa1c6c5bcffe0508c56f39e160bb2b9d613b`.
+
+Read-only inspection of the installed DDE SourceConvert handler establishes
+four argument buffers and FBD/IL/LD language selectors (FFLD is conditional),
+but the complete DDE object-name binding is not yet verified. No SourceConvert
+command or private vtable call was invoked. The public Ade.tlb `_Pou.Convert`
+method has one `newPouLanguage` argument; native enum FBD is 3.
+
+A disposable ST PROGRAM with Run/Ready BOOL, Elapsed TIME and IEC TON ProbeTimer
+compiled through native APIs. `_Pou.Convert(3)` returned CodexConvertProbe,
+retained the exact POU inventory and changed its language from ST(2) to FBD(3).
+Native Save completed. Saved target declarations, all other POUs, tasks, globals
+and unrelated source/translation files matched the pre-conversion state. A fresh
+Build (11.2 s) produced an accepted populated FBD listing with one network.
+Temporary task unassignment and POU deletion followed by Build/Make restored the
+complete original seven-POU baseline. Evidence:
+`native-conversion-live-f36c8f08-d167-4723-bce0-ca8d0f00efe6.json` and
+`graphical-listing-33962f7c-8766-4482-905d-d46c9603b9ac.json`.
+
+The initial probe stopped before FB insertion because TON resolved ambiguously
+between IEC and eCLR. Its unused blank temporary POU was inspected and removed;
+the corrected probe explicitly selects IEC. `test/native_conversion_live.mjs`
+requires an explicit pywin32 runtime and retains phases without automatic retry.
+This is native conversion evidence, not a public conversion tool. Complete raw
+native declaration-flag preservation needs a guarded route. The listing preserves
+unresolved @IFB/@IFBP tokens; canvas geometry/wiring and Arya host acceptance
+remain unverified. The next implementation is guarded conversion of an isolated
+copy after a fresh compile, with exact native/saved collateral checks.

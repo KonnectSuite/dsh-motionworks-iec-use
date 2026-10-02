@@ -125,8 +125,8 @@ Set `MOTIONWORKS_MCP_WORKSPACE` to that fixture and
 checks the COM runtime before any mutation; the bundled file-reader Python does
 not contain COM bindings. This dependency belongs to the opt-in investigation,
 not to the installed plugin's native bridge.
-These commands are investigation evidence, not an exposed public exchange tool.
-General import still needs collision, package/provenance, dependency, native flag,
+The initial probe established these native bindings; the guarded public route is documented below.
+Arbitrary external-package import still needs collision, package/provenance, dependency, native flag,
 source-preservation and partial-action guards. The observed argument buffers are
 bounded; the probe keeps each path below 128 characters. Graphical placement and
 wiring remain separate, unverified operations.
