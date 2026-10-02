@@ -3,7 +3,7 @@ const sourceKeys=['pous','tasks','globals','program_sources','translation_files'
 const identical=(before,after)=>sourceKeys.every(k=>same(before[k],after[k]));
 const exact=(rows,name)=>rows.find(p=>p.name===name);
 const prefix=(file,name)=>file.replaceAll('\\','/').toLowerCase().startsWith('poe/'+name.toLowerCase()+'/');
-function aligned(saved,native){
+export function alignSavedNative(saved,native){
  const fields=['name','type','section','group','address','initial_value','description'];
  const projectRows=rows=>rows.map(v=>Object.fromEntries(fields.map(k=>[k,k==='description'?(v[k]?.trim()||null):v[k]??null]))).sort((a,b)=>a.name.localeCompare(b.name));
  // COM omits worksheet comments on externals. Verify those through the exact
@@ -23,7 +23,7 @@ export async function exportPouPackage(args,deps){
  if(!/^[A-Za-z_][A-Za-z_0-9]{0,29}$/.test(args.pou??''))throw Error('Exact POU name required');
  if((await deps.status()).is_modified!==false)throw Error('Unsaved or unknown native baseline');
  const saved=await deps.saved(),native=await deps.snapshot(),pou=exact(saved.pous,args.pou),meta=exact(native.structure.pous,args.pou);
- aligned(saved,native);
+ alignSavedNative(saved,native);
  if(!pou||!meta||meta.read_only||!['ST','LD','FBD'].includes(pou.language))throw Error('Exact writable supported POU required');
  const result=await deps.mutate({operation:'export',pou:args.pou,before_state:native,before_files:saved.file_hashes});
  const after=await deps.saved(),afterNative=await deps.snapshot(),status=await deps.status();
@@ -38,7 +38,7 @@ export async function importPouPackage(args,receipt,deps){
  if(receipt.used)throw Error('Package import was already attempted; inspect retained evidence');
  if((await deps.status()).is_modified!==false)throw Error('Unsaved or unknown native baseline');
  const before=await deps.saved(),native=await deps.snapshot(),name=receipt.pou.name;
- aligned(before,native);
+ alignSavedNative(before,native);
  if(before.pous.some(p=>p.name.toLowerCase()===name.toLowerCase())||native.structure.pous.some(p=>p.name.toLowerCase()===name.toLowerCase()))throw Error('POU name already exists; package import never overwrites');
  if(!same(receipt.manifest,await deps.manifest()))throw Error('Native package changed since export');
  if(!same(native.libraries,receipt.native.libraries))throw Error('Native library bindings changed; inspect dependencies');

@@ -72,11 +72,11 @@ def networks(text, bindings):
     return result
 
 
-def inspect(project, name, start=1, limit=10):
+def inspect(project, name, start=1, limit=10, *, source_only=False):
     if type(start) is not int or start < 1 or type(limit) is not int or not 1 <= limit <= 50:
         raise ValueError('Invalid network range')
     pou = project.pou(name)
-    if pou.name != name or pou.body_stream()[1] not in ('LD', 'FBD'):
+    if pou.name != name or pou.body_stream()[1] not in (('ST', 'LD', 'FBD') if source_only else ('LD', 'FBD')):
         raise ValueError('Exact graphical POU required')
     root = project.root
     candidates = []
@@ -103,7 +103,9 @@ def inspect(project, name, start=1, limit=10):
     if paths and any(PureWindowsPath(p) != PureWindowsPath(expected_file) for p in paths):
         raise ValueError('Compiler source mapping points to another project/worksheet')
     bindings = symbols(declarations)
-    parsed = networks(code, bindings)
+    parsed = [] if source_only else networks(code, bindings)
+    if source_only and not paths:
+        raise ValueError('Compiled source has no worksheet mapping')
     if parsed and not paths:
         raise ValueError('Populated listing has no source mapping')
     selected = parsed[start-1:start-1+limit]
@@ -111,6 +113,9 @@ def inspect(project, name, start=1, limit=10):
     for artifact in artifacts:
         if read_text(Path(artifact['path']),root)[1]!=artifact:
             raise ValueError('Compiler artifact set changed during inspection')
+    if source_only:
+        return dict(pou=name, language=pou.body_stream()[1], artifacts=artifacts,
+                    action_performed=False, compiler_cache_freshness_verified=False)
     return dict(pou=name, language=pou.body_stream()[1], artifacts=artifacts,
                 network_count=len(parsed), start=start, networks=selected, has_more=start-1+len(selected)<len(parsed),
                 symbol_bindings=bindings, compiler_cache_freshness_verified=False,

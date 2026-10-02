@@ -67,6 +67,11 @@ def verb_graphical_listing(req):
     return _ok(**inspect(_project(req['project']), req['pou'], req.get('start', 1), req.get('limit', 10)))
 
 
+def verb_compiled_source_evidence(req):
+    from motionworks_iec_mcp.graphical_listing import inspect
+    return _ok(**inspect(_project(req['project']), req['pou'], source_only=True))
+
+
 def verb_structure_snapshot(req):
     from motionworks_iec_mcp.structure import snapshot
     return _ok(**snapshot(Path(req['project'])))
@@ -98,6 +103,11 @@ def verb_pous(req):
             stream = info.body_stream()
             entry["body_stream"] = stream[0] if stream else None
             entry["stream_language"] = stream[1] if stream else None
+            if stream:
+                import hashlib
+                body = info.st_body() if stream[1] == 'ST' else None
+                raw = body.encode('utf-8') if body is not None else info.source().read_stream(stream[0])
+                entry["body_sha256"] = hashlib.sha256(raw).hexdigest()
         except Exception as exc:
             entry["body_error"] = str(exc)
         try:
@@ -1081,6 +1091,7 @@ VERBS = {
     "read_st": verb_read_st,
     "worksheet_target": verb_worksheet_target,
     "graphical_listing": verb_graphical_listing,
+    "compiled_source_evidence": verb_compiled_source_evidence,
     "structure_snapshot": verb_structure_snapshot,
     "block_interface": verb_block_interface,
     "installed_help": verb_installed_help,

@@ -75,6 +75,18 @@ function without VAR_INPUT declarations.
 Rename/delete requires references_reviewed, including graphical and indirect
 calls; the automatic ST scan cannot prove their absence. Delete also requires
 explicit user approval. Review task assignments and remaining type/call references.
+For native source-language conversion use `mw_ide_pou_convert` with the exact
+POU, destination `language` FBD or LD, and `expected_body_sha256` returned by
+`mw_code_pous`. Set `baseline_saved:true` only for reconciled saved state and
+`conversion_reviewed:true` after reviewing replacement of its original source
+language/layout/comments. Prefer an isolated copy when generating new graphics.
+The tool converts the selected POU in place through native Pou.Convert, requires
+fresh compiler artifacts for that exact source, preserves native declarations,
+flags/groups/libraries and unrelated sources, then compiles the resulting graph.
+Unused POUs may have no compiled source; failure stops without assigning tasks,
+retrying or rolling back. Inspect retained phase evidence before another action.
+This creates native graphical source through compilation; canvas placement,
+individual pin wiring and machine behavior still need separate verification.
 For native POU exchange use `mw_ide_pou_package`: export an exact writable POU
 with `baseline_saved:true`, then retain its session-bound `package_token`.
 Import accepts only that unchanged native package into the same staged project

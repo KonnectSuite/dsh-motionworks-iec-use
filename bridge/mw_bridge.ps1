@@ -1487,6 +1487,31 @@ while ($true) {
                 if($app.ActiveProject.IsModified -ne $false){throw 'REFUSED: package inspection changed modified state'}
                 $ok=$true
             }
+            'pou_convert' {
+                $app=Connect-App
+                [void](Assert-StagedOpen $app $verb)
+                $project=[IO.Path]::GetFullPath([string]$req.project)
+                if([IO.Path]::GetFullPath($app.ActiveProject.FullName) -ine ($project+'.mwt') -or $app.ActiveProject.IsModified -ne $false -or $app.ActiveProject.IsCompiled -ne $true){throw 'REFUSED: wrong, unsaved or uncompiled project'}
+                $name=[string]$req.pou;$language=[string]$req.language
+                if($req.conversion_reviewed -ne $true -or $name -notmatch '^[A-Za-z_][A-Za-z0-9_]{0,29}$' -or $language -notin @('FBD','LD')){throw 'REFUSED: reviewed conversion identity/language required'}
+                $now=Get-PouPackageState $app
+                if(($now | ConvertTo-Json -Depth 30 -Compress) -cne ($req.before_state | ConvertTo-Json -Depth 30 -Compress)){throw 'REFUSED: native conversion baseline changed'}
+                foreach($property in $req.before_files.PSObject.Properties){
+                    $file=[IO.Path]::GetFullPath((Join-Path $project $property.Name))
+                    if(-not $file.StartsWith($project.TrimEnd('\')+'\',[StringComparison]::OrdinalIgnoreCase)){throw 'REFUSED: conversion source outside project'}
+                    Assert-NoLinkedPath $file
+                    if((Get-MwSha256 $file) -ine [string]$property.Value){throw 'REFUSED: saved conversion baseline changed'}
+                }
+                $present=@($now.structure.pous | Where-Object {$_.name -ceq $name})
+                $destination=if($language -eq 'FBD'){3}else{4}
+                if($present.Count -ne 1 -or $present[0].read_only -ne $false -or $present[0].language -notin @(2,3,4) -or $present[0].language -eq $destination){throw 'REFUSED: exact writable POU in a different supported language required'}
+                $converted=$app.ActiveProject.Pous.Item($name).Convert($destination)
+                $convertedName=if($converted -is [string]){$converted}else{[string]$converted.Name}
+                if($convertedName -cne $name){throw 'Native conversion returned a different identity; inspect state before another action'}
+                $app.ActiveProject.Save()
+                $data=[ordered]@{name=$convertedName;language=[int]$app.ActiveProject.Pous.Item($name).PouLanguage;saved=($app.ActiveProject.IsModified -eq $false);method='native_com_pou_convert'}
+                $ok=$true
+            }
             'pou_package_mutate' {
                 $app=Connect-App
                 [void](Assert-StagedOpen $app $verb)

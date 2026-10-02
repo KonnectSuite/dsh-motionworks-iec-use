@@ -49,5 +49,17 @@ class Listing(unittest.TestCase):
             with self.assertRaisesRegex(ValueError,'ambiguous'):inspect(project,'Main')
             path.unlink();path.with_name('ICI00002.CIC').unlink()
             with self.assertRaisesRegex(ValueError,'absent'):inspect(project,'Main')
+    def test_textual_source_provenance_without_graphical_network_parsing(self):
+        with tempfile.TemporaryDirectory() as temp:
+            project,path=self.fixture(Path(temp))
+            pou=project.pou('Main');pou.body_stream=lambda:('Main.ST','ST')
+            project.pou=lambda name:pou
+            path.write_text('(*\nT: PROGRAM Main\n*)\nLD\t@IV 1\nST\t@IV 2\n')
+            path.with_suffix('.DIW').write_text('00002\t00000\tPOE\\Main\\Main.st\n')
+            path.with_suffix('.SP').write_text(str(Path(temp)/'POE'/'Main'/'Main.st')+'\t4\n')
+            self.assertEqual(len(inspect(project,'Main',source_only=True)['artifacts']),4)
+            with self.assertRaisesRegex(ValueError,'graphical'):inspect(project,'Main')
+            path.with_suffix('.SP').write_text('')
+            with self.assertRaisesRegex(ValueError,'no worksheet mapping'):inspect(project,'Main',source_only=True)
 
 if __name__=='__main__':unittest.main()

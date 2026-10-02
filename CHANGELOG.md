@@ -10,6 +10,11 @@
 
 ## 0.5.5
 
+- Add native POU conversion to FBD/LD with exact expected body hashes, explicit
+  conversion review, fresh source-POU compiler artifacts, complete declaration
+  flag/group and collateral checks, then fresh generated-graph compilation.
+- Expose saved body SHA-256 values through POU discovery for exact preconditions.
+
 - Add guarded native POU package export/import with session-bound receipts,
   collision and dependency checks, package hashes, exact code/graph and native
   declaration flag/group verification, and complete collateral source checks.

@@ -62,6 +62,7 @@ import { nativeStructureChange } from './native-structure.js';
 import { nativeCodeChange } from './native-code.js';
 import { graphicalListing } from './graphical-listing.js';
 import { exportPouPackage,importPouPackage } from './pou-package.js';
+import { convertPou } from './pou-conversion.js';
 import { fbInsertionPlan } from './fb-insertion.js';
 
 export const name = 'motionworks-iec-use';
@@ -1324,6 +1325,36 @@ function nativePackageManifest(directory){
 }
 function defineTools() {
   return [
+    {
+      name:'mw_ide_pou_convert',
+      description:'Convert one exact writable saved ST/LD/FBD POU in place to FBD or LD through native Pou.Convert. Requires baseline_saved:true, conversion_reviewed:true and its exact expected_body_sha256 from mw_code_pous. Replaces source language; review loss of original layout/comments and prefer an isolated POU copy for generation. Runs a fresh native Build before conversion, requires regenerated compiler artifacts for that exact source POU, and runs a fresh graphical Build/listing after it. Requires preserved native declaration flags/groups, libraries, POU type, saved declarations and every unrelated source/task/global/translation. The compiler can omit unused POUs; this tool never assigns tasks to manufacture a compiled source. No conversion to ST, binary rewriting, desktop input or controller action. Full phase evidence is retained; stop after any failure and never retry/rollback blindly. Native conversion/build does not prove canvas geometry, individual pin wiring or machine behavior.',
+      parameters:{type:'object',additionalProperties:false,required:['project','pou','language','expected_body_sha256','baseline_saved','conversion_reviewed'],properties:{project:{type:'string'},pou:{type:'string'},language:{type:'string',enum:['FBD','LD']},expected_body_sha256:{type:'string',pattern:'^[a-f0-9]{64}$'},baseline_saved:{type:'boolean'},conversion_reviewed:{type:'boolean'}}},
+      output:{schema:{type:'object',additionalProperties:true,required:['accepted','action_performed','evidence_path']},render:(_a,v)=>text(JSON.stringify(v,null,2))},
+      execute:async args=>{
+        const project=projectOf(args),identity=await assertIdeProjectProven();
+        if(resolve(identity.active_project).replace(/\.mwt$/i,'').toLowerCase()!==project.toLowerCase())throw Error('REFUSED: wrong open project');
+        const directory=join(workspaceRoot(),'.motionworks','verification');
+        if(!isInsideWorkspace(directory))throw Error('REFUSED: linked conversion evidence directory');
+        mkdirSync(directory,{recursive:true});
+        const evidence_path=join(directory,'pou-conversion-'+randomUUID()+'.json');
+        let action_performed=false,conversion_attempted=false;const record={args,project,phase:'requested',events:[]};
+        const retain=()=>{if(!isInsideWorkspace(evidence_path))throw Error('REFUSED: linked conversion evidence');writeFileSync(evidence_path,JSON.stringify(record,null,2),'utf8');};retain();
+        const observe=async(name,fn)=>{const value=await fn();record.events.push({name,value});retain();return value;};
+        try{
+          const result=await convertPou(args,{
+            status:()=>observe('status',()=>verb('compile_state',{},30000)),
+            saved:()=>observe('saved',()=>runCode('structure_snapshot',{project})),
+            snapshot:()=>observe('native',()=>verb('pou_package_snapshot',{},30000)),
+            build:()=>{action_performed=true;record.phase='build_requested';retain();return observe('build',()=>defineTools().find(t=>t.name==='mw_ide_build').execute({}));},
+            source:()=>observe('compiled_source',()=>runCode('compiled_source_evidence',{project,pou:args.pou})),
+            mutate:request=>{conversion_attempted=true;record.phase='conversion_requested';retain();return observe('conversion',()=>verb('pou_convert',{...request,project,conversion_reviewed:args.conversion_reviewed},60000));},
+            listing:()=>{record.phase='converted_build_requested';retain();return observe('listing',()=>defineTools().find(t=>t.name==='mw_ide_graphical_listing').execute({project,pou:args.pou,baseline_saved:true,limit:1}));},
+          });
+          record.phase=result.verification.accepted?'conversion_verified':'conversion_unverified';record.result=result;retain();
+          return {accepted:result.verification.accepted,action_performed,conversion_attempted,pou:args.pou,language:args.language,verification:result.verification,network_count:result.listing?.network_count,evidence_path,layout_verified:false,wiring_verified:false,next_step:result.verification.accepted?'Run Make after intended conversions, then inspect the graphical editor and verify intended behavior; conversion is compiled source evidence.':'STOP: inspect full saved/native phase evidence before any further action; no automatic retry or rollback.'};
+        }catch(error){record.phase='stopped';record.error=error.message;retain();return {accepted:false,action_performed,conversion_attempted,error:error.message,evidence_path,next_step:'STOP: inspect current native/saved state and retained phases; do not retry or roll back blindly.'};}
+      },
+    },
     {
       name:'mw_ide_pou_package',
       description:'Export one writable ST/LD/FBD POU through the native IDE to a new private workspace package, or import that exact untouched package into its original staged project with its POU name absent. Export returns a session-bound package_token; import requires it and dependencies_reviewed:true. Receipts expire when this plugin process reloads and are consumed before one import attempt. Refuses arbitrary packages, path arguments, overwrites, changed libraries, missing/mismatched externals, stale source/native baselines and altered packages. Verifies full graph/code/declarations, native flags/groups and unrelated sources/tasks/globals/translations. No binary rewriting, desktop input, task assignment or controller action. Import preserves completed phases on failure; inspect evidence, never retry blindly. Finish intended imports with fresh Build/Make.',
@@ -2590,9 +2621,9 @@ function defineTools() {
       name: 'mw_code_pous',
       description:
         'List the POUs of a staged project with each one\'s language and body stream, read '
-        + 'straight from the project files. `has_st_body` is the editability test: Structured '
-        +         'Text POUs are editable, while graphical LD/FBD POUs are proprietary binary and are '
-        + 'refused. Defaults to the staged project. Pass reference: true with a project path to '
+        + 'straight from the project files, including body_sha256 for exact conversion preconditions. '
+        + 'has_st_body identifies readable ST text; graphical bodies use native IDE operations. '
+        + 'Defaults to the staged project. Pass reference: true with a project path to '
         + 'read a different program, including one outside the workspace, without staging or opening it.',
       parameters: {
         type: 'object',
@@ -2623,6 +2654,7 @@ function defineTools() {
                   name: { type: 'string' },
                   language: { oneOf: [{ type: 'string' }, { type: 'null' }] },
                   body_stream: { oneOf: [{ type: 'string' }, { type: 'null' }] },
+                  body_sha256: { type: 'string' },
                   has_st_body: { oneOf: [{ type: 'boolean' }, { type: 'null' }] },
                 },
               },
@@ -2634,7 +2666,8 @@ function defineTools() {
         render: (_a, v) => text(
           (v.read_only ? 'READ ONLY. ' : '')
           + `${v.count} POUs:\n` + v.pous.map((p) => `  ${p.name} [${p.language ?? '?'}]`
-            + (p.has_st_body ? ' editable (ST)' : ' not ST-editable')).join('\n'),
+            + (p.has_st_body ? ' ST text' : ' native graphical/body operations')
+            + (p.body_sha256 ? ' body_sha256='+p.body_sha256 : '')).join('\n'),
         ),
       },
       presentCall: () => ({ card: 'generic', title: 'List POUs from files', kind: 'read' }),

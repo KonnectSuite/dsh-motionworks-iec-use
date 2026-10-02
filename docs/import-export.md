@@ -190,3 +190,25 @@ Finish intended imports with fresh Build/Make. Arbitrary package paths,
 cross-project import, overwrites and graphical block placement/wiring are outside
 this route's verified scope. The opt-in `test/public_pou_package_live.mjs` exercises
 the guarded route on the disposable staged smoke fixture.
+
+## Public native source-language conversion
+
+`mw_ide_pou_convert` uses `_Pou.Convert(newPouLanguage)` to convert the selected
+POU in place to FBD(3) or LD(4). Read `mw_code_pous` first and supply its exact
+`body_sha256` as `expected_body_sha256`, plus the staged `project`, exact `pou`,
+`language`, `baseline_saved:true` and `conversion_reviewed:true`. Review replacement
+of the original source language, layout and code comments; prefer an isolated
+copy when generating new graphics. The tool does not copy or assign tasks itself.
+
+It requires a fresh Build and regenerated CIC/DIT/DIW/SP artifacts for that exact
+source POU, with matching declaration identity, saved worksheet and same-project
+source mapping. Missing/unused or stale compiled sources stop before conversion.
+The public COM method can return a Pou dispatch object; its Name is inspected
+rather than coercing it to a PowerShell string. Conversion is called once, followed
+by native Save, independent saved/native type and declaration read-back, complete
+native flag/group/library checks, collateral-source verification, and another
+fresh Build/listing of the generated graphical source. Unknown native flags stop
+before conversion. Completed phases remain in workspace evidence on failure.
+There is no automatic retry, rollback, conversion to ST or controller action.
+Finish intended conversions with Make and actual editor/behavior verification;
+compiler listings cannot establish canvas placement or individual pin wiring.

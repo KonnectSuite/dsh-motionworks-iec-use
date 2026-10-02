@@ -450,3 +450,50 @@ native declaration-flag preservation needs a guarded route. The listing preserve
 unresolved @IFB/@IFBP tokens; canvas geometry/wiring and Arya host acceptance
 remain unverified. The next implementation is guarded conversion of an isolated
 copy after a fresh compile, with exact native/saved collateral checks.
+
+## Guarded public native conversion acceptance (0.5.5)
+
+Added tool 60, `mw_ide_pou_convert`. It converts the exact selected POU in place
+through the public COM method, with an explicit conversion review and expected
+saved body SHA-256. `mw_code_pous` now supplies and renders that hash for ST and
+graphical bodies. The installed-module read-back verified those public hashes
+against complete saved structural evidence for all seven original POUs.
+
+The tool requires a fresh Build plus newly regenerated CIC/DIT/DIW/SP artifacts
+for the exact source POU, matching declarations, worksheet and project source
+mapping. It refuses omitted/unused/stale source caches before conversion and
+never manufactures usage through task assignment. After conversion/native Save,
+it verifies exact POU type/declarations, all native flags/groups and libraries,
+every unrelated source/task/global/translation, then a fresh generated-graph
+Build/listing and final saved/native preservation. Unknown native flag/group
+states stop before conversion. Full partial phases are retained without retry
+or rollback; graphical geometry and individual pin wiring remain unverified.
+
+The first public FBD attempt converted successfully but stopped before Save
+because PowerShell coerced the returned Pou dispatch object to a type string.
+Inspection confirmed the same POU name and FBD language. Native Save and full
+flag/group comparison passed before explicit unassignment/deletion. Cleanup
+Build marked the project modified; a subsequent reviewed Save, independent
+original-source comparison and Make restored the clean seven-POU baseline.
+Evidence: `conversion-partial-cleanup.json`. The bridge now reads the returned
+Pou object's Name, with a string-return branch for compatible native versions.
+
+Corrected public conversion of the populated IEC TON sample passed for both
+ST-to-FBD and ST-to-LD, including source cache freshness, generated one-network
+listing, native metadata/flags, complete collateral checks, cleanup Build/Make
+and exact original-baseline restoration. Evidence:
+`public-conversion-live-656aacb8-a0bc-4e03-bf43-b92b378ad651.json` /
+`pou-conversion-83ee0ca6-2157-46d4-b8c7-063a5232cfd5.json` (FBD), and
+`public-conversion-live-26a690f1-a7e9-484b-a297-642fafa4b01c.json` /
+`pou-conversion-d774ac1f-4cae-4d4b-b6dc-48beb5d25ec1.json` (LD).
+The bounded reproduction is `test/public_conversion_live.mjs`; select the
+fixture workspace and `MOTIONWORKS_CONVERSION_LANGUAGE=FBD` or `LD` explicitly.
+
+The full automated suite passes with 60 tools; focused regressions also cover
+unknown flags, wrong returned identity, stale source artifacts and failures
+after conversion. Deployment copied and hash-verified 131 declared package
+files as 0.5.5; backup: `Arya-restored-hotfix-20261001-213255-320da082`.
+A fresh installed-module process loads all 60 tools and verifies public body
+hashes (`installed-conversion-tools.json`). This does not prove the running Arya
+process reloaded. Direct graphical editor/toolbox placement/wiring, general IL
+editing and Arya-led live host acceptance remain incomplete; the goal is active.
