@@ -153,6 +153,61 @@ The refusal paths were also exercised: with no IDE running and no staged project
 this checkout, all fourteen throw before returning, so no output validation is
 attempted on that path.
 
+### Live baseline in the running chat
+
+Taken while the running process still held the pre-fix bundle, from the live
+harness rather than from disk:
+
+```
+plugin_manager list_plugins
+  -> {"entryId":"include:motionworks-iec-use","moduleName":"dsh-motionworks-iec-use",
+      "enabled":true,"fiberPhase":"failed", ...}
+
+cordis_inspect_query host Tool listTools
+  -> 182 tools callable by the agent, 0 of them named mw_*
+  -> the string "motionworks" does not appear in the catalog at all
+```
+
+Every other plugin in the same profile reports `"fiberPhase":"active"`. The plugin
+is enabled, its fiber failed, and the agent has no MotionWorks tool — which is the
+predicted consequence of `apply()` throwing on the first tool.
+
+This also fixes how the gap is checked. `apply()` runs before any tool is callable,
+so a still-failing schema shows up as `fiberPhase: "failed"` plus an empty catalog —
+not as a tool error. The two signals to read are:
+
+1. `plugin_manager list_plugins` — `fiberPhase` for `motionworks-iec-use`.
+2. `cordis_inspect_query` on `platform: "host"`, `provider: "Tool"`,
+   `method: "listTools"` — the tools actually callable by the agent.
+
+### Live confirmation after restart
+
+Arya was restarted against the installed bundle, and both signals flipped:
+
+```
+plugin_manager list_plugins
+  before: {"moduleName":"dsh-motionworks-iec-use","fiberPhase":"failed"}
+  after : {"moduleName":"dsh-motionworks-iec-use","fiberPhase":"active"}
+
+cordis_inspect_query host Tool listTools
+  before: 182 tools callable, 0 named mw_*, "motionworks" absent
+  after : 243 tools callable, 61 named mw_*
+```
+
+243 = 182 + 61, so the whole tool set arrived and nothing else was displaced. The
+61 names are exactly `defineTools()`: `mw_project_find`, `mw_workflow_check`, the
+29 `mw_code_*` tools and the 30 `mw_ide_*` tools. Several repaired schemas are
+visible verbatim in the live catalog — `mw_ide_pou_convert`'s
+`expected_body_sha256` now carries its constraint as a description,
+`mw_ide_fb_insert.bindings` and `mw_ide_task_change.settings_changes` report
+`additionalProperties: true`, and `mw_code_reference`'s `query`/`limit` and
+`mw_ide_graphical_listing`'s `start`/`limit` carry their bounds as descriptions.
+
+The restart was sufficient on its own. `index.js` does not import the new
+`tool-contract.mjs` (only `preflight.mjs` and the tests do), so the runtime module
+graph is the one that already resolved all 61 definitions out of
+`app.asar.unpacked`.
+
 ## New guard
 
 - `tool-contract.mjs` — a dependency-free reimplementation of
@@ -172,11 +227,12 @@ On the pre-fix commit it reports exactly the violations the real
 
 Version stays **0.5.5**; nothing was published and no release tag moved.
 
-- The **running** chat still holds the catalog it loaded at startup. A plugin
-  reload or an Arya restart is required before the tools appear. This was not
-  verified inside a live chat: `AryaAI.exe` was already running with eight
-  processes, and `ELECTRON_RUN_AS_NODE` probing stopped executing once it was.
+- The running chat's catalog was confirmed live after a restart: `fiberPhase`
+  `active`, 61 `mw_*` tools callable. A reload is still required after any future
+  change to this bundle, because the catalog is read at load time.
 - Live *success-path* output validation for the fourteen tools was not exercised —
-  that needs the disposable fixture, the IDE and an authorized edit session.
+  that needs the disposable fixture, the IDE and an authorized edit session. Their
+  refusal paths were exercised (all throw), and every declared key was traced to the
+  code or engine that produces it.
 - Nothing was sent to a controller; no download, no Run/Reset, no forcing, no
   motion. No customer project was opened, staged or modified.

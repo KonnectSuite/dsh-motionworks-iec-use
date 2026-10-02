@@ -15,6 +15,9 @@
   `preflight.mjs` gained the same check as step 7. Every existing test drove
   `defineTools()[i].execute(...)` directly, which is why a bundle that registered
   zero tools still passed the whole suite and preflight.
+- Verified live in the running app after a restart: the plugin's fiber went
+  `failed` -> `active`, and the agent's callable catalog went from 182 tools with no
+  `mw_*` to 243 tools including all 61 `mw_*`.
 - Added public requirements, local-bundle setup, attach-first examples, capability
   evidence, troubleshooting and sanitized support guidance.
 - Replaced obsolete offline-writer contributor instructions with IDE-first guidance.
