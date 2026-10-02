@@ -1,5 +1,6 @@
 import {variableExpectation} from './edit-session.js';
 const fields=['name','type','section','group','address','initial_value','description'];
+const flagFields=['retain','pdd','opc','disabled','not_on_plc','redundant'];
 const equalName=(a,b)=>a.toUpperCase()===b.toUpperCase();
 // The saved reader trims comment padding; raw native rows remain the mutation guard.
 const savedProjection=rows=>rows.map(v=>Object.fromEntries(fields.map(f=>[f,f==='description'?(v[f]?.trim()||null):v[f]??null])));
@@ -23,6 +24,10 @@ export function variableChangePlan(baseline,args,existingGroups=baseline.map(v=>
   return {expected,old};
 }
 export async function nativeVariableChange(args,{status,saved,snapshot,mutate,compare,globals}) {
+  if(args.flags!==undefined) {
+    if(!args.flags||typeof args.flags!=='object'||Array.isArray(args.flags)||Object.entries(args.flags).some(([k,v])=>!flagFields.includes(k)||typeof v!=='boolean'))throw new Error('flags must contain only explicit boolean native variable flags');
+    if(args.operation==='delete')throw new Error('Flag changes require add/edit, not delete');
+  }
   if(args.baseline_saved!==true)throw new Error('Save/reconcile IDE edits before a native variable operation');
   const state=await status();
   if(state.is_modified!==false)throw new Error('Native project has unsaved changes; save/reconcile first');
@@ -56,8 +61,10 @@ export async function nativeVariableChange(args,{status,saved,snapshot,mutate,co
   if(result.saved!==true||result.is_modified!==false){verification.accepted=false;verification.errors.push('Native save completion not proven');}
   for(const row of result.variables??[]) {
     const original=live.variables.find(v=>equalName(v.name,row.name))??(plan.old&&equalName(row.name,args.declaration?.name??'')?target:null);
-    for(const field of ['retain','pdd','opc','disabled','not_on_plc','redundant']) {
-      if(row[field] !== (original?.[field]??false)){verification.accepted=false;verification.errors.push(`Native ${field} changed unexpectedly on ${row.name}`);}
+    const changedTarget=args.operation!=='delete'&&equalName(row.name,args.declaration.name);
+    for(const field of flagFields) {
+      const expected=changedTarget&&Object.hasOwn(args.flags??{},field)?args.flags[field]:(original?.[field]??false);
+      if(row[field] !== expected){verification.accepted=false;verification.errors.push(`Native ${field} disagrees with expected flag on ${row.name}`);}
     }
   }
   if(after.warnings?.length){verification.accepted=false;verification.errors.push(...after.warnings);}

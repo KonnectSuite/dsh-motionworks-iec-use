@@ -32,8 +32,11 @@ For declarations use `mw_ide_variable_change` with the staged project, exact POU
 (omit for resource globals), operation, and `baseline_saved:true` only after
 reconciling saved edits. Add/edit requires all seven declaration fields and an
 existing writable group. Inspect `verification.accepted` before continuing;
-failure means stop and inspect evidence, never retry automatically. Delete
-requires explicit user approval and reference review; renames require review.
+failure means stop and inspect evidence, never retry automatically.
+Optional `flags` on add/edit changes explicit boolean retain/pdd/opc/disabled/
+not_on_plc/redundant properties through native setters. Omitted flags stay
+unchanged; verify all flags and review their effect before compilation.
+Delete requires explicit user approval and reference review; renames require review.
 Run fresh Build/Make after the intended edits. This API does not require opening
 a worksheet. To inspect or edit a named worksheet, use `mw_ide_open_worksheet`
 with kind `variables` or `code`, the staged project, and exact POU (omit only for

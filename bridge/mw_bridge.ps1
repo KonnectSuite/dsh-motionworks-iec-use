@@ -899,7 +899,7 @@ while ($true) {
 
             'ping' {
                 $ok = $true
-                $data = [ordered]@{ alive = $true; workspace_protocol = 4; ide_window = (Get-IdeWindow -ne $null) }
+                $data = [ordered]@{ alive = $true; workspace_protocol = 5; ide_window = (Get-IdeWindow -ne $null) }
             }
 
             'stop' {
@@ -1714,6 +1714,14 @@ while ($true) {
                 Assert-VariableBaseline $req.before_native (Get-VariableRows $vars)
                 $op=[string]$req.operation; $decl=$req.declaration
                 if($op -notin @('add','edit','delete')){throw 'Unknown native variable operation'}
+                $flagMap=@{retain='Retain';pdd='PDD';opc='OPC';disabled='Disabled';not_on_plc='NotOnPlc';redundant='Redundant'}
+                if($null -ne $req.flags) {
+                    if($req.flags -isnot [pscustomobject]){throw 'REFUSED: native flags must be an object'}
+                    if($op -eq 'delete'){throw 'REFUSED: flag changes require add/edit'}
+                    foreach($flag in $req.flags.PSObject.Properties) {
+                        if(-not $flagMap.ContainsKey($flag.Name) -or $flag.Value -isnot [bool]){throw 'REFUSED: unknown or non-boolean native variable flag'}
+                    }
+                }
                 $target=$null
                 for($i=1;$i -le $vars.Count;$i++) {if([string]$vars.Item($i).Name -ieq [string]$req.name){$target=$vars.Item($i)}}
                 if($op -ne 'add' -and -not $target){throw 'REFUSED: exact variable not found'}
@@ -1735,6 +1743,8 @@ while ($true) {
                     }
                     if($op -eq 'add') {
                         $group.Variables.Create([string]$decl.name,[string]$decl.type,[int]$block,[string]$decl.description,[string]$decl.initial_value,[string]$decl.address,$false) | Out-Null
+                        for($i=1;$i -le $vars.Count;$i++){if([string]$vars.Item($i).Name -ceq [string]$decl.name){$target=$vars.Item($i)}}
+                        if(-not $target){throw 'Native created variable cannot be resolved; inspect before another action'}
                     } else {
                         if([string]$target.Group.Name -cne $groupName){throw 'REFUSED: native Variable.Group is read-only; use the observed worksheet move workflow and full verification'}
                         if([string]$target.Name -ine [string]$decl.name -and $req.rename_reviewed -ne $true){throw 'REFUSED: rename reference review required'}
@@ -1744,6 +1754,12 @@ while ($true) {
                         $target.Comment=[string]$decl.description
                         $target.InitialValue=[string]$decl.initial_value
                         $target.IecAddress=[string]$decl.address
+                    }
+                    if($null -ne $req.flags) {
+                        foreach($flag in $req.flags.PSObject.Properties) {
+                            $nativeFlag=$flagMap[$flag.Name]
+                            $target.$nativeFlag=[bool]$flag.Value
+                        }
                     }
                 }
                 $app.ActiveProject.Save()

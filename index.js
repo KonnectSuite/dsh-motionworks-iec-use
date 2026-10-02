@@ -437,7 +437,7 @@ async function bridgeAlive(timeoutMs = 4000) {
   if (!existsSync(BRIDGE_SCRIPT)) return false;
   try {
     const reply = await call('ping', {}, timeoutMs);
-    if (reply?.workspace_protocol !== 4) {
+    if (reply?.workspace_protocol !== 5) {
       throw new Error('OUTDATED_BRIDGE: restart the MotionWorks bridge before using workspace-bound tools.');
     }
     return true;
@@ -1235,6 +1235,7 @@ function projectOf(args) {
 }
 
 const VARIABLE_FIELDS = ['name', 'type', 'section', 'group', 'address', 'initial_value', 'description'];
+const VARIABLE_FLAGS_SCHEMA = {type:'object',additionalProperties:false,description:'Explicit native flag changes for add/edit. Omitted flags preserve existing values, or default false for a new declaration. Review retention, publication and execution effects before changing.',properties:Object.fromEntries(['retain','pdd','opc','disabled','not_on_plc','redundant'].map(k=>[k,{type:'boolean'}]))};
 const VARIABLE_SCHEMA = {
   type: 'object', additionalProperties: false, required: VARIABLE_FIELDS,
   properties: Object.fromEntries(VARIABLE_FIELDS.map(field => [field,
@@ -1538,8 +1539,8 @@ function defineTools() {
     })),
     {
       name:'mw_ide_variable_change',
-      description:'Add, edit or delete ONE declaration through the native MotionWorks COM API by exact POU/resource, without grid input or worksheet navigation. Requires reconciled saved edits; compares the complete live/saved baseline before changing and verifies all saved declarations afterward. Uses the selected existing writable group. Externals require the matching global name/type. Edit accepts the complete desired seven-field declaration. Delete requires explicit approval and reference review. Does not download, compile automatically, move groups or repair/retry partial failures.',
-      parameters:{type:'object',additionalProperties:false,required:['project','operation','baseline_saved'],properties:{project:{type:'string'},pou:{type:'string'},operation:{type:'string',enum:['add','edit','delete']},baseline_saved:{type:'boolean'},name:{type:'string',description:'Existing exact name for edit/delete'},declaration:VARIABLE_SCHEMA,user_approved:{type:'boolean'},references_reviewed:{type:'boolean'},rename_reviewed:{type:'boolean'}}},
+      description:'Add, edit or delete ONE declaration through the native MotionWorks COM API by exact POU/resource, without grid input or worksheet navigation. Requires reconciled saved edits; compares the complete live/saved baseline before changing and verifies all saved declarations afterward. Uses the selected existing writable group. Externals require the matching global name/type. Edit accepts the complete desired seven-field declaration and optional explicit boolean flags (retain, pdd, opc, disabled, not_on_plc, redundant); omitted flags stay unchanged. Native flags are independently verified on every declaration. Delete requires explicit approval and reference review. Does not download, compile automatically, move groups or repair/retry partial failures.',
+      parameters:{type:'object',additionalProperties:false,required:['project','operation','baseline_saved'],properties:{project:{type:'string'},pou:{type:'string'},operation:{type:'string',enum:['add','edit','delete']},baseline_saved:{type:'boolean'},name:{type:'string',description:'Existing exact name for edit/delete'},declaration:VARIABLE_SCHEMA,flags:VARIABLE_FLAGS_SCHEMA,user_approved:{type:'boolean'},references_reviewed:{type:'boolean'},rename_reviewed:{type:'boolean'}}},
       output:{schema:{type:'object',additionalProperties:true,required:['operation','action_performed','native_result','verification','baseline','expected_variables','next_step']},render:(_a,v)=>text(JSON.stringify(v,null,2))},
       execute:async args=>{
         const project=projectOf(args),identity=await assertIdeProjectProven();

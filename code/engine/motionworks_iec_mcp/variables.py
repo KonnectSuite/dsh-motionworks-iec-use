@@ -102,6 +102,7 @@ class Variable:
     description: str | None = None
     line: int = 0
     initial_value: str | None = None
+    disabled: bool = False
 
     @property
     def is_external(self) -> bool:
@@ -156,6 +157,7 @@ class Variable:
             "initial_value": self.initial_value,
             "description": self.description,
             "line": self.line,
+            **({"disabled": True} if self.disabled else {}),
         }
 
     def format_line(self) -> str:
@@ -232,6 +234,25 @@ def _split_type_initial_comment(body: str) -> tuple[str, str | None, str | None]
         body = body[: match.start()]
     body = body.strip().rstrip(";").strip()
 
+    # Native publication/PLC flags follow the initializer/type as brace attributes.
+    # Strip only these observed attributes outside strings; they are not IEC value
+    # text. Native flag read-back remains the authority for its boolean state.
+    attribute = re.search(r'\s*\{(?:PDD|CSV|NOP|RDT)\}\s*$', body, re.I)
+    if attribute:
+        quote = None
+        pos = 0
+        while pos < attribute.start():
+            char = body[pos]
+            if quote:
+                if char == '$': pos += 2; continue
+                if char == quote:
+                    if pos+1 < attribute.start() and body[pos+1] == quote: pos += 2; continue
+                    quote = None
+            elif char in "'\"": quote = char
+            pos += 1
+        if quote is None:
+            body = body[:attribute.start()].rstrip()
+
     initial_value = None
     if ":=" in body:
         body, initial_value = body.split(":=", 1)
@@ -252,6 +273,14 @@ def parse_declarations(text: str, source_stream: str | None = None) -> Declarati
 
     for lineno, raw_line in enumerate(text.splitlines(), start=1):
         line = raw_line.strip()
+        disabled = False
+        # The IDE retains disabled declarations as (*<declaration;>*) followed
+        # by their description. Recognize that exact wrapper, not ordinary
+        # comments, and retain its disabled state for saved-source readers.
+        wrapped = re.fullmatch(r'\(\*<(.*?)>\*\)(\s*(?:\(\*.*?\*\))?)', line)
+        if wrapped:
+            line = wrapped[1] + wrapped[2]
+            disabled = True
 
         group_match = _GROUP_RE.match(line)
         if group_match:
@@ -326,6 +355,7 @@ def parse_declarations(text: str, source_stream: str | None = None) -> Declarati
                     description=description,
                     line=lineno,
                     initial_value=initial_value,
+                    disabled=disabled,
                 )
             )
 

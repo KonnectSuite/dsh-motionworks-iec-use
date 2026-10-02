@@ -14,6 +14,16 @@ externals require an existing global name/type and no address/initializer. Delet
 requires explicit approval and reference review. Check `verification.accepted`
 and stop on failure rather than retrying. Finish with fresh Build/Make.
 
+For explicit native flag changes, pass optional `flags` on add/edit, for example
+`flags: {retain: true}`. Supported keys are `retain`, `pdd`, `opc`, `disabled`,
+`not_on_plc` and `redundant`, with boolean values only. Omitted flags preserve
+existing values (new declarations default false). Review retention, publication
+and execution effects before selecting flags. The tool verifies all six flags
+on every native row; an ignored setter or collateral flag change fails acceptance.
+Live proof covers each flag separately on one local INT, not all combinations,
+external/global flags or controller behavior. Saved brace metadata and the
+native disabled wrapper must not be mistaken for initializer/name text.
+
 Use `mw_ide_open_worksheet` for inspection or when an editor operation is needed.
 It resolves the document URN from PROJECT.TRE and verifies the active logical view,
 unchanged modified state, and two responsive frames with the expected editor caption.

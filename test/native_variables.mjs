@@ -52,3 +52,12 @@ assert.equal((await run(args,{mutate:async()=>({saved:true,is_modified:false})})
 assert.equal((await run(args,{mutate:async()=>({saved:true,is_modified:false,variables:[{...row,...flags,retain:true},{...addition,...flags}]})})).verification.accepted,false);
 assert.equal((await run(args,{mutate:async()=>({saved:true,is_modified:true,variables:[{...row,...flags},{...addition,...flags}]})})).verification.accepted,false);
 console.log('Native variable lifecycle, baseline drift, consent, external scope, complete read-back and flag guards passed');
+for(const field of Object.keys(flags)) {
+  const requested={...args,flags:{[field]:true}};
+  assert.equal((await run(requested,{mutate:async()=>({saved:true,is_modified:false,variables:[{...row,...flags},{...addition,...flags,[field]:true}]})})).verification.accepted,true);
+  assert.equal((await run(requested)).verification.accepted,false,'Ignored explicit flag must fail');
+  assert.equal((await run(requested,{mutate:async()=>({saved:true,is_modified:false,variables:[{...row,...flags,[field]:true},{...addition,...flags,[field]:true}]})})).verification.accepted,false,'Collateral flag change must fail');
+}
+for(const bad of [null,[],true,{unknown:true},{retain:'true'},{opc:1}])await assert.rejects(()=>run({...args,flags:bad},{noMutation:true}),/flags/);
+await assert.rejects(()=>run({...args,operation:'delete',name:row.name,declaration:undefined,user_approved:true,references_reviewed:true,flags:{retain:false}},{noMutation:true}),/add\/edit/);
+console.log('Six explicit native flags, ignored setter/collateral refusal and invalid/delete flag guards passed');

@@ -150,6 +150,20 @@ class Programming(unittest.TestCase):
         with self.assertRaises(ValueError): C.interface_signature({**interface,'hidden':True})
         with self.assertRaises(ValueError): C.interface_signature({**interface,'pins':interface['pins']+[interface['pins'][0]]})
 
+    def test_native_pdd_attribute_is_not_initializer_text(self):
+        table=C.parse_declarations("VAR\nx:INT := 7 {PDD};\ny:BOOL {PDD};\nz:INT := 7 {CSV};\ns:STRING := '{PDD}';\nu:INT := 7 {UNKNOWN};\nEND_VAR")
+        self.assertFalse(table.warnings)
+        self.assertEqual(table.by_name('x').initial_value,'7')
+        self.assertEqual(table.by_name('y').type_name,'BOOL')
+        self.assertEqual(table.by_name('z').initial_value,'7')
+        self.assertEqual(table.by_name('s').initial_value,"'{PDD}'")
+        self.assertEqual(table.by_name('u').initial_value,'7 {UNKNOWN}')
+        disabled=C.parse_declarations('VAR\n(*<x : INT := 7;>*)(*disabled variable*)\nEND_VAR').by_name('x')
+        self.assertEqual(disabled.initial_value,'7')
+        self.assertEqual(disabled.description,'disabled variable')
+        self.assertTrue(disabled.disabled)
+        self.assertTrue(disabled.to_dict()['disabled'])
+
     def test_writable_fb_bindings_literals_and_unresolved_storage(self):
         spec={'authority':'bound_installed_declaration','complete':True,
               'inputs':{},'outputs':{'Q':'ANY'},'inouts':{'State':'ANY'},
