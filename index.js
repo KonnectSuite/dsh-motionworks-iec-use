@@ -53,26 +53,33 @@ import {
   rmSync, statSync, writeFileSync,
 } from 'node:fs';
 import { dirname, isAbsolute, join, resolve, sep } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { tmpdir } from 'node:os';
-import { verifyAcceptance } from './verification.js';
-import { retainPlan, lookupPlan, requireVariableView } from './edit-session.js';
-import { nativeVariableChange } from './native-variables.js';
-import { nativeStructureChange } from './native-structure.js';
-import { nativeCodeChange } from './native-code.js';
-import { graphicalListing } from './graphical-listing.js';
-import { exportPouPackage,importPouPackage } from './pou-package.js';
-import { convertPou } from './pou-conversion.js';
-import { fbInsertionPlan } from './fb-insertion.js';
+// Resolve helpers before importing them: hotfix files added after packaging are
+// absent from the ASAR directory index even when present in app.asar.unpacked.
+// Child scripts and documentation use the same physical package root.
+const SELF = dirname(fileURLToPath(import.meta.url));
+const UNPACKED = SELF.replace(/app\.asar(?=[\\/]|$)/i, 'app.asar.unpacked');
+const HERE = UNPACKED !== SELF && existsSync(UNPACKED) ? UNPACKED : SELF;
+const [
+  { verifyAcceptance },
+  { retainPlan, lookupPlan, requireVariableView },
+  { nativeVariableChange },
+  { nativeStructureChange },
+  { nativeCodeChange },
+  { graphicalListing },
+  { exportPouPackage, importPouPackage },
+  { convertPou },
+  { fbInsertionPlan },
+] = await Promise.all([
+  'verification.js', 'edit-session.js', 'native-variables.js',
+  'native-structure.js', 'native-code.js', 'graphical-listing.js',
+  'pou-package.js', 'pou-conversion.js', 'fb-insertion.js',
+].map(file => import(pathToFileURL(join(HERE, file)).href)));
 
 export const name = 'motionworks-iec-use';
 export const inject = ['tools'];
 
-// Electron can read ASAR paths, but spawned Python/PowerShell cannot. Use the
-// physical unpacked package for child scripts; never write into an installation.
-const SELF = dirname(fileURLToPath(import.meta.url));
-const UNPACKED = SELF.replace(/app\.asar(?=[\\/]|$)/i, 'app.asar.unpacked');
-const HERE = UNPACKED !== SELF && existsSync(UNPACKED) ? UNPACKED : SELF;
 const BRIDGE_DIR = join(HERE, 'bridge');
 const BRIDGE_SCRIPT = join(BRIDGE_DIR, 'mw_bridge.ps1');
 const LAUNCHER_CMD = join(BRIDGE_DIR, 'start_bridge.cmd');

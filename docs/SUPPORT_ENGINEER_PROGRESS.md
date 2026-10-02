@@ -497,3 +497,26 @@ A fresh installed-module process loads all 60 tools and verifies public body
 hashes (`installed-conversion-tools.json`). This does not prove the running Arya
 process reloaded. Direct graphical editor/toolbox placement/wiring, general IL
 editing and Arya-led live host acceptance remain incomplete; the goal is active.
+
+### Electron archive resolution correction (2026-10-01)
+
+Read-only inspection found the desktop profile selects the installed bundle.
+A separate Arya Electron Node-mode probe confirmed that patched `index.js` and
+`package.json` resolve through `app.asar`, but new `pou-package.js` and
+`pou-conversion.js` return ENOENT there. The archive index does not acquire new
+entries when files are copied into `app.asar.unpacked`. Consequently the earlier
+physical-path Node import did not establish that a restarted Arya could load it.
+
+The entry point now selects its physical package root before dynamically
+importing all local helpers. Child scripts and documentation share that root.
+The packaged-runtime regression leaves helper modules absent from the virtual
+archive and verifies tool registration and read/staging behavior. The full
+60-tool automated suite passes. Actual running-chat catalog reload and graphical
+canvas operation remain unverified.
+
+A separate process using Arya's own Electron executable successfully imported
+through the real `app.asar` URL: physical HERE, 60 tools, conversion/package
+routes present and variable guide returned. Evidence is
+`arya-electron-plugin-load.json` in the parent workspace. Installed files were
+hash-verified (131 files); backup `Arya-restored-hotfix-20261001-214336-3e88a652`.
+This is an independent host-runtime import, not a reload of the active chat.
