@@ -279,3 +279,33 @@ matching editor observations, focus_verified=false, compiled=true, modified=fals
 Complete source/inventory comparison passed. Evidence: `installed-editor-readiness.json`.
 This is installed-module acceptance, not proof that the existing Arya process
 reloaded its catalog or performed an engineering task.
+
+## Companion routing correction and graphical observation retry
+
+The companion pairing guide still directed source, variable and POU edits to
+desktop tools. It now explicitly routes supported declarations, ST code/block
+calls, POU lifecycle and task operations through the verified native tools, and
+reserves desktop input for graphical placement/wiring and unsupported operations.
+It also distinguishes native caption readiness from current desktop observation
+and keyboard focus; stale worksheet trees must not supply input targets.
+
+A fresh disposable `CodexGraphKeyboard` PROGRAM/FBD creation and native navigation
+passed. Desktop capture again failed with `FrameArrived timed out` and then
+`window capture timed out` after refreshing the returned window. Accessibility
+still named the previous globals worksheet. The same live MotionWorks process
+alternated between responsive and unresponsive observations, then recovered
+without termination. After a desktop observation kernel reset, its returned
+window title named the FBD document but accessibility was null. No desktop input
+was sent; this does not verify graphical insertion or wiring.
+
+Native deletion of the unused, blank, zero-variable test POU passed and restored
+the complete original seven-POU, five-task, global, program-source and translation
+baseline. Evidence: `graph-keyboard-baseline.json`,
+`graph-keyboard-responsiveness.json` and `graph-keyboard-cleanup.json` in the
+disposable workspace verification directory. Desktop observation remains the
+current limit for the graphical keyboard route. Other native operations remain
+available; the full support-engineer goal remains active.
+
+Cleanup fresh Build (6.9 s) and Make (2.5 s) passed with compiled=true and
+modified=false. All complete baseline inventories and program/translation
+manifests matched. Evidence: `graph-keyboard-cleanup-build.json`.
