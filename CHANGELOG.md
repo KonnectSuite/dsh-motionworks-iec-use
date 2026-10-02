@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+- Fix a registration defect that made the bundle load NO tools at all: 14 tools
+  declared `required` names that were never declared in `properties`, so
+  `ctx.tools.register` threw `JsonSchemaError` on the first of them and `apply()`
+  aborted. Open result objects now declare their guarantee-keys as permissive
+  properties, and parameter schemas were brought inside the supported keyword
+  subset — `pattern`/`minimum`/`maximum`/`minLength`/`maxLength`/`uniqueItems` and
+  object-valued `additionalProperties` are not supported, so their intent moved
+  into `description` text (the runtime checks are unchanged and still authoritative).
+- Add `tool-contract.mjs` and `test/registration_contract.mjs`, which register the
+  tools the way DSH does and assert the harness's supported JSON Schema subset;
+  `preflight.mjs` gained the same check as step 7. Every existing test drove
+  `defineTools()[i].execute(...)` directly, which is why a bundle that registered
+  zero tools still passed the whole suite and preflight.
 - Added public requirements, local-bundle setup, attach-first examples, capability
   evidence, troubleshooting and sanitized support guidance.
 - Replaced obsolete offline-writer contributor instructions with IDE-first guidance.

@@ -30,6 +30,7 @@
     "pou-conversion.js",
     "fb-insertion.js",
     "preflight.mjs",
+    "tool-contract.mjs",
     "SKILL.md",
     "README.md",
     "CONTRIBUTING.md",
@@ -66,6 +67,7 @@
     "test/workflow_test.py",
     "test/smoke_manifest.py",
     "test/render_contract.mjs",
+    "test/registration_contract.mjs",
     "test/replay_report.mjs",
     "test/pou_deletion_test.py",
     "test/ide_first.mjs",
@@ -103,6 +105,7 @@
   "scripts": {
     "test": "node test/workspace_suite.mjs",
     "test:contract": "node test/render_contract.mjs",
+    "test:registration": "node test/registration_contract.mjs",
     "test:workspace": "node test/workspace_suite.mjs",
     "test:selfcontained": "node test/selfcontained.mjs",
     "test:guards": "node test/ide_first.mjs",

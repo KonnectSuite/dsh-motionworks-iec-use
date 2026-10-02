@@ -1239,7 +1239,7 @@ const VARIABLE_FLAGS_SCHEMA = {type:'object',additionalProperties:false,descript
 const VARIABLE_SCHEMA = {
   type: 'object', additionalProperties: false, required: VARIABLE_FIELDS,
   properties: Object.fromEntries(VARIABLE_FIELDS.map(field => [field,
-    field === 'name' ? { type: 'string', minLength: 1 }
+    field === 'name' ? { type: 'string', description: 'Exact declaration name; must be non-empty.' }
       : { oneOf: [{ type: 'string' }, { type: 'null' }] }])),
 };
 
@@ -1331,13 +1331,27 @@ function nativePackageManifest(directory){
   }
   visit(directory);return files.sort((a,b)=>a.path<b.path?-1:a.path>b.path?1:0);
 }
+// The harness enforces a JSON Schema SUBSET when a tool is registered
+// (`assertSupportedJsonSchema`, called from ToolRuntime.register for output.schema):
+// every name in `required` must be DECLARED in `properties`, `additionalProperties`
+// must be a boolean, and keywords such as pattern/minimum/maxLength/uniqueItems are
+// rejected outright. `ctx.tools.register` receives these objects unconverted, so one
+// violating schema throws out of `apply()` and takes every later tool down with it.
+// An open result object therefore DECLARES its guarantee-keys as permissive
+// properties: the keys stay required and unknown keys stay allowed.
+const openOutput = required => ({
+  type: 'object',
+  additionalProperties: true,
+  properties: Object.fromEntries(required.map(key => [key, {}])),
+  required,
+});
 function defineTools() {
   return [
     {
       name:'mw_ide_pou_convert',
       description:'Convert one exact writable saved ST/LD/FBD POU in place to FBD or LD through native Pou.Convert. Requires baseline_saved:true, conversion_reviewed:true and its exact expected_body_sha256 from mw_code_pous. Replaces source language; review loss of original layout/comments and prefer an isolated POU copy for generation. Runs a fresh native Build before conversion, requires regenerated compiler artifacts for that exact source POU, and runs a fresh graphical Build/listing after it. Requires preserved native declaration flags/groups, libraries, POU type, saved declarations and every unrelated source/task/global/translation. The compiler can omit unused POUs; this tool never assigns tasks to manufacture a compiled source. No conversion to ST, binary rewriting, desktop input or controller action. Full phase evidence is retained; stop after any failure and never retry/rollback blindly. Native conversion/build does not prove canvas geometry, individual pin wiring or machine behavior.',
-      parameters:{type:'object',additionalProperties:false,required:['project','pou','language','expected_body_sha256','baseline_saved','conversion_reviewed'],properties:{project:{type:'string'},pou:{type:'string'},language:{type:'string',enum:['FBD','LD']},expected_body_sha256:{type:'string',pattern:'^[a-f0-9]{64}$'},baseline_saved:{type:'boolean'},conversion_reviewed:{type:'boolean'}}},
-      output:{schema:{type:'object',additionalProperties:true,required:['accepted','action_performed','evidence_path']},render:(_a,v)=>text(JSON.stringify(v,null,2))},
+      parameters:{type:'object',additionalProperties:false,required:['project','pou','language','expected_body_sha256','baseline_saved','conversion_reviewed'],properties:{project:{type:'string'},pou:{type:'string'},language:{type:'string',enum:['FBD','LD']},expected_body_sha256:{type:'string',description:'Exact lowercase hex SHA-256 (64 chars) reported by mw_code_pous for this body.'},baseline_saved:{type:'boolean'},conversion_reviewed:{type:'boolean'}}},
+      output:{schema:openOutput(['accepted','action_performed','evidence_path']),render:(_a,v)=>text(JSON.stringify(v,null,2))},
       execute:async args=>{
         const project=projectOf(args),identity=await assertIdeProjectProven();
         if(resolve(identity.active_project).replace(/\.mwt$/i,'').toLowerCase()!==project.toLowerCase())throw Error('REFUSED: wrong open project');
@@ -1367,7 +1381,7 @@ function defineTools() {
       name:'mw_ide_pou_package',
       description:'Export one writable ST/LD/FBD POU through the native IDE to a new private workspace package, or import that exact untouched package into its original staged project with its POU name absent. Export returns a session-bound package_token; import requires it and dependencies_reviewed:true. Receipts expire when this plugin process reloads and are consumed before one import attempt. Refuses arbitrary packages, path arguments, overwrites, changed libraries, missing/mismatched externals, stale source/native baselines and altered packages. Verifies full graph/code/declarations, native flags/groups and unrelated sources/tasks/globals/translations. No binary rewriting, desktop input, task assignment or controller action. Import preserves completed phases on failure; inspect evidence, never retry blindly. Finish intended imports with fresh Build/Make.',
       parameters:{type:'object',additionalProperties:false,required:['project','operation','baseline_saved'],properties:{project:{type:'string'},operation:{type:'string',enum:['export','import']},baseline_saved:{type:'boolean'},pou:{type:'string'},package_token:{type:'string'},dependencies_reviewed:{type:'boolean'}}},
-      output:{schema:{type:'object',additionalProperties:true,required:['accepted','action_performed','evidence_path']},render:(_a,v)=>text(JSON.stringify(v,null,2))},
+      output:{schema:openOutput(['accepted','action_performed','evidence_path']),render:(_a,v)=>text(JSON.stringify(v,null,2))},
       execute:async args=>{
         const project=projectOf(args),identity=await assertIdeProjectProven(),workspace=workspaceRoot();
         if(resolve(identity.active_project).replace(/\.mwt$/i,'').toLowerCase()!==project.toLowerCase())throw Error('REFUSED: wrong open project');
@@ -1413,8 +1427,8 @@ function defineTools() {
     {
       name:'mw_ide_graphical_listing',
       description:'Inspect one exact saved LD/FBD POU through its compiler-generated networks. Runs a fresh native Build; requires baseline_saved:true and a clean native saved state. Checks full source/declaration/task/translation preservation, matching listing/declaration/worksheet/source-map identities, and returns bounded raw instructions with declaration symbol annotations and artifact hashes. FB pin names/directions require an exact compiler dependency type matching the saved instance, complete declaration ordinals and fresh dependency artifacts from that Build; compiler ordinals can differ from installed interface order. Private fields and unknown compiler tokens remain unresolved. Does not decode/write GB files, open/focus the editor, verify canvas placement/wiring, or command a controller. A failed/unverified Build or changed baseline stops inspection; do not retry automatically.',
-      parameters:{type:'object',additionalProperties:false,required:['project','pou','baseline_saved'],properties:{project:{type:'string'},pou:{type:'string'},baseline_saved:{type:'boolean'},start:{type:'integer',minimum:1},limit:{type:'integer',minimum:1,maximum:50}}},
-      output:{schema:{type:'object',additionalProperties:true,required:['accepted','evidence_path']},render:(_a,v)=>text(JSON.stringify(v,null,2))},
+      parameters:{type:'object',additionalProperties:false,required:['project','pou','baseline_saved'],properties:{project:{type:'string'},pou:{type:'string'},baseline_saved:{type:'boolean'},start:{type:'integer',description:'First row to list, 1-based.'},limit:{type:'integer',description:'Maximum rows to list (1-50).'}}},
+      output:{schema:openOutput(['accepted','evidence_path']),render:(_a,v)=>text(JSON.stringify(v,null,2))},
       execute:async args=>{
         const project=projectOf(args),identity=await assertIdeProjectProven();
         if(resolve(identity.active_project).replace(/\.mwt$/i,'').toLowerCase()!==project.toLowerCase())throw Error('REFUSED: wrong open project');
@@ -1440,15 +1454,15 @@ function defineTools() {
     {
       name:'mw_code_installed_help',
       description:'Read/search actual installed English MotionWorks CHM help as inert text. Omit module to list installed archives; then use an exact module to list topics, query words, or read an exact topic. Provides archive/topic hashes and native help links, caches text in this session workspace, and never opens help or edits the IDE. Use for shortcut/editor/toolbox and programming semantics instead of guessing keys or signatures. Images may contain diagrams or key symbols omitted from text. Installed help is source evidence, not proof of live operation or controller/library compatibility. Refuses absent/ambiguous roots, unknown modules and cache integrity changes.',
-      parameters:{type:'object',additionalProperties:false,properties:{module:{type:'string'},query:{type:'string',maxLength:256},topic:{type:'string',maxLength:256},limit:{type:'integer',minimum:1,maximum:10}}},
-      output:{schema:{type:'object',additionalProperties:true,required:['evidence_kind','action_performed']},render:(_a,v)=>text(JSON.stringify(v,null,2))},
+      parameters:{type:'object',additionalProperties:false,properties:{module:{type:'string'},query:{type:'string',description:'Search text, at most 256 characters.'},topic:{type:'string',description:'Topic filter, at most 256 characters.'},limit:{type:'integer',description:'Maximum hits to return (1-10).'}}},
+      output:{schema:openOutput(['evidence_kind','action_performed']),render:(_a,v)=>text(JSON.stringify(v,null,2))},
       execute:async args=>runCode('installed_help',args??{}),
     },
     {
       name:'mw_ide_fb_insert',
       description:'Insert ONE new FB instance and ST call using its installed declared interface. Requires exact expected_body, saved baseline, explicit pin bindings and optional line-boundary offset (default append). Resolves block/library through live-bound parameter/declaration tables; rejects hidden/non-FB blocks, unknown/duplicate pins, missing in-out pins, instance collisions and direct-variable type mismatches. Outputs/in-outs currently require existing direct local/external variables. Inputs allow single expressions; compiler validation remains required. Adds the instance via guarded native variable API, then imports/verifies the code via native DDE. Retains plan/phase evidence; a partial failure reports completed phases and never retries or silently rolls back. No graphical insertion or controller action. Require verification.accepted then fresh Build/Make.',
-      parameters:{type:'object',additionalProperties:false,required:['project','pou','block','instance','expected_body','baseline_saved','bindings'],properties:{project:{type:'string'},pou:{type:'string'},block:{type:'string'},library:{type:'string'},instance:{type:'string'},expected_body:{type:'string'},baseline_saved:{type:'boolean'},group:{type:'string'},offset:{type:'integer',minimum:0},bindings:{type:'object',additionalProperties:{type:'string'}}}},
-      output:{schema:{type:'object',additionalProperties:true,required:['verification','completed_phases','evidence_path']},render:(_a,v)=>text(JSON.stringify(v,null,2))},
+      parameters:{type:'object',additionalProperties:false,required:['project','pou','block','instance','expected_body','baseline_saved','bindings'],properties:{project:{type:'string'},pou:{type:'string'},block:{type:'string'},library:{type:'string'},instance:{type:'string'},expected_body:{type:'string'},baseline_saved:{type:'boolean'},group:{type:'string'},offset:{type:'integer',description:'Zero-based pin offset; defaults to 0.'},bindings:{type:'object',additionalProperties:true,description:'Pin name to the exact value or symbol to bind.'}}},
+      output:{schema:openOutput(['verification','completed_phases','evidence_path']),render:(_a,v)=>text(JSON.stringify(v,null,2))},
       execute:async args=>{
         const project=projectOf(args),definitions=defineTools(),tool=name=>definitions.find(t=>t.name===name);
         const block=await tool('mw_code_block_interface').execute({project,name:args.block,library:args.library});
@@ -1482,7 +1496,7 @@ function defineTools() {
       name:'mw_code_block_interface',
       description:'List bound project/toolbox/firmware blocks, or read one exact block interface with pin names, declared types and input/output/in-out directions. Matches saved references against the live IDE library paths. Reads native firmware .PT tables or project/library declarations, with source/registry hashes; does not infer directions from compiled identifier names. Omit name for catalog, specify library to resolve duplicates. IEC/eCLR implicit references are separately identified; controller firmware profile still requires verification. Read-only: no IDE input, library edits or controller action.',
       parameters:{type:'object',additionalProperties:false,required:['project'],properties:{project:{type:'string'},name:{type:'string'},library:{type:'string'}}},
-      output:{schema:{type:'object',additionalProperties:true,required:['evidence_kind','action_performed']},render:(_a,v)=>text(JSON.stringify(v,null,2))},
+      output:{schema:openOutput(['evidence_kind','action_performed']),render:(_a,v)=>text(JSON.stringify(v,null,2))},
       execute:async args=>{
         const project=projectOf(args),identity=await assertIdeProjectProven();
         if(resolve(identity.active_project).replace(/\.mwt$/i,'').toLowerCase()!==project.toLowerCase())throw new Error('REFUSED: wrong open project');
@@ -1494,7 +1508,7 @@ function defineTools() {
       name:'mw_ide_code_change',
       description:'Replace an existing writable ST or IL worksheet through MotionWorks native ChangeCodeWS API. Requires exact expected_body from mw_code_read_text (mw_code_read_st also works for ST), reconciled saved baseline, and printable ASCII code. Retains the plan, guards complete saved/native source baselines, imports once, saves and verifies full code including comments, unchanged declarations/native flags, tasks, globals and other POUs. No mouse input, clipboard, disk source editing, controller action or automatic retry. Check verification.accepted, then fresh Build/Make. Graphical body editing is not supported by this tool; IL uses its native AB text worksheet.',
       parameters:{type:'object',additionalProperties:false,required:['project','pou','baseline_saved','expected_body','code'],properties:{project:{type:'string'},pou:{type:'string'},baseline_saved:{type:'boolean'},expected_body:{type:'string'},code:{type:'string'}}},
-      output:{schema:{type:'object',additionalProperties:true,required:['pou','action_performed','method','native_result','verification','body','evidence_path','next_step']},render:(_a,v)=>text(JSON.stringify(v,null,2))},
+      output:{schema:openOutput(['pou','action_performed','method','native_result','verification','body','evidence_path','next_step']),render:(_a,v)=>text(JSON.stringify(v,null,2))},
       execute:async args=>{
         const project=projectOf(args),identity=await assertIdeProjectProven();
         if(resolve(identity.active_project).replace(/\.mwt$/i,'').toLowerCase()!==project.toLowerCase())throw new Error('REFUSED: wrong open project');
@@ -1533,15 +1547,15 @@ function defineTools() {
       parameters:{type:'object',additionalProperties:false,required:['project','operation','name','baseline_saved'],properties:{
         project:{type:'string'},operation:{type:'string',enum:scope==='pou'?['create','copy','rename','delete']:['create','edit','delete','assign','unassign']},name:{type:'string'},baseline_saved:{type:'boolean'},user_approved:{type:'boolean'},
         ...(scope==='pou'?{new_name:{type:'string'},pou_type:{type:'string',enum:['PROGRAM','FUNCTION_BLOCK','FUNCTION']},language:{type:'string',enum:['ST','IL','FBD','LD'],description:'Creation language; defaults to ST. Copy retains its source language.'},return_type:{type:'string'},references_reviewed:{type:'boolean'}}:
-          {kind:{type:'string',enum:['CYCLIC','DEFAULT','SYSTEM']},pou:{type:'string'},instance:{type:'string'},settings_changes:{type:'object',additionalProperties:{type:'string'}}})}},
-      output:{schema:{type:'object',additionalProperties:true,required:['scope','operation','action_performed','native_result','verification','baseline','expected_native','next_step']},render:(_a,v)=>text(JSON.stringify(v,null,2))},
+          {kind:{type:'string',enum:['CYCLIC','DEFAULT','SYSTEM']},pou:{type:'string'},instance:{type:'string'},settings_changes:{type:'object',additionalProperties:true,description:'Task setting name to its new value; every key must already exist in the saved task.'}})}},
+      output:{schema:openOutput(['scope','operation','action_performed','native_result','verification','baseline','expected_native','next_step']),render:(_a,v)=>text(JSON.stringify(v,null,2))},
       execute:args=>executeNativeStructure(scope,args),
     })),
     {
       name:'mw_ide_variable_change',
       description:'Add, edit or delete ONE declaration through the native MotionWorks COM API by exact POU/resource, without grid input or worksheet navigation. Requires reconciled saved edits; compares the complete live/saved baseline before changing and verifies all saved declarations afterward. Uses the selected existing writable group. Externals require the matching global name/type. Edit accepts the complete desired seven-field declaration and optional explicit boolean flags (retain, pdd, opc, disabled, not_on_plc, redundant); omitted flags stay unchanged. Native flags are independently verified on every declaration. Delete requires explicit approval and reference review. Does not download, compile automatically, move groups or repair/retry partial failures.',
       parameters:{type:'object',additionalProperties:false,required:['project','operation','baseline_saved'],properties:{project:{type:'string'},pou:{type:'string'},operation:{type:'string',enum:['add','edit','delete']},baseline_saved:{type:'boolean'},name:{type:'string',description:'Existing exact name for edit/delete'},declaration:VARIABLE_SCHEMA,flags:VARIABLE_FLAGS_SCHEMA,user_approved:{type:'boolean'},references_reviewed:{type:'boolean'},rename_reviewed:{type:'boolean'}}},
-      output:{schema:{type:'object',additionalProperties:true,required:['operation','action_performed','native_result','verification','baseline','expected_variables','next_step']},render:(_a,v)=>text(JSON.stringify(v,null,2))},
+      output:{schema:openOutput(['operation','action_performed','native_result','verification','baseline','expected_variables','next_step']),render:(_a,v)=>text(JSON.stringify(v,null,2))},
       execute:async args=>{
         const project=projectOf(args),identity=await assertIdeProjectProven();
         if(resolve(identity.active_project).replace(/\.mwt$/i,'').toLowerCase()!==project.toLowerCase())throw new Error('REFUSED: wrong open project');
@@ -1563,7 +1577,7 @@ function defineTools() {
       name:'mw_ide_open_worksheet',
       description:'Open the exact saved POU code/variables worksheet or resource globals through native COM, using the internal document URN resolved from PROJECT.TRE. Verifies the active logical name, unchanged modified state, and two responsive frames with the expected editor caption. COM view metadata alone is not editor readiness. keyboard_focus_verified remains false: observe current editor focus through the connected computer tool before keys or text. Native declaration/code APIs need no editor focus. Does not use mouse input, save, edit, compile or download. Code requires a POU; omit POU only for globals. Refuses ambiguous/unparsed tree identities and an unresponsive/unknown IDE frame. An unsettled request returns accepted=false and action_performed=true; never repeat it automatically.',
       parameters:{type:'object',additionalProperties:false,required:['project','kind'],properties:{project:{type:'string'},kind:{type:'string',enum:['code','variables']},pou:{type:'string'}}},
-      output:{schema:{type:'object',additionalProperties:true,required:['accepted','action_performed','logical_name','requested_logical_name','active_project','method','is_modified','modified_state_unchanged','urn']},render:(_a,v)=>text(JSON.stringify(v,null,2))},
+      output:{schema:openOutput(['accepted','action_performed','logical_name','requested_logical_name','active_project','method','is_modified','modified_state_unchanged','urn']),render:(_a,v)=>text(JSON.stringify(v,null,2))},
       execute:async args=>{
         const project=projectOf(args),identity=await assertIdeProjectProven();
         if(resolve(identity.active_project).replace(/\.mwt$/i,'').toLowerCase()!==project.toLowerCase())throw new Error('REFUSED: wrong open project');
@@ -1575,7 +1589,7 @@ function defineTools() {
       name: 'mw_ide_variable_plan',
       description: 'Prepare ONE native variable addition: verify the exact open stage and variable worksheet, retain the complete saved baseline internally, reject duplicate names/addresses and overlength identifiers, and return explicit Create Variable Set dialog values plus a verification token. READ/PLAN ONLY: does not insert or send keys. Reconcile and save unsaved worksheet edits first. Never allocate an IO address from arithmetic alone.',
       parameters:{type:'object',additionalProperties:false,required:['project','baseline_saved','declaration'],properties:{project:{type:'string'},pou:{type:'string'},baseline_saved:{type:'boolean',description:'True only after reconciling unsaved edits and native Save All.'},declaration:VARIABLE_SCHEMA}},
-      output:{schema:{type:'object',additionalProperties:true,required:['token','expected_count','declaration','dialog_values','action_performed','expires_in_seconds']},render:(_a,v)=>text(JSON.stringify(v,null,2))},
+      output:{schema:openOutput(['token','expected_count','declaration','dialog_values','action_performed','expires_in_seconds']),render:(_a,v)=>text(JSON.stringify(v,null,2))},
       execute: async args => {
         if (args.baseline_saved !== true) throw new Error('REFUSED: reconcile unsaved changes and Save All before retaining a baseline');
         const project=projectOf(args), status=await assertIdeProjectProven();
@@ -1591,7 +1605,7 @@ function defineTools() {
       name: 'mw_ide_variable_verify',
       description: 'After native Create Variable Set and Save All, verify the entire saved worksheet using the retained plan token. No need to resend hundreds of declarations. Detects missing additions, unrelated renames/group/type/address changes and extra rows. No Save or input; not a keyboard interlock. accepted:true is declaration agreement only, not compiler or machine acceptance.',
       parameters:{type:'object',additionalProperties:false,required:['token'],properties:{token:{type:'string'}}},
-      output:{schema:{type:'object',additionalProperties:true,required:['accepted','evidence_kind','expected_count','saved_count','missing','unexpected','changed','errors']},render:(_a,v)=>text(JSON.stringify(v,null,2))},
+      output:{schema:openOutput(['accepted','evidence_kind','expected_count','saved_count','missing','unexpected','changed','errors']),render:(_a,v)=>text(JSON.stringify(v,null,2))},
       execute: async args => {
         const plan=lookupPlan(args.token,workspaceRoot());
         assertProven(plan.project);
@@ -2819,9 +2833,9 @@ function defineTools() {
       name: 'mw_code_reference',
       description: 'Search reviewed Yaskawa programming references with document ID, revision, section and physical PDF page links. Works offline with curated guidance; synchronized official PDFs add full-page search. Omit query to list sources/topics; pass block for one reviewed FB interface. Historical signatures are advisory until installed versions match.',
       parameters: { type: 'object', additionalProperties: false, properties: {
-        query: { type: 'string', maxLength: 256 }, source_id: { type: 'string' },
+        query: { type: 'string', description: 'Search text, at most 256 characters.' }, source_id: { type: 'string' },
         block: { type: 'string', description: 'Function-block type, e.g. MC_ReadActualPosition.' },
-        limit: { type: 'integer', minimum: 1, maximum: 10 },
+        limit: { type: 'integer', description: 'Maximum results to return (1-10).' },
       } },
       output: { schema: WRITE_SCHEMA, render: renderWrite },
       execute: (args) => runCode('reference', args ?? {}),
@@ -2830,7 +2844,7 @@ function defineTools() {
       name: 'mw_code_reference_sync',
       description: 'Download and index allowlisted official Yaskawa PDFs inside this workspace .motionworks/references. No project files are transmitted. Requires network access and pypdf in the plugin Python runtime. Verifies reviewed PDF hashes before using versioned page citations; changed vendor editions require catalog review. Curated references remain usable if downloads are unavailable.',
       parameters: { type: 'object', additionalProperties: false, properties: {
-        source_ids: { type: 'array', uniqueItems: true, items: { type: 'string', enum: ['basics', 'plcopen', 'toolbox', 'quick'] } },
+        source_ids: { type: 'array', description: 'Reference sources to sync; list each source at most once.', items: { type: 'string', enum: ['basics', 'plcopen', 'toolbox', 'quick'] } },
       } },
       output: { schema: WRITE_SCHEMA, render: renderWrite },
       execute: (args) => runCode('reference_sync', args ?? {}, 600000),
@@ -2840,7 +2854,7 @@ function defineTools() {
       description: 'Read-only source-linked programming review: external/global scope and types, integer bounds, named function-block pin direction/types, and task-binding candidates. Pass pou and body to check proposed ST before writing; omit them to review existing ST POUs. Set installed_interfaces:true for the verified clean open project: resolves vendor FBs from its native-bound installed libraries with exact source hashes; unresolved/ambiguous interfaces stay unresolved instead of falling back to historical signatures. Project-defined interfaces take precedence. Without this option vendor signatures are historical advisories. Reports library and graphical coverage; does not replace the compiler or modify source.',
       parameters: { type: 'object', additionalProperties: false, properties: {
         project: { type: 'string' }, pou: { type: 'string' }, body: { type: 'string' }, installed_interfaces: { type: 'boolean' },
-        interface_libraries: {type:'object',description:'Explicit type-to-library selection for duplicate installed FB names, e.g. {TON: "IEC"}. Requires installed_interfaces:true; project-defined interfaces still take precedence.',additionalProperties:{type:'string'}},
+        interface_libraries: {type:'object',description:'Explicit type-to-library selection for duplicate installed FB names, e.g. {TON: "IEC"}. Requires installed_interfaces:true; project-defined interfaces still take precedence.',additionalProperties:true},
       } },
       output: { schema: WRITE_SCHEMA, render: renderWrite },
       execute: async (args) => {
@@ -2860,7 +2874,7 @@ function defineTools() {
       name: 'mw_code_diagnose',
       description: 'Map exact compiler or runtime diagnostic text to documented candidate causes, read-only checks and versioned Yaskawa references. Separates compiler, runtime and IDE-state problems. Does not invent a root cause or clear alarms; unknown messages are reported unmatched.',
       parameters: { type: 'object', additionalProperties: false, required: ['message'], properties: {
-        message: { type: 'string', minLength: 1, maxLength: 20000 },
+        message: { type: 'string', description: 'Question or diagnostic message, 1-20000 characters.' },
       } },
       output: { schema: WRITE_SCHEMA, render: renderWrite },
       execute: (args) => runCode('diagnose', args),
@@ -3670,7 +3684,7 @@ function defineTools() {
             tasks: { type: 'object', additionalProperties: true },
             bindings: {type:'array',items:{type:'object',additionalProperties:true}},
             binding_resolution: {type:'string'},
-            source_hashes: {type:'object',additionalProperties:{type:'string'}},
+            source_hashes: {type:'object',additionalProperties:true,description:'Relative source path to its SHA-256.'},
             unassigned: { type: 'array', items: { type: 'string' } },
             unassigned_note: { type: 'string' },
             // DECLARED because the engine RETURNS it, and an undeclared field under

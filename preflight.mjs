@@ -156,6 +156,29 @@ if (!existsSync(entry)) {
       } else {
         note(`all ${tools.length} tools have a valid { schema, render }`);
       }
+
+      // ── 7. the registration contract ──────────────────────────────────────────────
+      // `ctx.tools.register` asserts output.schema BEFORE inserting, and the loop in
+      // apply() has no try/catch. So one schema outside DSH's supported subset throws
+      // out of apply() and every later tool is lost - with no error reported anywhere.
+      // Check it here, where the failure is still visible.
+      const { checkToolContract } = await import('./tool-contract.mjs');
+      const contract = checkToolContract(tools);
+      const offenders = [
+        ...contract.shape.map((f) => `${f.tool}: ${f.violation}`),
+        ...contract.output.map((f) => `${f.tool}: ${f.violation}`),
+      ];
+      if (offenders.length) {
+        fail('tool registration', `${offenders.length} schema problem(s) would make register() throw, `
+          + `so apply() would register NO tool after the first: ${offenders.slice(0, 4).join('; ')}`
+          + (offenders.length > 4 ? ` (+${offenders.length - 4} more)` : ''));
+      } else {
+        note(`all ${tools.length} tools satisfy the registration contract`);
+      }
+      if (contract.parameters.length) {
+        note(`WARNING: ${contract.parameters.length} parameter schema(s) use keywords outside `
+          + `the authoring subset: ${contract.parameters.slice(0, 3).map((f) => `${f.tool} (${f.violation})`).join('; ')}`);
+      }
     }
   } catch (e) {
     fail('entry point', `does not load: ${String(e.message).split('\n')[0].slice(0, 90)}`);
