@@ -2,14 +2,14 @@
 
 For supported operations, prefer native APIs: `mw_ide_open_worksheet` resolves
 the exact code/variable document; `mw_ide_variable_change` manages declarations;
-`mw_ide_pou_change` creates blank ST/FBD/LD POUs and manages copy/rename/delete; and
+`mw_ide_pou_change` creates blank ST/IL/FBD/LD POUs and manages copy/rename/delete; and
 `mw_ide_task_change` manages tasks, settings and exact program instances.
-`mw_ide_code_change` replaces existing ST bodies through native ChangeCodeWS:
-read `mw_code_read_st`, supply exact `expected_body` and complete ASCII `code`,
+`mw_ide_code_change` replaces existing ST/IL bodies through native ChangeCodeWS:
+read `mw_code_read_text` (`mw_code_read_st` remains ST-only), supply exact
+`expected_body` and complete ASCII `code`,
 and reconcile/save before calling. It verifies code and native comment translations,
 declarations/flags, globals, tasks and other POU sources, retaining full evidence.
-These
-use the running IDE and verify saved/native results without mouse input. Require
+These use the running IDE and verify saved/native results without mouse input. Require
 their accepted verdict, retain the verification report and finish Build/Make.
 The UI recipes below remain fallbacks for editor operations not yet automated.
 
@@ -21,7 +21,7 @@ editable-focus observation through the connected computer tool before input.
 If the frame is unresponsive/unknown or its caption still names an earlier editor,
 stop and inspect the existing request rather than opening again or sending keys.
 
-For POU creation, set `language` to `ST`, `FBD` or `LD` (default `ST`).
+For POU creation, set `language` to `ST`, `IL`, `FBD` or `LD` (default `ST`).
 Copy retains the source language. FBD and LD share the `.GB` extension, so the
 reader uses the exact saved tree record to distinguish them. Graphical creation
 accepts only the native empty body observed on MotionWorks IEC 3 Pro / Ade 1.19;
@@ -57,6 +57,11 @@ optional HTTP listener now requires `MCP_HTTP_TOKEN`, accepts its bearer token o
 request, and binds only to `127.0.0.1`. Do not expose desktop control to a network.
 Loading an MCP server into Codex and into Arya are
 separate configuration operations. Reload each host to acquire a fresh tool catalog.
+Installed files and a fresh standalone module load do not prove the existing chat
+catalog refreshed. After an app update completes, verify the installed plugin
+selection and a new host catalog before treating it as ready. An app installer is
+not the running chat host. Do not change an active installer or repeatedly launch
+the desktop app to manufacture this evidence.
 Keep approvals enabled for desktop actions and supervise initial commissioning.
 
 The computer tool schema has `action`, optional `coordinate:[x,y]` and optional `text`.
@@ -156,7 +161,8 @@ Never Download, Run/Reset a controller, force I/O, jog or command motion under t
 Native inspection, manifests and diagnosis remain available. Eight offline code,
 variable and POU editor tools have been removed from the public catalog, as has the
 unsupported Rebuild API. The old environment opt-in cannot restore them. Use the
-native editors/import dialogs and observed Rebuild menu instead. Private engine
+verified native declaration/code/POU/task tools first. Use observed graphical
+editors/import dialogs for unsupported operations. Private engine
 fixtures retain historical format/rollback coverage; they are not an agent workflow.
 See [retired tools and replacements](TOOL_RETIREMENT.md).
 
@@ -217,7 +223,10 @@ the MotionWorks plugin regression suite also passed.
 an isolated copy using public discovery/staging tools and captures before hashes.
 `inspect --workspace <created smoke workspace>` reads the saved smoke POU, tasks and
 original source hashes. It never types into the IDE or writes native POU/global streams.
-Use the computer tool for edits and retain its actual screenshots and compile outcome.
+For new work, prefer the verified native editing tools listed above. Use the
+computer tool for unsupported editor operations and retain the actual screenshots
+and compile outcome; the historical UI smoke recipe is not the default for routine
+declaration or ST/IL edits.
 `verify --workspace <smoke workspace>` runs the guarded IDE verifier and retains its JSON
 report; it does not close/reopen automatically. After separately approved and observed
 UI close/reopen, `reopen-inspect --workspace <smoke workspace>` checks that the saved ST,

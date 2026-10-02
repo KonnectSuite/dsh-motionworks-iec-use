@@ -27,12 +27,19 @@ than wiring/noise, polarity, software rearming, startup behavior or repeated req
    coding. Inspect graphical logic visually where tools lack semantic coverage.
 5. Explain source-backed findings, label hypotheses, and establish missing physical
    requirements and acceptance criteria before selecting filter thresholds.
-6. Edit scoped code/declarations/descriptions inside the IDE using the computer MCP.
-   Observe, one action, refresh. Match project and focus each time.
+6. Prefer native editing in the verified IDE: `mw_ide_variable_change` for complete
+   declarations/descriptions, `mw_ide_code_change` for ST/IL text, and
+   `mw_ide_pou_change`/`mw_ide_task_change` for structural changes. Use
+   `mw_ide_fb_insert` for installed-interface ST block calls. These operations do
+   not need editor focus or coordinate clicks. Check every verification result.
+   For graphical canvas and unsupported variable-grid operations, read the exact
+   operation guide and installed shortcut help before using the computer MCP.
+   Observe, one action, refresh. Match project and editable focus each time.
 7. API Save; compare full saved read-back with intended changes. Native comments can
    reside in translation records rather than literal ST bodies.
 8. API Build/Make; inspect current diagnostics and fresh-completion evidence. Native
-   Rebuild is separate and version-dependent. Compare source manifests afterward.
+   Rebuild is separate and version-dependent; prefer the proven fresh native
+   Build/Make tools. Compare source manifests afterward.
 9. Leave the project open unless a separately approved persistence test is requested.
    That test includes fresh Build/Make after reopening, not hashes alone. No controller
    download, Run/Reset, forces or motion commands.
