@@ -367,4 +367,10 @@ For graphical editing, call `mw_ide_edit_guide(operation: "graphical")` and read
 `docs/GRAPHICAL_EDITOR_WORKFLOW.md`. It supplies the observed inline block-type
 placement, instance selection, pin insertion/connection and constant-edit path,
 with source/flag and fresh compiler checks. Compiler pin ordinals can differ
-from parameter-table order. Keep native workflows and desktop input serialized.
+from installed interface order. The same guide covers the live LD path: confirm
+current menu shortcuts, use F6 for a basic network, F7 for a serial contact and
+Ctrl+F7 for a single parallel contact. Name existing BOOL operands through an
+observed inline editor or Contact/Coil Properties, preserve declaration fields
+and flags, and match the intended expression to fresh compiler instructions.
+Multi-object Ctrl+T branches and arbitrary ladder graphs require separate
+verification. Keep native workflows and desktop input serialized.

@@ -1,4 +1,4 @@
-# Graphical FB placement, connection and editing
+# Graphical FB and ladder editing
 
 Use native tools for project identity, declarations, POU/task operations, Save,
 Build and read-back. Use the desktop companion for the actual graphical canvas.
@@ -50,8 +50,9 @@ The following path was observed on a disposable MotionWorks IEC 3 Pro FBD POU:
 For free connections or other graphical objects, read the installed
 `GraphEd001/GE_ConnectObjects.htm` and inspect the current geometry. It documents
 dragging between provided connection points and connecting selected points.
-Those alternate routes, contacts/coils, branches and general LD edits were not
-covered by this FBD probe. Do not reuse example coordinates across layouts.
+Those alternate connection routes were not covered by this FBD probe. The
+separate LD proof below covers basic contacts, a coil and a single-contact
+parallel branch. Do not reuse example coordinates across layouts.
 
 If a recent scratch insertion is wrong, inspect the actual Undo command and
 its result. One observed Ctrl+Z removed the mistaken operand here. Do not use
@@ -85,3 +86,54 @@ unassignment/deletion, the original seven-POU source baseline matched exactly
 and Build/Make were clean. Evidence: `graphical-canvas-live.json` in the
 disposable workspace verification directory. This is a bounded live proof,
 not acceptance of arbitrary graphs, running Arya's catalog or controller behavior.
+
+## Ladder contacts, coil and parallel path
+
+Prepare the exact BOOL declarations through native APIs, retain their full
+fields and flags, then navigate to the exact LD code worksheet. Inspect the
+current Objects menu and installed `ld001` help. The following shortcuts were
+both displayed in this IDE's menu and exercised in a disposable live probe:
+
+| Observed shortcut | Context and result |
+| --- | --- |
+| F6 | At a free insertion mark, Contact Network inserted a contact, coil and power rails. |
+| F7 | On the selected contact, Contact Right inserted and connected a serial contact. |
+| Ctrl+F7 | On the selected contact, Contact Below inserted and connected a parallel contact below it. |
+| Tab | On the selected contact/coil, opened the inline variable-name editor. |
+
+Observe the inserted object before naming it. Default names such as C000 are
+placeholders; they are not proof of a declared variable. In the inline box,
+inspect focus and select its existing text with Ctrl+A before replacing it with
+the exact declared BOOL name. Inspect the new text before Enter, then confirm
+the committed label and retained connections. Do not type while the menu or a
+different editor has focus.
+
+Double-clicking the actual contact icon opened Contact / Coil Properties.
+Entering an existing variable name loaded its declaration fields, including
+its initializer. Check Name, BOOL type, usage, scope, group, initializer,
+address, description and flags independently before accepting. Contact/Coil
+and the lower Type list control the graphical object. Selecting the displayed
+normally closed contact symbol changed the Stop contact without changing its
+BOOL declaration. Inspect the actual symbol and connections after OK.
+
+For a single parallel contact, select the intended contact and use the observed
+Ctrl+F7 command; confirm the branch rejoins before the next serial object.
+Selecting the wrong contact creates a different expression. Installed
+`ld001/InsertingParallelLDBranches.htm` also documents multi-object branches
+with Ctrl+T, but that separate path was not exercised here. Verify it before use.
+
+The live canvas contained Run and Alternate in parallel, followed by normally
+closed Stop and the Ready coil. Fresh Build/listing and Make were clean and
+matched exactly: LD Run, OR Alternate, ANDN Stop, ST Ready. This represents
+`Ready := (Run OR Alternate) AND NOT Stop` in the compiler evidence; no runtime
+or controller behavior was tested. All four complete native declaration rows,
+flags and collateral sources were preserved. Saving the populated scratch body
+removed its empty body translation file; its variable translation and all
+unrelated translations remained identical. Review target-body translation
+changes explicitly, rather than ignoring translation collateral broadly.
+
+Evidence and explicit native cleanup are retained in `ld-canvas-live.json` in
+the disposable verification directory. This proves the described basic ladder
+workflow, not arbitrary LD graphs or active Arya execution. Keep native
+workflows and companion input serialized throughout, and observe again after
+native calls before relying on keyboard focus or screen geometry.

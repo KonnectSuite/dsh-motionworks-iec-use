@@ -667,3 +667,30 @@ duplicate declarations, missing dependencies and changed dependency contents.
 The native live harness is test/graphical_pins_live.mjs. This improves graph
 diagnosis; canvas placement/wiring and controller behavior remain separate
 checks. General LD editing, IL editing and active Arya acceptance are still open.
+
+## Basic ladder editing with observed shortcuts
+
+A disposable CodexLadderProbe PROGRAM/LD POU was prepared with native APIs:
+Run, Alternate, Stop and Ready BOOL declarations, and a test-only BG assignment.
+Exact native worksheet navigation was accepted before companion input. The
+current Objects menu displayed F6 Contact Network, F7 Contact Right and Ctrl+F7
+Contact Below; each was exercised and its actual result observed. Tab inline
+editing bound the initial contact and coil to existing Run/Ready declarations.
+Contact/Coil Properties bound the serial Stop contact and selected its normally
+closed symbol. Ctrl+F7 inserted a parallel contact below Run; its properties
+reused Alternate. The settled canvas showed the branch rejoining before Stop.
+
+Fresh Build/listing returned one network, matched exactly to LD Run, OR
+Alternate, ANDN Stop, ST Ready. Make was compiled/unmodified. All four native
+declaration rows, groups/flags and unrelated sources remained identical. The
+first verification stopped because native Save removed the scratch body's
+empty translation file; inspection confined that change to the intended body,
+retained the stop evidence and required all other translations to match.
+
+Explicit native unassignment/deletion removed only this probe. Fresh Build/Make
+were clean, and the complete original seven-POU, tasks/globals, program streams
+and translation baseline matched exactly. The evidence is ld-canvas-live.json,
+phase cleaned, in the disposable verification directory; the opt-in harness is
+test/ld_canvas_live.mjs. The graphical guide now carries this tested path.
+Multi-object branches, arbitrary LD graph lifecycles, IL editing and actual
+running Arya acceptance remain unproven. The support-engineer goal stays active.
