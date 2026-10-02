@@ -71,7 +71,7 @@ do not generalize them to arbitrary populated or protected POU conversions.
 |---|---|
 | Startup and trial | Passed disposable launch; install reload still required |
 | Named worksheet navigation | Native code/local/global navigation passed; exact saved-tree URNs and active views verified in two POUs |
-| POU add/edit/delete | Native blank ST/IL/FBD/LD creation and populated ST/IL/LD lifecycles passed with independent saved/native inventory and collateral checks; arbitrary graphical lifecycles remain unproven |
+| POU add/edit/delete | Native blank ST/IL/FBD/LD creation and populated ST/IL/LD lifecycles passed; one populated TON FBD copy/rename/export/import/delete lifecycle also passed with source preservation. Arbitrary graphical lifecycles remain unproven |
 | Local/global/external variables | Public native add/edit/delete and full saved/native comparisons passed for all three scopes; group moves remain refused |
 | Tasks and POU assignment | Public native create/settings edit/assign/exact-instance unassign/delete passed; controller-specific timing acceptance remains separate |
 | POU code editing | Native ST/IL import/replacement/clear, exact comments/flags/collateral, stale-body refusal and fresh Build/Make passed. One FBD TON placement/wiring/edit and one LD parallel/serial rung passed; arbitrary graphs remain unproven |
@@ -728,3 +728,28 @@ as unsupported, even for a supplied body, and must not label IL as ST reviewed.
 The ST FB insertion helper remains ST-only. This establishes the tested IL text
 lifecycle; arbitrary graphic/toolbox objects and actual running Arya acceptance
 remain open. The full support-engineer goal stays active.
+
+## Populated FBD native lifecycle acceptance
+
+The opt-in `test/native_fbd_lifecycle_live.mjs` exercised the public tools on the
+sole disposable fixture. It created an ST TON call with Run, Ready and Elapsed
+bindings, converted it to FBD, copied and renamed the populated graph, exported
+it, deleted the scratch copy and imported the same retained package. The
+imported snapshot exactly matched the pre-export snapshot. A fresh graphical
+listing resolved all four TON pins (IN, PT, Q, ET) from matching compiler
+artifacts; Make succeeded with compiled=true and modified=false.
+
+Native copy/rename retained the original worksheet names. The first harness
+comparison incorrectly normalized names by POU name and stopped after the
+successful copy. Every graph/declaration stream byte hash matched. The harness
+was corrected to compare unique stream roles, then resumed only after matching
+the current saved state to the successful native copy receipt. No creation,
+conversion or copy was repeated.
+
+Cleanup removed both scratch task instances and POUs. Fresh Build succeeded
+(compiled=true, modified=true), then Make settled compiled=true/modified=false.
+The complete original seven POUs, five tasks, globals, program streams and
+translation files matched the retained baseline exactly. Evidence:
+`native-fbd-lifecycle-ed53b00f-1f61-469e-aa4f-a36a02591553.json`, phase cleaned,
+accepted=true. No controller action occurred. This proves one populated TON FBD
+lifecycle; arbitrary toolbox graphs and running Arya chat acceptance remain open.

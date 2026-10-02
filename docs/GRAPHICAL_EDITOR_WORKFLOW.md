@@ -16,6 +16,15 @@ interface with `mw_code_block_interface`. Prepare variables through
 to a task just to manufacture compiler evidence; test assignment is appropriate
 only in an explicitly disposable project.
 
+For an existing graphical POU, use `mw_ide_pou_change` for copy/rename/delete
+and `mw_ide_pou_package` for guarded export/import. Copy or rename can retain
+the original code and variable worksheet names. Resolve the saved worksheet
+through `mw_ide_open_worksheet`; never construct a worksheet URN from the new
+POU name. Preserve graph stream hashes, complete declarations/native flags,
+task assignments and unrelated sources. Review graphical/indirect references
+before rename/delete, and package dependencies before import. Require accepted
+verification and fresh Build/Make after the intended changes.
+
 Open the exact code worksheet through `mw_ide_open_worksheet`. Require accepted
 navigation, then inspect the actual editor through the companion. Click inside
 the observed work surface and confirm it remains the intended worksheet before
