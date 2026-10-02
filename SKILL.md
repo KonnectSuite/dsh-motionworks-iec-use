@@ -75,6 +75,15 @@ function without VAR_INPUT declarations.
 Rename/delete requires references_reviewed, including graphical and indirect
 calls; the automatic ST scan cannot prove their absence. Delete also requires
 explicit user approval. Review task assignments and remaining type/call references.
+For native POU exchange use `mw_ide_pou_package`: export an exact writable POU
+with `baseline_saved:true`, then retain its session-bound `package_token`.
+Import accepts only that unchanged native package into the same staged project
+with the original POU name absent and `dependencies_reviewed:true`. It checks
+library bindings and external globals, preserves native declaration flags/groups
+and complete graph/code sources, and refuses overwrites or arbitrary paths.
+Tokens expire on plugin reload and are consumed before one import attempt.
+Require `accepted:true`, inspect retained evidence after failure, and finish
+intended imports with fresh Build/Make. It does not place or wire new blocks.
 For tasks use `mw_ide_task_change`: create/edit/delete/assign/unassign. Edit accepts
 `settings_changes` for existing field names and imports them through the IDE,
 preserving other fields. Unassignment uses the exact `instance` name, which can

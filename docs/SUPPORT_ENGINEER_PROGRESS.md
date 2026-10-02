@@ -389,3 +389,27 @@ deletion, Build/Make and complete original-baseline restoration. Evidence:
 
 General public exchange guards, graphical placement/wiring and Arya-led live
 host acceptance remain unfinished. The support-engineer goal remains active.
+
+## Public native package route acceptance (0.5.5)
+
+Added `mw_ide_pou_package` as tool 59. Its session-bound private export/import
+route verifies same staged project, complete native/saved source baselines,
+package hashes, name collision refusal, library bindings, external global types,
+exact graph/code/translation restoration and all native declaration flags/groups.
+An import receipt is consumed before native mutation; partial action evidence is
+retained without blind retry. No arbitrary external package or overwrite route.
+
+The first two live export checks stopped before native mutation while reconciling
+COM's omitted external worksheet comments. Each unused temporary POU was removed
+through the native API before the corrected run. Comments remain verified through
+saved declarations and translation files; raw native rows are preserved separately.
+The corrected public route passed export, collision refusal, deletion/import,
+complete copied-source comparison, temporary assignment, fresh five-network ladder
+listing, unassignment/deletion, fresh Build/Make and exact seven-POU baseline
+restoration. Evidence: `public-pou-package-live-c33a9343-2de0-41ac-b441-d883ef07abef.json`.
+
+The automated suite passes with 59 tools. Deployment copied and hash-verified
+129 declared package files as 0.5.5; backup:
+`Arya-restored-hotfix-20261001-210055-61408607`. A fresh installed-module process
+loads all 59 tools including the package route. The running Arya process's reload,
+graphical placement/wiring and Arya-led complete host acceptance remain unverified.

@@ -47,7 +47,7 @@
 
 import { spawn } from 'node:child_process';
 import { AsyncLocalStorage } from 'node:async_hooks';
-import { randomUUID } from 'node:crypto';
+import { randomUUID,createHash } from 'node:crypto';
 import {
   copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, realpathSync, renameSync,
   rmSync, statSync, writeFileSync,
@@ -61,6 +61,7 @@ import { nativeVariableChange } from './native-variables.js';
 import { nativeStructureChange } from './native-structure.js';
 import { nativeCodeChange } from './native-code.js';
 import { graphicalListing } from './graphical-listing.js';
+import { exportPouPackage,importPouPackage } from './pou-package.js';
 import { fbInsertionPlan } from './fb-insertion.js';
 
 export const name = 'motionworks-iec-use';
@@ -1303,8 +1304,73 @@ async function executeNativeStructure(scope,args) {
   return {...summary,evidence_path,baseline:{pou_count:fullBaseline.pous.length,task_count:fullBaseline.tasks.length,
     global_count:result.baseline.globals.length,graphical_reference_review_required:result.baseline.pous.filter(p=>!p.reference_scan_complete).map(p=>p.name)}};
 }
+const pouPackageReceipts=new Map();
+function nativePackageManifest(directory){
+  const files=[];
+  function visit(folder){
+    if(!isInsideWorkspace(folder))throw Error('REFUSED: linked package directory');
+    for(const entry of readdirSync(folder,{withFileTypes:true})){
+      const path=join(folder,entry.name);
+      if(entry.isSymbolicLink()||!isInsideWorkspace(path))throw Error('REFUSED: linked package item');
+      if(entry.isDirectory()){visit(path);continue;}
+      if(!entry.isFile())throw Error('REFUSED: unsupported package item');
+      const before=statSync(path),bytes=readFileSync(path),after=statSync(path);
+      if(before.size!==after.size||before.mtimeMs!==after.mtimeMs)throw Error('Package changed during inspection');
+      files.push({path:path.slice(directory.length+1).replaceAll('\\','/'),bytes:bytes.length,sha256:createHash('sha256').update(bytes).digest('hex')});
+      if(files.length>100||files.reduce((n,f)=>n+f.bytes,0)>64*1024*1024)throw Error('Native package exceeds supported size');
+    }
+  }
+  visit(directory);return files.sort((a,b)=>a.path<b.path?-1:a.path>b.path?1:0);
+}
 function defineTools() {
   return [
+    {
+      name:'mw_ide_pou_package',
+      description:'Export one writable ST/LD/FBD POU through the native IDE to a new private workspace package, or import that exact untouched package into its original staged project with its POU name absent. Export returns a session-bound package_token; import requires it and dependencies_reviewed:true. Receipts expire when this plugin process reloads and are consumed before one import attempt. Refuses arbitrary packages, path arguments, overwrites, changed libraries, missing/mismatched externals, stale source/native baselines and altered packages. Verifies full graph/code/declarations, native flags/groups and unrelated sources/tasks/globals/translations. No binary rewriting, desktop input, task assignment or controller action. Import preserves completed phases on failure; inspect evidence, never retry blindly. Finish intended imports with fresh Build/Make.',
+      parameters:{type:'object',additionalProperties:false,required:['project','operation','baseline_saved'],properties:{project:{type:'string'},operation:{type:'string',enum:['export','import']},baseline_saved:{type:'boolean'},pou:{type:'string'},package_token:{type:'string'},dependencies_reviewed:{type:'boolean'}}},
+      output:{schema:{type:'object',additionalProperties:true,required:['accepted','action_performed','evidence_path']},render:(_a,v)=>text(JSON.stringify(v,null,2))},
+      execute:async args=>{
+        const project=projectOf(args),identity=await assertIdeProjectProven(),workspace=workspaceRoot();
+        if(resolve(identity.active_project).replace(/\.mwt$/i,'').toLowerCase()!==project.toLowerCase())throw Error('REFUSED: wrong open project');
+        if(!['export','import'].includes(args.operation))throw Error('Unknown package operation');
+        const evidenceDirectory=join(workspace,'.motionworks','verification');
+        if(!isInsideWorkspace(evidenceDirectory))throw Error('REFUSED: linked evidence directory');
+        mkdirSync(evidenceDirectory,{recursive:true});
+        const evidence_path=join(evidenceDirectory,'pou-package-'+randomUUID()+'.json');
+        let directory,receipt,attempted=false;const record={args,project,phase:'requested',events:[]};
+        const retain=()=>{if(!isInsideWorkspace(evidence_path))throw Error('REFUSED: linked evidence');writeFileSync(evidence_path,JSON.stringify(record,null,2),'utf8');};retain();
+        const observe=async(name,fn)=>{const value=await fn();record.events.push({name,value});retain();return value;};
+        try{
+          if(args.operation==='export'){
+            if(args.package_token!==undefined)throw Error('Export does not accept an import token');
+            directory=join(workspace,'.motionworks','pk-'+randomUUID().slice(0,8));
+            if(directory.length>=128||/[^\x20-\x7e]|["\r\n]/.test(directory)||!isInsideWorkspace(directory))throw Error('Workspace package path exceeds tested DDE limits');
+            mkdirSync(directory);record.directory=directory;retain();
+          }else{
+            if(args.pou!==undefined)throw Error('Import identity comes from its export receipt');
+            receipt=pouPackageReceipts.get(args.package_token);
+            if(!receipt||receipt.workspace!==workspace||receipt.project!==project)throw Error('Unknown/expired token or wrong workspace/project');
+            directory=receipt.directory;record.directory=directory;record.export_evidence_path=receipt.evidence_path;retain();
+          }
+          const deps={
+            status:()=>observe('status',()=>verb('compile_state',{},30000)),
+            saved:()=>observe('saved',()=>runCode('structure_snapshot',{project})),
+            snapshot:()=>observe('native',()=>verb('pou_package_snapshot',{},30000)),
+            manifest:async()=>nativePackageManifest(directory),
+            consume:async()=>{receipt.used=true;record.phase='import_token_consumed';retain();},
+            mutate:request=>{attempted=true;record.phase=request.operation+'_requested';retain();return observe('mutation',()=>verb('pou_package_mutate',{...request,project,package_directory:directory},60000));},
+          };
+          if(args.operation==='export'){
+            const exported=await exportPouPackage(args,deps),package_token=randomUUID();
+            pouPackageReceipts.set(package_token,{...structuredClone(exported),directory,workspace,project,evidence_path,used:false});
+            record.phase='export_verified';record.exported=exported;retain();
+            return {accepted:true,action_performed:true,operation:'export',pou:args.pou,package_token,package_directory:directory,file_count:exported.manifest.length,evidence_path,next_step:'Token remains valid only in this plugin process and staged project. Import requires absent POU identity and reviewed dependencies; preserve the package untouched.'};
+          }
+          const result=await importPouPackage(args,receipt,deps);record.phase=result.accepted?'import_verified':'import_unverified';record.result=result;retain();
+          return {accepted:result.accepted,action_performed:true,operation:'import',pou:receipt.pou.name,errors:result.errors,evidence_path,next_step:result.accepted?'Run fresh Build/Make after intended edits; task assignment and machine behavior are separate.':'STOP: inspect retained native/saved evidence; token is consumed and no automatic retry or rollback occurs.'};
+        }catch(error){record.phase='stopped';record.error=error.message;retain();return {accepted:false,action_performed:attempted,error:error.message,evidence_path,next_step:'Inspect retained evidence and current native/saved state before another action; no automatic retry.'};}
+      },
+    },
     {
       name:'mw_ide_graphical_listing',
       description:'Inspect one exact saved LD/FBD POU through its compiler-generated networks. Runs a fresh native Build; requires baseline_saved:true and a clean native saved state. Checks full source/declaration/task/translation preservation, matching listing/declaration/worksheet/source-map identities, and returns bounded raw instructions with declaration symbol annotations and artifact hashes. Unknown compiler tokens remain raw. Does not decode/write GB files, open/focus the editor, verify canvas placement/wiring, or command a controller. A failed/unverified Build or changed baseline stops inspection; do not retry automatically.',

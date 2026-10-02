@@ -10,6 +10,10 @@
 
 ## 0.5.5
 
+- Add guarded native POU package export/import with session-bound receipts,
+  collision and dependency checks, package hashes, exact code/graph and native
+  declaration flag/group verification, and complete collateral source checks.
+
 - Add guarded LD/FBD compiler-network inspection after a fresh Build, with exact
   source-map identities, regenerated artifact timestamps/hashes, declaration
   annotations and complete source preservation. Unknown tokens remain raw;

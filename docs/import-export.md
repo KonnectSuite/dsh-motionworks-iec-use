@@ -168,3 +168,25 @@ existing 64-bit Python/pywin32 out-of-process COM client.
 ```powershell
 & "$env:SystemRoot\SysWOW64\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -File <probe>.ps1
 ```
+
+## Guarded public native packages (0.5.5)
+
+`mw_ide_pou_package` exposes the proven ExportPou/ImportPou route through the
+plugin bridge. Export takes `project`, `operation:"export"`, `pou` and
+`baseline_saved:true`; it returns a private package directory and a session-bound
+`package_token`. Import takes the same project, `operation:"import"`, that token,
+`baseline_saved:true` and `dependencies_reviewed:true`. The original POU name
+must be absent. Receipts expire when the plugin process reloads; an import token
+is consumed before native mutation so a partial action cannot be retried blindly.
+
+Only its own unchanged native export can be imported, into the original staged
+project. It verifies complete package hashes, library bindings, external global
+names/types, full native declaration flags/groups, saved code/graph/translation
+sources and unrelated POU/task/global inventories. The COM API omits external
+worksheet descriptions; those comments are verified through saved declarations
+and translation files rather than inferred from global descriptions. Failure
+retains the completed phases and stops without automatic retry or rollback.
+Finish intended imports with fresh Build/Make. Arbitrary package paths,
+cross-project import, overwrites and graphical block placement/wiring are outside
+this route's verified scope. The opt-in `test/public_pou_package_live.mjs` exercises
+the guarded route on the disposable staged smoke fixture.

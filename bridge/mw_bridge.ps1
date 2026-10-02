@@ -713,6 +713,31 @@ function Assert-NoLinkedPath([string]$path) {
     }
 }
 
+function Get-PouPackageState($app) {
+    $structure=Get-NativeStructure $app
+    $declarations=[ordered]@{}
+    foreach($name in @('')+@($structure.pous | ForEach-Object {$_.name})) {
+        $sheet=Get-VariableSheet $app $name;$groups=@()
+        for($i=1;$i -le $sheet.Groups.Count;$i++){$group=$sheet.Groups.Item($i);$groups+=,[ordered]@{name=[string]$group.Name;read_only=[bool]$group.ReadOnly}}
+        $key=if($name){'pou:'+$name}else{'globals'}
+        $declarations[$key]=[ordered]@{variables=(Get-VariableRows $sheet);groups=$groups}
+    }
+    $libraries=@()
+    for($i=1;$i -le $app.ActiveProject.Libraries.Count;$i++){$library=$app.ActiveProject.Libraries.Item($i);$libraries+=,[ordered]@{name=[string]$library.Name;full_name=[string]$library.FullName;logical_name=[string]$library.LogicalName}}
+    return [ordered]@{structure=$structure;declarations=$declarations;libraries=$libraries}
+}
+
+function Get-PouPackageManifest([string]$directory) {
+    Assert-NoLinkedPath $directory
+    $files=@()
+    foreach($item in @(Get-ChildItem -LiteralPath $directory -Recurse -Force | Sort-Object FullName)) {
+        Assert-NoLinkedPath $item.FullName
+        if($item.PSIsContainer){continue}
+        $files+=,[ordered]@{path=$item.FullName.Substring($directory.TrimEnd('\').Length+1).Replace('\','/');bytes=[long]$item.Length;sha256=(Get-MwSha256 $item.FullName).ToLowerInvariant()}
+    }
+    return ,$files
+}
+
 function Test-InsideWorkspace([string]$path) {
     if ([string]::IsNullOrWhiteSpace($path) -or -not $script:WorkspaceRoot) { return $false }
     Assert-NoLinkedPath $path
@@ -1452,6 +1477,54 @@ while ($true) {
                 $app=Connect-App
                 [void](Assert-StagedOpen $app $verb)
                 $data=Get-NativeStructure $app
+                $ok=$true
+            }
+            'pou_package_snapshot' {
+                $app=Connect-App
+                [void](Assert-StagedOpen $app $verb)
+                if($app.ActiveProject.IsModified -ne $false){throw 'REFUSED: package snapshot requires known saved state'}
+                $data=Get-PouPackageState $app
+                if($app.ActiveProject.IsModified -ne $false){throw 'REFUSED: package inspection changed modified state'}
+                $ok=$true
+            }
+            'pou_package_mutate' {
+                $app=Connect-App
+                [void](Assert-StagedOpen $app $verb)
+                $project=[IO.Path]::GetFullPath([string]$req.project)
+                if([IO.Path]::GetFullPath($app.ActiveProject.FullName) -ine ($project+'.mwt') -or $app.ActiveProject.IsModified -ne $false){throw 'REFUSED: wrong or unsaved project'}
+                $name=[string]$req.pou;$operation=[string]$req.operation
+                if($name -notmatch '^[A-Za-z_][A-Za-z0-9_]{0,29}$' -or $operation -notin @('export','import')){throw 'REFUSED: unsupported package operation/identity'}
+                $now=Get-PouPackageState $app
+                if(($now | ConvertTo-Json -Depth 30 -Compress) -cne ($req.before_state | ConvertTo-Json -Depth 30 -Compress)){throw 'REFUSED: native package baseline changed'}
+                foreach($property in $req.before_files.PSObject.Properties){
+                    $file=[IO.Path]::GetFullPath((Join-Path $project $property.Name))
+                    if(-not $file.StartsWith($project.TrimEnd('\')+'\',[StringComparison]::OrdinalIgnoreCase)){throw 'REFUSED: baseline outside project'}
+                    Assert-NoLinkedPath $file
+                    if((Get-MwSha256 $file) -ine [string]$property.Value){throw 'REFUSED: saved package baseline changed'}
+                }
+                $directory=[IO.Path]::GetFullPath([string]$req.package_directory)
+                $parent=[IO.Path]::GetFullPath((Join-Path $script:WorkspaceRoot '.motionworks'))
+                if([IO.Path]::GetDirectoryName($directory) -ine $parent -or [IO.Path]::GetFileName($directory) -notmatch '^pk-[a-f0-9]{8}$' -or $directory.Length -ge 128 -or $directory -match '[^\x20-\x7e]|["\r\n]'){throw 'REFUSED: unsupported private package directory'}
+                Assert-NoLinkedPath $directory
+                if(-not (Test-Path -LiteralPath $directory -PathType Container)){throw 'REFUSED: package directory missing'}
+                $manifest=Get-PouPackageManifest $directory
+                $present=@($now.structure.pous | Where-Object {$_.name -ieq $name})
+                if($operation -eq 'export'){
+                    if($manifest.Count -ne 0 -or $present.Count -ne 1 -or $present[0].read_only){throw 'REFUSED: export requires empty destination and writable POU'}
+                    $command='ExportPou '+$name+' "'+$directory+'"'
+                }else{
+                    if($present.Count -ne 0 -or (Test-Path -LiteralPath (Join-Path $project ('POE\'+$name)))){throw 'REFUSED: package import identity/directory already exists'}
+                    if($manifest.Count -ne $req.package_manifest.Count){throw 'REFUSED: native package file inventory changed'}
+                    foreach($expected in $req.package_manifest){
+                        $actual=@($manifest | Where-Object {$_.path -ceq $expected.path})
+                        if($actual.Count -ne 1 -or $actual[0].bytes -ne $expected.bytes -or $actual[0].sha256 -cne $expected.sha256){throw 'REFUSED: native package manifest changed'}
+                    }
+                    $command='ImportPou "'+$directory+'"'
+                }
+                $returnCode=$app.ExecuteDdeCommand($command)
+                if([int]$returnCode -ne 0){throw ('Native POU '+$operation+' returned '+$returnCode+'; inspect retained state before another action')}
+                if($operation -eq 'import'){$app.ActiveProject.Save()}
+                $data=[ordered]@{return_code=[int]$returnCode;saved=($app.ActiveProject.IsModified -eq $false);is_modified=$app.ActiveProject.IsModified;method=('native_dde_'+$operation+'Pou')}
                 $ok=$true
             }
             'code_mutate' {

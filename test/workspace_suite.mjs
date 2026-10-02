@@ -15,6 +15,7 @@ const commands = [
   [process.execPath, ['test/native_structure.mjs']],
   [process.execPath, ['test/native_code.mjs']],
   [process.execPath, ['test/graphical_listing.mjs']],
+  [process.execPath, ['test/pou_package.mjs']],
   [process.execPath, ['test/fb_insertion.mjs']],
   [process.execPath, ['test/skill_delivery.mjs', root]],
   [process.execPath, ['test/workspace_session.mjs']],

@@ -26,6 +26,7 @@
     "native-structure.js",
     "native-code.js",
     "graphical-listing.js",
+    "pou-package.js",
     "fb-insertion.js",
     "preflight.mjs",
     "SKILL.md",
@@ -83,6 +84,7 @@
     "test/installed_help.py",
     "test/graphical_listing.py",
     "test/graphical_listing.mjs",
+    "test/pou_package.mjs",
     "test/trial_dialog.ps1",
     "test/ide_ui_session.mjs",
     "!bridge/*.lock"
