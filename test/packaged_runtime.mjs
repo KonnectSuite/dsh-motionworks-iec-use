@@ -31,6 +31,10 @@ try {
   assert.match(skills[0].content, /VARIABLE_WORKSHEET_WORKFLOW/);
   const variableGuide = await tools.get('mw_ide_edit_guide').execute({operation:'variables'});
   assert.match(variableGuide.variable_guidance, /group-name editor/);
+  const graphicalGuide = await tools.get('mw_ide_edit_guide').execute({operation:'graphical'});
+  assert.match(graphicalGuide.graphical_guidance, /block type/);
+  assert.match(graphicalGuide.graphical_guidance, /Compiler pin ordinals/);
+  assert.match(graphicalGuide.graphical_guidance, /source baseline matched exactly/);
   const workspace = join(root, 'workspace');
   mkdirSync(join(workspace, 'Machine'), { recursive: true });
   writeFileSync(join(workspace, 'Machine.mwt'), mwtFixture(join(workspace, 'Machine')));

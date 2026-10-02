@@ -61,8 +61,11 @@ entries are keyed by source hash and validated before reuse. A changed archive
 gets a new index; a mismatched cache stops the call. Queries require an explicit
 module to avoid expanding the entire installed help collection unnecessarily.
 
-The current desktop computer-use helper can read accessibility text and send
-observed keyboard shortcuts, but screenshot capture times out and indexed mouse
-input reports unavailable geometry. Native IDE tools and installed-help reads
-continue to work. Graphical placement/wiring and an Arya-led editing session still
-need complete observed acceptance; this help tool does not prove them.
+The Sky desktop helper's capture and indexed geometry failed in this environment.
+The Konnect companion later captured the actual graphical editor successfully.
+A disposable live FBD probe confirmed Tab inline block insertion, instance
+selection, automatic connection at selected pins, constant editing and Ctrl+Z
+for a known mistaken scratch insertion. Read `GRAPHICAL_EDITOR_WORKFLOW.md` and
+use the actual current companion observation before input. Immediate captures
+can show a prior state or tooltip; wait for the observed result instead of
+resending an action. Do not interleave native workflows with foreground UI input.

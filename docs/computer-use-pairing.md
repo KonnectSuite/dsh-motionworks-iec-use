@@ -42,3 +42,10 @@ Observe the settled result before the next action and read back saved sources.
 Never send blind clicks if screen capture fails. Desktop capture can require
 desktop-access permissions unavailable to a sandboxed companion process; diagnose
 that access separately instead of changing the customer project or weakening guards.
+
+The verified FBD inline editing path is delivered by
+`mw_ide_edit_guide(operation: "graphical")` from
+`docs/GRAPHICAL_EDITOR_WORKFLOW.md`. It covers a bounded TON placement, four
+connections, constant edit and complete source/compiler checks. The block type
+and instance name play different roles; compiler pin ordinals can differ from
+installed parameter-table order. Serialize native and desktop operations.

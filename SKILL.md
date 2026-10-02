@@ -357,3 +357,9 @@ blanket directory copy, which drags compiled output over the real project. Reloa
 plugin after changing its installed code so updated tool schemas and bridge logic are used.
 Restart a stale bridge when its protocol version is refused; never weaken the workspace checks
 to retain an old bridge.
+
+For graphical editing, call `mw_ide_edit_guide(operation: "graphical")` and read
+`docs/GRAPHICAL_EDITOR_WORKFLOW.md`. It supplies the observed inline block-type
+placement, instance selection, pin insertion/connection and constant-edit path,
+with source/flag and fresh compiler checks. Compiler pin ordinals can differ
+from parameter-table order. Keep native workflows and desktop input serialized.

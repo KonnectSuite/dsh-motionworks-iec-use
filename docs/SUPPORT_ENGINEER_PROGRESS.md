@@ -600,3 +600,43 @@ compiled=true and modified=false. Evidence:
 and toolbox dropdown access; placement, wiring and active-chat reload remain
 outstanding. The next graphical probe can use this working companion capture
 path with native and UI operations serialized.
+
+### Direct FBD placement, four connections and constant edit (2026-10-01)
+
+Using the working Konnect companion, a native-created disposable FBD PROGRAM
+CodexCanvasProbe was given Run/Ready BOOL, Elapsed TIME and ProbeTimer TON through
+public native declaration APIs. The sole test instance was assigned to BG only
+in this disposable fixture. Public native navigation settled on its code view.
+
+Tab opened inline insertion. Entering ProbeTimer inserted a variable operand,
+not an FB call; that known scratch insertion was undone with observed Ctrl+Z.
+Entering the block type TON, then selecting ProbeTimer in its properties dialog,
+placed the real block with IN/PT and Q/ET pins. Each observed pin was selected,
+then Tab inline insertion connected Run to IN, T#100ms to PT, Q to Ready, and
+ET to Elapsed. The actual four connections were visible. Native Save, complete
+saved declarations/collateral-source checks, native flags, fresh Build/listing
+and Make passed. Selecting the PT constant and replacing its inline text changed
+it to T#200ms; visual read-back and a second fresh generated network passed.
+
+The generated TON declaration numbered IN=1, PT=2, ET=3 and Q=4, while the
+installed interface listed IN/PT/Q/ET. Both graph versions matched the complete
+nine-instruction network against the matching compiler block declaration;
+parameter-table/display order was not used as a compiler ordinal mapping.
+A retained stale hover tooltip displayed 100ms briefly after the edit; the
+settled actual label and regenerated instructions established 200ms. Input
+acknowledgments and immediate captures alone are insufficient acceptance.
+
+Explicit native unassignment/deletion removed the probe, and independent full
+source comparison restored the original seven POUs, tasks/globals, program
+streams and translations exactly. Fresh Build/Make were compiled and unmodified.
+Evidence: `graphical-canvas-live.json`, phase cleaned, in the disposable
+verification directory. The evidence contains both saved graph baselines, native
+flags, fresh listings, the compiler TON declaration hash, visual observations,
+exact instruction matching and complete cleanup comparison.
+
+The new packaged GRAPHICAL_EDITOR_WORKFLOW.md is returned directly by the
+existing graphical edit guide and referenced by the active skill. The proof is
+bounded to this TON FBD graph and constant edit; general LD/contact/coil/branch
+editing, general IL editing and actual running Arya acceptance remain incomplete.
+The generic graphical listing still reports layout/wiring unverified because it
+cannot independently inspect a canvas. The full support-engineer goal is active.
