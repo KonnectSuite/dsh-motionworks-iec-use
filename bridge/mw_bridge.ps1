@@ -488,13 +488,16 @@ function Get-IdeDialogs {
 
 # One screen of truth about the IDE, suitable for a tool result.
 function Get-IdeState {
+    $trial = Get-TrialDialog
+    $trialPresent = [bool]$trial[0]
+    $verifierRunning = [bool](Get-Process -Name mwctVerify -ErrorAction SilentlyContinue)
     $w = Get-IdeWindow
     $dialogs = Get-IdeDialogs
-    $blocked = $false
+    $blocked = $trialPresent
     $enabled = $null
     if ($w) {
         $enabled = [MWW]::IsWindowEnabled([IntPtr]$w)
-        $blocked = (-not $enabled) -or ($dialogs.Count -gt 0)
+        $blocked = $trialPresent -or (-not $enabled) -or ($dialogs.Count -gt 0)
     }
     $t = ''
     if ($w) {
@@ -508,7 +511,12 @@ function Get-IdeState {
         blocked      = $blocked
         dialog_count = $dialogs.Count
         dialogs      = @($dialogs)
-        hint         = $(if ($blocked) {
+        trial_dialog = $trialPresent
+        trial_dialog_hwnd = $(if ($trialPresent) { "0x{0:X}" -f ([int64]$trial[0]) } else { $null })
+        verifier_running = $verifierRunning
+        hint         = $(if ($trialPresent) {
+            'The MotionWorks trial verifier is waiting. Use mw_ide_trial(attempt:true) for one native Use Trial action and verified closure. Do not launch another IDE or use generic answer_dialog.'
+        } elseif ($blocked) {
             'A modal dialog is blocking the IDE. The automation API returns nothing while it is up, so "no project" / "IDE closed" MUST NOT be concluded. Answer it with answer_dialog.'
         } else { $null })
     }

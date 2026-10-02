@@ -2,6 +2,23 @@
 
 This is work in progress. Version 0.5.5 did not establish complete IDE control.
 
+## Trial-aware state follow-up
+
+`mw_ide_state` now reports the exact trial dialog and verifier process separately
+from the IDE frame. A trial prompt before that frame is blocked startup, rather
+than evidence to launch another IDE. The rendered result routes directly to the
+existing native `mw_ide_trial(attempt:true)` action. A running verifier without
+the exact control is reported as waiting for inspection; no action is guessed.
+Ambiguous trial controls remain refused. The state read performs no input.
+
+Regression checks execute the real bridge state function with pre-frame trial,
+trial alongside an enabled frame, verifier-only, ready/closed and ambiguous
+states, and check the delivered tool rendering. The full suite passed. A fresh
+installed Electron ASAR load exposed 61 tools and the new state fields; the live
+IDE was enabled, unblocked and had no trial prompt or other dialog. Evidence:
+`arya-electron-startup-state.json` in the parent workspace. This ready-state read
+does not prove a new live trial dismissal or the existing Arya chat's catalog.
+
 ## Proven follow-up patch for 0.5.5
 
 - Trial detection selects only mwctVerify-owned Windows Forms dialogs containing

@@ -19,7 +19,12 @@ customized, so inspect their actual effect. Do not use generic Windows F10 menu
 assumptions: this MotionWorks installation maps F10 to online mode. Avoid online
 commands. Help images may contain symbols absent from extracted text.
 At startup use `mw_ide_trial` and `mw_ide_state` to distinguish a licence prompt,
-loading process, blocked frame and ready IDE. `mw_ide_start` answers the exact Use
+loading process, blocked frame and ready IDE. `mw_ide_state` reports
+`trial_dialog`, `trial_dialog_hwnd` and `verifier_running` separately from
+`ide_running`: a verifier can be waiting before the IDE frame exists. For an
+exact trial prompt use `mw_ide_trial(attempt:true)`, not generic dialog input.
+If only the verifier is visible, inspect again rather than launching another IDE.
+`mw_ide_start` answers the exact Use
 Trial control through the native control API and verifies closure. Do not start
 another IDE or begin coordinate clicking while that operation is running.
 Offline code/variable/POU editors and the unsupported Rebuild API are retired.

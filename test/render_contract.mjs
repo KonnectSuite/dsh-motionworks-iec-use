@@ -71,3 +71,11 @@ const verified = definitions.find(t => t.name === 'mw_ide_verify')
 assert.match(verified.output.render({}, { verdict: 'unverified',
   report_path: 'evidence.json', next_step: 'Inspect evidence' })[0].text, /unverified/)
 console.log('compile evidence render checks passed')
+const state = definitions.find(t => t.name === 'mw_ide_state')
+const preFrame = state.output.render({}, { ide_running: false, trial_dialog: true, verifier_running: true })[0].text
+assert.match(preFrame, /mw_ide_trial\(attempt:true\)/)
+assert.doesNotMatch(preFrame, /No MotionWorks IDE is running/)
+assert.match(state.output.render({}, { ide_running: true, trial_dialog: true })[0].text, /Use Trial prompt/)
+assert.match(state.output.render({}, { ide_running: false, verifier_running: true })[0].text, /no exact Use Trial control/)
+assert.match(state.output.render({}, { ide_running: false, verifier_running: false })[0].text, /No MotionWorks IDE is running/)
+console.log('trial-aware startup state render checks passed')

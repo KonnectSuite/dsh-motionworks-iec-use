@@ -2320,8 +2320,9 @@ function defineTools() {
     {
       name: 'mw_ide_start',
       description:
-        'Start MotionWorks IEC (a bare Mwt.exe launch, no project). Needed after mw_ide_close, '
-        + 'for an approved close/reopen persistence check. Source edits happen inside the open IDE. '
+        'Start MotionWorks IEC (a bare Mwt.exe launch, no project), including an approved close/reopen persistence check. '
+        + 'Resolves the exact native Use Trial prompt during initial startup or an already-running blocked startup; do not launch a second IDE. '
+        + 'Source edits happen inside the open IDE. '
         + 'Follow it with mw_ide_open to load a project: a '
         + 'freshly launched IDE has no project services until one is opened. If MotionWorks '
         + 'restores another project, it is left open until the user approves saving and closing it.',
@@ -2377,7 +2378,7 @@ function defineTools() {
     {
       name: 'mw_ide_trial',
       description:
-        'Check for Ã¢â‚¬â€ and optionally answer Ã¢â‚¬â€ the MotionWorks licence/trial dialog. An '
+        'Check for and optionally answer the MotionWorks licence/trial dialog. An '
         + 'unlicensed build shows a modal dialog ("Use Trial" / "Activate Online" / '
         + '"Activate by Phone") BEFORE the IDE creates any window of its own, and until '
         + 'it is answered the IDE has no project services, so every OpenProject fails '
@@ -2460,6 +2461,9 @@ function defineTools() {
             window_title: { type: 'string' },
             ide_enabled: { oneOf: [{ type: 'boolean' }, { type: 'null' }] },
             blocked: { type: 'boolean' },
+            trial_dialog: { type: 'boolean' },
+            trial_dialog_hwnd: { oneOf: [{ type: 'string' }, { type: 'null' }] },
+            verifier_running: { type: 'boolean' },
             dialog_count: { type: 'integer' },
             dialogs: {
               type: 'array',
@@ -2492,6 +2496,8 @@ function defineTools() {
           },
         },
         render: (_a, v) => {
+          if (v.trial_dialog) return text('MotionWorks startup is BLOCKED by its Use Trial prompt. Use mw_ide_trial(attempt:true) for one native action and verified closure; do not launch another IDE or use generic dialog clicks.');
+          if (!v.ide_running && v.verifier_running) return text('The MotionWorks licence verifier is running, but no exact Use Trial control or IDE frame is visible yet. Inspect mw_ide_trial and mw_ide_state again; do not launch another IDE.');
           if (!v.ide_running) return text('No MotionWorks IDE is running.');
           const lines = [
             `MotionWorks is running (${v.ide_window}), ${v.blocked ? 'BLOCKED' : 'not blocked'}.`,
