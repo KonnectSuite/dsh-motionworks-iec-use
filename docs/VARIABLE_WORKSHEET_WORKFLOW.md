@@ -23,6 +23,44 @@ authorize typing, even when the native view matches. An unsettled request return
 `accepted=false`, `action_performed=true`; inspect it without repeating the request.
 The dialog workflow below is a fallback for operations the API cannot perform.
 
+## Move an existing declaration between groups
+
+Native `Variable.Group` is read-only in the declared installed interface;
+`mw_ide_variable_change` refuses a group change instead of recreating the variable.
+The similarly named `MoveToGroup` method belongs to POUs. The variables-grid
+Properties dialog has no group field; do not confuse it with the code editor's
+Variable Properties dialog for choosing the group of a new declaration.
+
+Installed `var001` help topic
+`assigningadeclarationtoacertainvariablesgroup.htm` documents drag-and-drop or
+cut-and-paste for existing declarations. One local INT move passed using the
+following observed shortcut path in the disposable project:
+
+1. Reconcile/save the project, retain the complete saved worksheet and collateral
+   source baseline, and read `mw_ide_variables` for the complete native fields,
+   six flags and group read-only states. Stop if any required field is missing.
+   Keep the full planned final list with only the intended group changed.
+2. Navigate to the exact variables worksheet. Observe the source variable data
+   row and destination writable group. Click the source row header and confirm
+   that exactly that complete variable row is selected, without any group row.
+3. Press **Ctrl+X** once. Observe the result and keep the intended declaration
+   on the clipboard; do not save a half-completed move or cut another row.
+4. Observe the destination group's current position (rows can shift after cut).
+   Select its group row header, verify the selection, then press **Ctrl+V** once.
+   Require the declaration under that group with the same name and fields.
+5. Save natively and verify the entire planned worksheet with
+   `mw_code_verify_variables`. Compare complete native declarations/flags through
+   `mw_ide_variables`, group names/read-only states, code and collateral source
+   baselines. Run fresh Build/Make. Missing/extra/renamed rows, altered metadata
+   or flags require inspection before any further input.
+
+The live proof preserved name, INT type, VAR usage, initializer, description,
+empty address, all six flags and the unrelated declaration. Code using both
+variables then compiled in a disposable assigned POU. It does not prove every
+variable type, global move, protected group or batch move. Drag input did not
+establish a move in this probe; one attempt changed foreground, another only
+changed selection. Never infer acceptance or repeat a move from input success.
+
 ## Before input
 
 Verify the exact open stage and worksheet. Retain the **complete saved baseline**

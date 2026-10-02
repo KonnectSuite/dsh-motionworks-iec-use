@@ -35,6 +35,11 @@ assert.equal((await run(args,{
   mutate:async()=>({saved:true,is_modified:false,variables:[{...padded,...flags},{...addition,...flags}]})
 })).verification.accepted,true);
 assert.equal((await run({...args,operation:'edit',name:row.name,declaration:{...row,initial_value:'9'}})).verification.accepted,true);
+await assert.rejects(()=>nativeVariableChange({...args,operation:'edit',name:row.name,declaration:{...row,group:'Destination'}},{
+ status:async()=>({is_modified:false}),saved:async()=>({variables:[row]}),
+ snapshot:async()=>({variables:[{...row,...flags}],groups:[{name:'Default',read_only:false},{name:'Destination',read_only:false}]}),
+ compare:__internals.compareVariables,mutate:async()=>assert.fail('Group refusal must precede mutation')
+}),/Variable.Group is read-only/);
 assert.equal((await run({...args,operation:'delete',name:row.name,declaration:undefined,user_approved:true,references_reviewed:true})).verification.accepted,true);
 assert.throws(()=>variableChangePlan([row],{operation:'delete',name:row.name}),/approval/);
 assert.throws(()=>variableChangePlan([row],{...args,operation:'edit',name:row.name}),/renaming/);

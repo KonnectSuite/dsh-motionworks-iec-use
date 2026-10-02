@@ -2013,8 +2013,8 @@ function defineTools() {
     {
       name: 'mw_ide_variables',
       description:
-        'Read the live variable model of the project open in the IDE: name, data type, initial '
-        + 'value and IEC address per declaration, grouped as the IDE groups them. Optionally '
+        'Read the live variable model of the project open in the IDE: name, data type, section, group, description, initial '
+        + 'value, IEC address and six native flags (retain, pdd, opc, disabled, not_on_plc, redundant) per declaration, with group read_only state. Optionally '
         + 'restrict to one POU. This is the IDE\'s own model, so it needs no knowledge of the '
         + 'on-disk container format.',
       parameters: {
@@ -2050,6 +2050,10 @@ function defineTools() {
                         data_type: { oneOf: [{ type: 'string' }, { type: 'null' }] },
                         initial_value: { oneOf: [{ type: 'string' }, { type: 'null' }] },
                         iec_address: { oneOf: [{ type: 'string' }, { type: 'null' }] },
+                        section: {type:'string'},group:{type:'string'},
+                        description: {oneOf:[{type:'string'},{type:'null'}]},
+                        retain:{type:'boolean'},pdd:{type:'boolean'},opc:{type:'boolean'},
+                        disabled:{type:'boolean'},not_on_plc:{type:'boolean'},redundant:{type:'boolean'},
                       },
                     },
                   },
@@ -2063,6 +2067,7 @@ function defineTools() {
                         name: { type: 'string' },
                         count: { type: 'integer' },
                         variables: { type: 'array', items: { type: 'string' } },
+                        read_only: {type:'boolean'},
                       },
                     },
                   },

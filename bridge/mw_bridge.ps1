@@ -1728,7 +1728,7 @@ while ($true) {
                     if($op -eq 'add') {
                         $group.Variables.Create([string]$decl.name,[string]$decl.type,[int]$block,[string]$decl.description,[string]$decl.initial_value,[string]$decl.address,$false) | Out-Null
                     } else {
-                        if([string]$target.Group.Name -cne $groupName){throw 'REFUSED: native group move has not been verified'}
+                        if([string]$target.Group.Name -cne $groupName){throw 'REFUSED: native Variable.Group is read-only; use the observed worksheet move workflow and full verification'}
                         if([string]$target.Name -ine [string]$decl.name -and $req.rename_reviewed -ne $true){throw 'REFUSED: rename reference review required'}
                         $target.Name=[string]$decl.name
                         $target.DataType=[string]$decl.type
@@ -1756,16 +1756,24 @@ while ($true) {
                     $items = @()
                     try {
                         $vs = $p.Variables
-                        for ($k = 1; $k -le $vs.Count; $k++) {
-                            $v = $vs.Item($k)
+                        foreach ($v in (Get-VariableRows $vs)) {
                             $items += [ordered]@{
-                                name          = [string]$v.Name
-                                data_type     = $(try { [string]$v.DataType } catch { $null })
-                                initial_value = $(try { [string]$v.InitialValue } catch { $null })
-                                iec_address   = $(try { [string]$v.IecAddress } catch { $null })
+                                name          = $v.name
+                                data_type     = $v.type
+                                initial_value = $v.initial_value
+                                iec_address   = $v.address
+                                section       = $v.section
+                                group         = $v.group
+                                description   = $v.description
+                                retain        = $v.retain
+                                pdd           = $v.pdd
+                                opc           = $v.opc
+                                disabled      = $v.disabled
+                                not_on_plc    = $v.not_on_plc
+                                redundant     = $v.redundant
                             }
                         }
-                    } catch { }
+                    } catch { throw ('Native variable model incomplete: '+$_.Exception.Message) }
 
                     $groups = @()
                     try {
@@ -1776,10 +1784,10 @@ while ($true) {
                             try {
                                 $gvv = $grp.Variables
                                 for ($m = 1; $m -le $gvv.Count; $m++) { $gv += [string]$gvv.Item($m).Name }
-                            } catch { }
-                            $groups += [ordered]@{ name = [string]$grp.Name; count = $gv.Count; variables = $gv }
+                            } catch { throw ('Native group members incomplete: '+$_.Exception.Message) }
+                            $groups += [ordered]@{ name = [string]$grp.Name; count = $gv.Count; variables = $gv; read_only = [bool]$grp.ReadOnly }
                         }
-                    } catch { }
+                    } catch { throw ('Native variable groups incomplete: '+$_.Exception.Message) }
 
                     $result += [ordered]@{ pou = $pname; count = $items.Count; variables = $items; groups = $groups }
                 }

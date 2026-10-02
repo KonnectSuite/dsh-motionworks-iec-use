@@ -41,7 +41,7 @@ export async function nativeVariableChange(args,{status,saved,snapshot,mutate,co
   const target=live.variables.find(v=>equalName(v.name,args.name??''));
   const group=args.declaration?.group??target?.group;
   if(!live.groups.some(g=>g.name===group&&!g.read_only))throw new Error('Target group is absent or read-only');
-  if(args.operation==='edit' && group!==target.group)throw new Error('Native group moves have not been verified');
+  if(args.operation==='edit' && group!==target.group)throw new Error('Native Variable.Group is read-only; use the observed variable-grid move workflow in docs/VARIABLE_WORKSHEET_WORKFLOW.md and verify complete saved/native declarations');
   const result=await mutate({...args,before_native:live.variables});
   const after=await saved();
   const verification=compare(plan.expected,after.variables);

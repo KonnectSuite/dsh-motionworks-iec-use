@@ -72,7 +72,7 @@ do not generalize them to arbitrary populated or protected POU conversions.
 | Startup and trial | Passed disposable launch; install reload still required |
 | Named worksheet navigation | Native code/local/global navigation passed; exact saved-tree URNs and active views verified in two POUs |
 | POU add/edit/delete | Native blank ST/IL/FBD/LD creation and populated ST/IL/LD lifecycles passed; one populated TON FBD copy/rename/export/import/delete lifecycle also passed with source preservation. Arbitrary graphical lifecycles remain unproven |
-| Local/global/external variables | Public native add/edit/delete and full saved/native comparisons passed for all three scopes; group moves remain refused |
+| Local/global/external variables | Native add/edit/delete passed for all three scopes. Native group changes remain refused; one local INT grid move through Ctrl+X/Ctrl+V passed with full declaration/flag checks and compilation |
 | Tasks and POU assignment | Public native create/settings edit/assign/exact-instance unassign/delete passed; controller-specific timing acceptance remains separate |
 | POU code editing | Native ST/IL import/replacement/clear, exact comments/flags/collateral, stale-body refusal and fresh Build/Make passed. One FBD TON placement/wiring/edit and one LD parallel/serial rung passed; arbitrary graphs remain unproven |
 | Toolbox and FB insertion | Installed interfaces, native ST FB insertion, graphical TON placement/wiring and compiler FB pin resolution passed; arbitrary toolbox objects remain unproven |
@@ -799,3 +799,31 @@ EIP_ToCLX; that warning is absent from the new programming review. Complete
 before/after POU, task, global, program-stream and translation snapshots match.
 Evidence: `native-task-ownership-cec2827e-382a-4bfc-9e3d-e46842d4588b.json`,
 phase accepted, accepted=true. No IDE source or controller mutation occurred.
+
+## Existing variable group move: observed shortcut fallback
+
+Installed Ade variable Group is a property-get only; POU MoveToGroup is a different
+interface. Native variable mutation continues to refuse group changes and now
+routes to the documented grid workflow. The grid Properties dialog has no group
+selector. Installed var001 topic assigningadeclarationtoacertainvariablesgroup.htm
+(hash b0b733272ddc090881e2845056946d504367bd2aaeb9b541c9663ecc9f7f6cf3)
+provides cut/paste and drag/drop for existing declarations.
+
+The disposable live proof created two INT declarations and a writable Destination
+group through native APIs. After exact native variable navigation, selecting only
+Mover's full data row, Ctrl+X, selecting the current Destination group header and
+Ctrl+V moved Mover once. Full saved/native verification retained its name, type,
+VAR usage, initializer, description, empty address and six native flags, with
+Anchor and group read-only states unchanged. Only declaration/group streams in
+the scratch POU changed. Code using Mover and Anchor was then imported natively,
+assigned to a disposable BG instance, and compiled with source preservation.
+Cleanup unassigned/deleted the scratch POU and restored the exact original seven
+POUs, tasks, globals, source streams and translations; final Build/Make passed.
+Evidence: native-variable-group-live.json, phase cleaned, accepted=true.
+
+The first drag changed foreground; native inspection proved no mutation. A second
+fresh drag only changed selection. Neither established a move, and no input was
+sent into Codex. Cut/paste was observed independently. This is one local INT
+proof, not batch/global/protected-group acceptance. The public mw_ide_variables
+reader now exposes section, group, description, all six flags and group read_only
+state for independent verification, and native read failures refuse partial data.
