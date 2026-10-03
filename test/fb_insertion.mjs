@@ -9,7 +9,7 @@ assert.equal(plan.declaration.type,'Timer');
 assert.equal(plan.declaration.address,null);
 assert.equal(plan.declaration.initial_value,null);
 assert.equal(plan.declaration.description,null);
-assert.equal(plan.call,'NewTimer(IN := FALSE, State := Accum);\r\nDone := NewTimer.Q;\r\n');
+assert.equal(plan.call,'NewTimer(IN := FALSE, State := Accum);\r\nDone := NewTimer.Q;\r\nAccum := NewTimer.State;\r\n');
 assert.ok(plan.code.endsWith('RETURN;\n'));
 const {expected_body,offset,...shortArgs}=args;
 const hashArgs={...shortArgs,expected_body_sha256:createHash('sha256').update(read.body).digest('hex'),before:'RETURN;'};

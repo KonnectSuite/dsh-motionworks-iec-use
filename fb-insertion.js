@@ -50,8 +50,11 @@ export function fbInsertionPlan(args,block,read){
       if(variable&&pin.type.toUpperCase()!=='ANY'&&!sameType(variable.type,pin.type))throw new Error('Binding type mismatch: '+pin.name);
       if(!variable)warnings.push('Compiler must validate input expression type: '+pin.name);
     }else throw new Error('Unresolved pin direction: '+pin.name);
-    if(pin.direction==='output')outputs.push(value+' := '+args.instance+'.'+pin.name+';\r\n');
-    else fields.push(pin.name+' := '+value);
+    // eCLR requires both sides of VAR_IN_OUT connected to the same variable.
+    // Installed help: TheVARINOUTParameterIsNotConnectedToAVariable.htm and
+    // TheVARINOUTParameterIsConnectedToDifferentVariables.htm.
+    if(pin.direction==='output'||pin.direction==='in_out')outputs.push(value+' := '+args.instance+'.'+pin.name+';\r\n');
+    if(pin.direction!=='output')fields.push(pin.name+' := '+value);
   }
   for(const pin of block.pins)if(pin.direction==='in_out'&&!seen.has(pin.name.toUpperCase()))throw new Error('Required in-out binding missing: '+pin.name);
   let offset=args.offset??read.body.length;

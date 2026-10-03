@@ -71,8 +71,12 @@ large POUs or ask the user to paste the call. Its returned `text_body_sha256` ca
 guard a subsequent insertion after checking the accepted result.
 Outputs and in-out pins require existing direct variables of matching types;
 all in-out pins must be bound. The tool declares the instance and inserts the
-call through native APIs, retaining completed phases on failure. Inspect that
-evidence before another action; never retry blindly. Require accepted read-back
+call through native APIs, retaining completed phases on failure. Each in-out
+variable connects on both sides: the named input binding
+and `variable := instance.pin;` after the call. The installed eCLR compiler
+requires the same variable on both sides. Preserve these output assignments
+when editing existing calls; an input-only in-out binding can fail compilation.
+Inspect retained evidence before another action; never retry blindly. Require accepted read-back
 and fresh Build/Make. Graphical insertion remains outside this tool's scope.
 For saved LD/FBD diagnosis, use `mw_ide_graphical_listing` with the exact POU,
 `baseline_saved:true` and a bounded network range (`start`, `limit`). It runs a

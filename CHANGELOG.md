@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Connect native ST VAR_IN_OUT bindings on both sides of an FB call using the
+  same local variable, as required by the installed eCLR code generator. The
+  missing post-call assignment caused TON_Retentive to fail when its PROGRAM
+  was actually assigned to a task. Assigned-target Build/Make and exact cleanup
+  now pass; retain source-map evidence instead of relying on unused-POU builds.
 - Fix native compiler-message pane selection: inactive lists can remain visible
   with zero area. Read only the uniquely displayed list after exact activation;
   refuse unknown/ambiguous/unreadable panes. Read MSAA rows 1 through N so a

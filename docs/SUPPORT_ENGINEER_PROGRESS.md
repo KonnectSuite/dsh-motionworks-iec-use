@@ -2,6 +2,28 @@
 
 This is work in progress. Version 0.5.5 did not establish complete IDE control.
 
+## Assigned ST toolbox FB compilation
+
+The installed eCLR compiler requires each VAR_IN_OUT to connect to the same
+variable before and after the call. Native insertion now generates its named
+input binding and `variable := instance.pin;` afterward. Without the latter,
+an assigned TON_Retentive PROGRAM failed with "Accum is not connected" despite
+passing native source readback. Earlier unused-POU builds did not cover that
+requirement. Installed eCLR_001 topics
+TheVARINOUTParameterIsNotConnectedToAVariable.htm and
+TheVARINOUTParameterIsConnectedToDifferentVariables.htm document the requirement.
+
+Fresh public acceptance created a 2,322-line commented ST PROGRAM, rejected a
+stale readable hash before mutation, inserted IEC TON and Yaskawa_Toolbox_v375
+TON_Retentive, assigned the PROGRAM to BG, and observed successful fresh Build.
+Make was up to date, native state was compiled and unmodified, and the correctly
+identified Errors pane was empty. Four freshly generated compiler artifacts
+matched exact POU/worksheet/source-map identities. Cleanup and final Build/Make
+restored the complete original source baseline. No resume was needed.
+Evidence: native-fb-hash-84bcbc28-32e1-409f-bed6-d6359f31450f.json, cleaned,
+accepted=true. This proves these two assigned ST FB calls, not arbitrary toolbox
+objects, graphical canvas editing or runtime machine behavior.
+
 ## Worksheet readiness and task-instance context
 
 Native navigation now recognizes an exact task-instance view only after reading

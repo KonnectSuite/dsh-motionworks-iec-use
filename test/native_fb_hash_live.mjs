@@ -1,6 +1,6 @@
 // Opt-in native IEC + Yaskawa toolbox insertion on the disposable fixture only.
 import assert from 'node:assert/strict';
-import {readFileSync,writeFileSync} from 'node:fs';
+import {readFileSync,writeFileSync,statSync} from 'node:fs';
 import {join} from 'node:path';
 import {randomUUID} from 'node:crypto';
 import {__internals as i} from '../index.js';
@@ -23,6 +23,11 @@ async function act(name,args={}){
  return result;
 }
 async function digest(){return (await act('mw_code_pous')).pous.find(p=>p.name===pou).text_body_sha256;}
+async function targetEvidence(started){
+ record.compiler_source=await i.runCode('compiled_source_evidence',{project,pou});
+ assert.equal(record.compiler_source.pou,pou);assert.equal(record.compiler_source.artifacts.length,4);
+ assert.ok(record.compiler_source.artifacts.every(a=>a.modified_ms>=started&&a.modified_ms<=Date.now()));retain();
+}
 async function compile(proveTarget=false){
  const before=await i.runCode('structure_snapshot',{project}),started=Date.now();
  for(const name of ['mw_ide_build','mw_ide_make']){
@@ -31,20 +36,23 @@ async function compile(proveTarget=false){
   const status=await act('mw_ide_compile_state');assert.equal(status.is_modified,false);
   if(name==='mw_ide_build')assert.equal(result.evidence_kind,'observed_compile_transition');
  }
+ const errors=await act('mw_ide_errors',{pane:'Errors'});assert.equal(errors.count,0);
  const after=await i.runCode('structure_snapshot',{project});
  for(const key of ['pous','tasks','globals','program_sources','translation_files'])assert.deepEqual(after[key],before[key],key);
- if(proveTarget){
-  record.compiler_source=await i.runCode('graphical_listing',{project,pou,source_only:true});
-  assert.equal(record.compiler_source.pou,pou);assert.equal(record.compiler_source.artifacts.length,4);
-  assert.ok(record.compiler_source.artifacts.every(a=>a.modified_ms>=started&&a.modified_ms<=Date.now()));retain();
- }
+ if(proveTarget)await targetEvidence(started);
 }
 try{
+ let compiledResume=false;
  if(resume){
   assert.equal(record.project,project);assert.equal(record.pou,pou);assert.equal(record.phase,'stopped');
   const lastBuild=record.events.findLast(e=>e.name==='mw_ide_build');
-  assert.equal(lastBuild.result.evidence_kind,'completion_unverified');
-  const permitted=new Set(['mw_ide_build','mw_code_read_text','mw_ide_state','mw_ide_compile_state','mw_ide_save']);
+  compiledResume=record.error==='ValueError: Exact graphical POU required';
+  if(compiledResume){
+   assert.equal(lastBuild.result.evidence_kind,'observed_compile_transition');
+   assert.equal(lastBuild.result.is_compiled,true);assert.equal(lastBuild.result.settled,true);
+   const make=record.events.findLast(e=>e.name==='mw_ide_make');assert.equal(make.result.is_compiled,true);assert.equal(make.result.is_modified,false);
+  }else assert.equal(lastBuild.result.evidence_kind,'completion_unverified');
+  const permitted=new Set(['mw_ide_build','mw_code_read_text','mw_ide_state','mw_ide_compile_state','mw_ide_save',...(compiledResume?['mw_ide_make']:[])]);
   assert.ok(record.events.slice(record.events.indexOf(lastBuild)+1).every(e=>permitted.has(e.name)),'Unexpected action since unverified Build');
   const task=record.events.findLast(e=>e.name==='mw_ide_task_change');assert.equal(task.args.operation,'assign');
   assert.equal(task.result.verification.accepted,true);
@@ -58,6 +66,7 @@ try{
   const state=await act('mw_ide_state');assert.equal(state.blocked,false);assert.equal(state.ide_enabled,true);
   record.original_error=record.error;record.resumed_saved_baseline=current;
   const status=await act('mw_ide_compile_state');
+  if(compiledResume){assert.equal(status.is_compiled,true);assert.equal(status.is_modified,false);await targetEvidence(statSync(task.result.evidence_path).mtimeMs);}
   if(status.is_modified){
    const native=await i.verb('variable_snapshot',{pou},30000);
    const saved=await act('mw_ide_save');assert.equal(saved.saved,true);assert.equal(saved.is_modified,false);
@@ -88,7 +97,7 @@ try{
  record.phase='inserted';retain();
  await act('mw_ide_task_change',{operation:'assign',name:'BG',pou,instance});
  }
- if(!cleanupOnly){await compile(true);record.phase='compiled';retain();}
+ if(!cleanupOnly){if(!compiledResume)await compile(true);record.phase='compiled';retain();}
  await act('mw_ide_task_change',{operation:'unassign',name:'BG',instance,user_approved:true});
  await act('mw_ide_pou_change',{operation:'delete',name:pou,user_approved:true,references_reviewed:true});
  if(!cleanupOnly)await compile();

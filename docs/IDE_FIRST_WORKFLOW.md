@@ -25,6 +25,11 @@ readable `text_body_sha256` supplied as `expected_body_sha256`, and a unique exa
 It creates the declaration and call natively, retaining completed phases if a
 later step fails. Do not repeat a partial insertion or ask the user to retype a
 large body. Verify the result and compile the intended task/POU context.
+In-out pins generate both `Pin := variable` in the call and
+`variable := instance.Pin;` after it. The installed eCLR code generator requires
+the same variable connected to both sides; retain that post-call assignment.
+See installed eCLR_001 topics TheVARINOUTParameterIsNotConnectedToAVariable.htm
+and TheVARINOUTParameterIsConnectedToDifferentVariables.htm.
 
 Native navigation distinguishes the COM active-view identity from visible editor
 readiness. It requires two responsive frames and the expected editor caption before
