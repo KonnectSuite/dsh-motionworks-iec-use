@@ -51,6 +51,12 @@ readiness check: it verifies the current editor without OpenDocument or input.
 An exact task-instance view is supported only when its native instance type
 matches the requested POU and the full worksheet/task-context caption matches.
 Inspection cannot establish keyboard focus; native edit APIs do not require it.
+If compilation reports `completion_unverified`, inspect native state and the
+exact Errors, Warnings and Build panes through `mw_ide_errors`. Informational
+messages have the exact pane name `Infos`. An unverified timeout or empty pane
+does not prove a busy compiler, damaged POU or success. Diagnostic reads refuse
+unknown panes and ambiguous/unreadable controls; do not infer an empty result
+from a failed read. Set screenshot:true only when a visual inspection is needed.
 The tool resolves the internal document URN from the saved tree; never
 send a slash-style logical name directly to OpenDocument or navigate by guessed
 tree coordinates. Code editors report the POU logical name as their active view.

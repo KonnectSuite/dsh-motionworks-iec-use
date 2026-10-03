@@ -67,6 +67,10 @@ assert.doesNotMatch(cached[0].text, /compiled cleanly/)
 const stalled = make.output.render({}, { mode: 'Make', accepted: true,
   stalled: true, is_compiled: true, elapsed_s: 30 })
 assert.match(stalled[0].text, /completion unverified/)
+const unknownCompletion = make.output.render({}, {mode:'Build',accepted:true,
+  stalled:false,settled:false,is_compiled:false,evidence_kind:'completion_unverified',elapsed_s:90})[0].text
+assert.match(unknownCompletion,/completion unverified/)
+assert.doesNotMatch(unknownCompletion,/COMPILE FAILED|compiler is still/)
 const verified = definitions.find(t => t.name === 'mw_ide_verify')
 assert.match(verified.output.render({}, { verdict: 'unverified',
   report_path: 'evidence.json', next_step: 'Inspect evidence' })[0].text, /unverified/)

@@ -92,6 +92,7 @@
     "test/pou_conversion.mjs",
     "test/trial_dialog.ps1",
     "test/native_snapshot.ps1",
+    "test/output_pane.ps1",
     "test/ide_ui_session.mjs",
     "!bridge/*.lock"
   ],

@@ -2069,16 +2069,17 @@ while ($true) {
             'read_output' {
                 $name = if ($req.pane) { [string]$req.pane } else { 'Errors' }
                 $limit = if ($req.limit) { [int]$req.limit } else { 200 }
+                if ($null -ne $req.limit -and ($req.limit -isnot [int] -and $req.limit -isnot [long] -or $req.limit -lt 1 -or $req.limit -gt 5000)) { throw 'Output limit must be an integer from 1 to 5000' }
                 $app = Connect-App
                 [void](Assert-StagedOpen $app 'read_output')
                 # Activate first: a pane that is not showing has no visible list.
-                try {
-                    $ow = $app.OutputWindows
-                    for ($i = 1; $i -le $ow.Count; $i++) {
-                        $w = $ow.Item($i)
-                        if ("$($w.Name)" -eq $name) { $w.Activate(); break }
-                    }
-                } catch { }
+                $activated = $false
+                $ow = $app.OutputWindows
+                for ($i = 1; $i -le $ow.Count; $i++) {
+                    $w = $ow.Item($i)
+                    if ("$($w.Name)" -ceq $name) { $w.Activate(); $activated = $true; break }
+                }
+                if (-not $activated) { throw "No exact output pane '$name'; no diagnostic list was read" }
                 Start-Sleep -Milliseconds 700
 
                 $idePid = Get-IdePid
@@ -2104,7 +2105,7 @@ while ($true) {
                 }
 
                 $script:best = $null
-                $script:bestRows = 0
+                $script:readableLists = @()
                 $root = if ($script:msgWin) { [IntPtr]$script:msgWin } else { [IntPtr]::Zero }
                 if ($root -ne [IntPtr]::Zero) {
                     $cbList = [MWW+EnumWindowsProc]{
@@ -2113,27 +2114,31 @@ while ($true) {
                         [void][MWW]::GetClassNameW($k, $cls, 64)
                         if ($cls.ToString() -ne 'SysListView32') { return $true }
                         if (-not [MWW]::IsWindowVisible($k)) { return $true }
-                        $rows = [MWW]::ListRowCount($k)
-                        # Only the active tab's list is visible; a pane with nothing to
-                        # report has rows=0 and is skipped, which is itself the answer.
-                        if ($rows -gt $script:bestRows) { $script:bestRows = $rows; $script:best = $k }
+                        $rc = New-Object MWW+RECT
+                        if (-not [MWW]::GetWindowRect($k, [ref]$rc)) { return $true }
+                        # Inactive panes retain WS_VISIBLE but collapse to zero area.
+                        # Row count cannot identify the selected diagnostic pane.
+                        if ($rc.Right -le $rc.Left -or $rc.Bottom -le $rc.Top) { return $true }
+                        $script:readableLists += $k
                         return $true
                     }
                     [void][MWW]::EnumChildWindows($root, $cbList, [IntPtr]::Zero)
                 }
 
-                if ($null -eq $script:best) {
-                    $ok = $true
-                    $data = [ordered]@{ pane = $name; lines = @(); count = 0; note = 'no readable list found for this pane' }
+                if ($script:readableLists.Count -ne 1) {
+                    throw "Cannot uniquely identify the activated '$name' pane list ($($script:readableLists.Count) candidates); diagnostics unverified"
                 } else {
+                    $script:best = $script:readableLists[0]
                     $acc = [MWW]::GetAccessible([IntPtr]$script:best)
+                    if ($null -eq $acc) { throw "Activated '$name' pane is not accessible; diagnostics unverified" }
                     $lines = New-Object System.Collections.ArrayList
                     if ($null -ne $acc) {
                         $n = [MWW]::ListRowCount([IntPtr]$script:best)
-                        for ($i = 0; $i -lt [Math]::Min($n, $limit); $i++) {
+                        for ($i = 1; $i -le [Math]::Min($n, $limit); $i++) {
                             $t = ''
                             try { $t = [string]$acc.accName($i) } catch { }
-                            if ($t) { [void]$lines.Add($t) }
+                            if (-not $t) { throw "Cannot read row $i of '$name'; diagnostics incomplete" }
+                            [void]$lines.Add($t)
                         }
                     }
                     $ok = $true
@@ -2141,7 +2146,7 @@ while ($true) {
                         pane  = $name
                         count = $lines.Count
                         lines = @($lines)
-                        note  = $(if ($lines.Count -eq 0) { "the '$name' pane is empty - that is a clean result" } else { $null })
+                        note  = $(if ($lines.Count -eq 0) { "the '$name' pane has no messages; inspect compile state separately" } else { $null })
                     }
                 }
             }

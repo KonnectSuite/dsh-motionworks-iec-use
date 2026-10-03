@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Fix native compiler-message pane selection: inactive lists can remain visible
+  with zero area. Read only the uniquely displayed list after exact activation;
+  refuse unknown/ambiguous/unreadable panes. Read MSAA rows 1 through N so a
+  one-line error and every pane's final message are retained. Correct Infos name
+  and remove unsupported timeout/empty-pane cause claims and automatic captures.
+  Live Errors/Warnings/Infos/Build reads passed with exact source preservation.
 - Add readable SHA-256 guards and unique insertion anchors to native ST
   function-block insertion so large worksheets need not be reproduced. Return
   the verified text hash for subsequent insertions. Live IEC TON and Yaskawa

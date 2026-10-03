@@ -820,7 +820,7 @@ function diagnoseBuild(verdict) {
     };
   }
 
-  if (verdict?.stalled) {
+  if (verdict?.stalled || verdict?.settled === false || verdict?.evidence_kind === 'completion_unverified') {
     return { kind: 'stall', explain: 'Completion was not verified for this request. The IDE may be busy, blocked by a dialog, failed, or reporting a cached result.', next: 'Inspect mw_ide_state and mw_ide_errors; do not treat this as success or repair files while the IDE is open.' };
   }
 
@@ -926,15 +926,14 @@ const BUILD_SCHEMA = {
     accepted: { type: 'boolean', description: 'The IDE accepted the compile request.' },
     settled: {
       type: 'boolean',
-      description: 'A second compile was accepted, proving the previous one finished.',
+      description: 'A native false-to-true compiled transition was observed, or Make remained compiled and unmodified as an explicit no-op.',
     },
     stalled: {
       oneOf: [{ type: 'boolean' }, { type: 'null' }],
       description:
-        'The compiler never finished. is_compiled=false with is_modified=TRUE is a STALL, '
-        + 'not a rejection: the compiler is still working, so the Errors pane proves nothing '
-        + 'and hunting it for messages wastes the turn. Only is_modified=false means the '
-        + 'compiler finished and REJECTED the code.',
+        'Completion was not verified within the observation period. This does not prove '
+        + 'the compiler is still running or that code was rejected. Inspect IDE state and '
+        + 'exact compiler diagnostics; modification state alone cannot determine the cause.',
     },
     is_compiled: { oneOf: [{ type: 'boolean' }, { type: 'null' }] },
     is_modified: { oneOf: [{ type: 'boolean' }, { type: 'null' }] },
@@ -949,10 +948,9 @@ const BUILD_SCHEMA = {
       description:
         'Why the build did not succeed, worked out on the way out rather than left to the caller. '
         + 'kind is one of: poe-damaged (a POU container is not a plausible size - the compiler '
-        + 'destroyed it), stall (the compiler never finished, so the Errors pane is EMPTY and '
-        + 'reading it wastes the turn), rejected (the compiler finished and refused the code, so '
-        + 'the Errors pane HAS messages), or null when the build was clean. explain names the cause '
-        + 'and next says what to do about it.',
+        + 'destroyed it), stall (completion was not verified; inspect IDE state and diagnostics), '
+        + 'rejected (a negative verdict requiring compiler messages), or null when compiled. '
+        + 'Historical container sizes and modification flags do not prove a cause.',
     },
   },
 };
@@ -978,7 +976,7 @@ function renderBuild(_a, v) {
   if (v.evidence_kind === 'already_up_to_date') {
     return text(`${v.mode}: already up to date; no fresh compilation was observed.${where}`);
   }
-  if (v.stalled) {
+  if (v.stalled || v.settled === false || v.evidence_kind === 'completion_unverified') {
     return text(`${v.mode}: completion unverified after ${v.elapsed_s}s.${where} Inspect mw_ide_state and mw_ide_errors before proceeding.`);
   }
 
@@ -2218,10 +2216,12 @@ function defineTools() {
         + 'cleanly: the automation API returns the verdict but never the messages, so this reads '
         + 'the Message Window list control through MSAA and returns each line verbatim, e.g. '
         + '"No matching global variable found for \'x:y\' in resource \'Resource\'!". Panes: '
-        + 'Errors (default), Warnings, Build, Info. The Errors pane also carries INFORMATIONAL lines - structure padding notes, required-memory totals, redundant-variable counts - so read them before calling a build broken. '
+        + 'Errors (default), Warnings, Build, Infos, PLC Errors, Print, Statistics, SCC. '
+        + 'Activates the exact named pane and requires one visible list with nonzero area. '
+        + 'Unknown panes, ambiguous controls and unreadable rows refuse instead of returning another pane or a false empty result. '
         + 'AN EMPTY PANE IS NOT BY ITSELF A CLEAN BUILD: this tool also reads the compile state, and '
         + 'when the pane is empty while the project is NOT compiled it says so, because that pair is '
-        + 'a stall or a destroyed POU rather than success. Set screenshot:true to also capture the '
+        + 'unverified; this alone does not establish a stall or damaged source. Set screenshot:true to also capture the '
         + 'pane, and limit to raise the cap.',
       parameters: {
         type: 'object',
@@ -2229,9 +2229,9 @@ function defineTools() {
         properties: {
           pane: {
             type: 'string',
-            description: 'Output pane to read: Errors (default), Warnings, Build, or Info.',
+            description: 'Exact output pane name: Errors (default), Warnings, Build, Infos, PLC Errors, Print, Statistics, or SCC.',
           },
-          limit: { type: 'integer', description: 'Maximum lines to return. Defaults to 200.' },
+          limit: { type: 'integer', description: 'Maximum lines to return (1-5000). Defaults to 200.' },
           screenshot: {
             type: 'boolean',
             description: 'Also capture the pane to a PNG and return its path. Defaults to false.',
@@ -2272,10 +2272,9 @@ function defineTools() {
             if (v.compiles === false) {
               return text(`${head}\n`
                 + `BUT is_compiled=false — this is NOT a clean build. The pane is empty and the\n`
-                + `project did not compile, which is a STALL or a DESTROYED POU, not success.\n`
+                + `project has no verified compiled state. This does not identify the cause.\n`
                 + `Do not treat this as a pass.  ${v.empty_means}\n`
-                + `Next: mw_ide_state (is the IDE blocked on a dialog?), then mw_ide_build to retry,\n`
-                + `and an approved verified backup if the build names a damaged POU.` + shot);
+                + `Next: inspect mw_ide_state and the Build/Errors/Warnings panes before another compile request.` + shot);
             }
             if (v.compiles === true && v.is_modified === true) {
               return text(`${head}\n`
@@ -2318,16 +2317,14 @@ function defineTools() {
 
         const count = read.count ?? 0;
         const emptyMeans = count === 0
-          ? 'An empty pane can mean "no messages" OR "the pane could not be read"; the compile '
-            + 'state above is what tells the two apart. If you expected errors and see none, take '
-            + 'the screenshot before concluding the build is clean.'
+          ? 'The identified pane has no messages. Compile state is a separate observation; '
+            + 'an empty pane does not prove a fresh successful compilation.'
           : '';
 
         let shotPath = null;
-        // Auto-capture when the pane is empty and the verdict says something is wrong: that is
-        // the case where the screenshot is the only other evidence, and the caller has just been
-        // told not to trust the empty pane.
-        const wantShot = args?.screenshot || (count === 0 && compiles === false);
+        // The native reader proves pane identity and refuses unreadable controls.
+        // Capture only when requested; an empty pane needs no foreground change.
+        const wantShot = args?.screenshot === true;
         if (wantShot) {
           const out = join(IPC_DIR, 'shots', `pane-${pane.replace(/\W+/g, '')}-${Date.now()}.png`);
           mkdirSync(dirname(out), { recursive: true });
