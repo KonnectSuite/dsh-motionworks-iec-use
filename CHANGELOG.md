@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Add inspection-only worksheet readiness so an unsettled native open can be
+  checked without repeating navigation. Accept task-instance views only after
+  exact native instance/type and complete worksheet/task-context caption checks.
+  Preserve responsiveness, modified-state and keyboard-focus guards. Protocol 6
+  prevents old bridges from silently ignoring inspection-only requests. Live
+  ordinary navigation/inspection/refusal checks preserve all saved sources.
 - Live-test native trial dismissal and a 2,322-line commented ST snippet patch,
   fresh Build/Make and exact cleanup. Fix the discovered comment-reference hash
   mismatch by exposing `text_body_sha256` for readable ST/IL bodies; raw

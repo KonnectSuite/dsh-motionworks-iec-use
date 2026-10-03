@@ -2,6 +2,24 @@
 
 This is work in progress. Version 0.5.5 did not establish complete IDE control.
 
+## Worksheet readiness and task-instance context
+
+Native navigation now recognizes an exact task-instance view only after reading
+adeOtProgramInstance (19) by its observed logical path and verifying its Name and
+Type against the requested POU. It requires the full worksheet/context caption,
+unchanged modified state and two responsive observations. Wrong worksheet, POU,
+task or native instance identity remains refused; keyboard focus stays unproven.
+
+Added `inspect_only:true` to re-check an unsettled editor without OpenDocument or
+input. Protocol 6 prevents an old bridge from ignoring this flag and navigating.
+The full non-IDE suite passed. Live test
+`native-navigation-readiness-live-e554274e-c77a-4a39-8d69-a874a6f78fff.json`
+passed 4 opens, 4 matching inspections and 4 wrong-target refusals, with unchanged
+POUs/tasks/globals/program sources/translations. Read-only
+`navigation-instance-native-proof.json` proves the native instance lookup, but
+active task-instance editor reuse still needs a live reproduction. No customer
+project, controller action, mouse input or keyboard input was used.
+
 ## Native trial and large-body patch live proof
 
 The real trial prompt was dismissed by native startup with trial_answered=true.

@@ -437,7 +437,7 @@ async function bridgeAlive(timeoutMs = 4000) {
   if (!existsSync(BRIDGE_SCRIPT)) return false;
   try {
     const reply = await call('ping', {}, timeoutMs);
-    if (reply?.workspace_protocol !== 5) {
+    if (reply?.workspace_protocol !== 6) {
       throw new Error('OUTDATED_BRIDGE: restart the MotionWorks bridge before using workspace-bound tools.');
     }
     return true;
@@ -1591,14 +1591,15 @@ function defineTools() {
     },
     {
       name:'mw_ide_open_worksheet',
-      description:'Open the exact saved POU code/variables worksheet or resource globals through native COM, using the internal document URN resolved from PROJECT.TRE. Verifies the active logical name, unchanged modified state, and two responsive frames with the expected editor caption. COM view metadata alone is not editor readiness. keyboard_focus_verified remains false: observe current editor focus through the connected computer tool before keys or text. Native declaration/code APIs need no editor focus. Does not use mouse input, save, edit, compile or download. Code requires a POU; omit POU only for globals. Refuses ambiguous/unparsed tree identities and an unresponsive/unknown IDE frame. An unsettled request returns accepted=false and action_performed=true; never repeat it automatically.',
-      parameters:{type:'object',additionalProperties:false,required:['project','kind'],properties:{project:{type:'string'},kind:{type:'string',enum:['code','variables']},pou:{type:'string'}}},
+      description:'Open the exact saved POU code/variables worksheet or resource globals through native COM, using the internal document URN resolved from PROJECT.TRE. inspect_only:true checks the current editor without opening it: use after an unsettled request instead of repeating navigation. Verifies the active logical name (or exact native task-instance type and full worksheet/context caption), unchanged modified state, and two responsive frames with the expected editor caption. COM view metadata alone is not editor readiness. keyboard_focus_verified remains false: observe current editor focus through the connected computer tool before keys or text. Native declaration/code APIs need no editor focus. Does not use mouse input, save, edit, compile or download. Code requires a POU; omit POU only for globals. Refuses ambiguous/unparsed tree identities and an unresponsive/unknown IDE frame. An unsettled navigation returns accepted=false and action_performed=true; inspection always returns action_performed=false. Never repeat navigation automatically.',
+      parameters:{type:'object',additionalProperties:false,required:['project','kind'],properties:{project:{type:'string'},kind:{type:'string',enum:['code','variables']},pou:{type:'string'},inspect_only:{type:'boolean',description:'Check current editor identity/readiness only, without OpenDocument or input; defaults to false.'}}},
       output:{schema:openOutput(['accepted','action_performed','logical_name','requested_logical_name','active_project','method','is_modified','modified_state_unchanged','urn']),render:(_a,v)=>text(JSON.stringify(v,null,2))},
       execute:async args=>{
+        if(args.inspect_only!==undefined&&typeof args.inspect_only!=='boolean')throw new Error('REFUSED: inspect_only must be a boolean');
         const project=projectOf(args),identity=await assertIdeProjectProven();
         if(resolve(identity.active_project).replace(/\.mwt$/i,'').toLowerCase()!==project.toLowerCase())throw new Error('REFUSED: wrong open project');
         const target=await runCode('worksheet_target',{project,kind:args.kind,pou:args.pou});
-        return verb('open_worksheet',{project,...target},30000);
+        return verb('open_worksheet',{project,...target,inspect_only:args.inspect_only===true},30000);
       },
     },
     {

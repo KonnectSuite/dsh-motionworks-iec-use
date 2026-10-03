@@ -94,6 +94,9 @@ const names = registered.map((t) => t.name);
 const dupes = names.filter((n, i) => names.indexOf(n) !== i);
 assert.equal(dupes.length, 0, `duplicate tool name(s): ${[...new Set(dupes)].join(', ')}`);
 assert.ok(!names.includes('run_code'), 'run_code is reserved for the PTC transport and cannot be registered');
+for(const bad of ['true','false',1,null]){
+  await assert.rejects(registered.find(t=>t.name==='mw_ide_open_worksheet').execute({inspect_only:bad}),/inspect_only must be a boolean/);
+}
 // Large bodies/inventories must not be re-emitted into the agent's context.
 for(const name of ['mw_ide_code_change','mw_ide_variable_change']){
   const tool=registered.find(t=>t.name===name);

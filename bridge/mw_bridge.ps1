@@ -419,6 +419,21 @@ function Get-WorksheetEditorState($requested, $actual, $beforeModified, $afterMo
         keyboard_focus_verified = $false }
 }
 
+# A document already open through a task instance may be reused by OpenDocument.
+# Its active view is the instance, not /Pous/<type>/<sheet>. Resolve that exact
+# native instance (adeOtProgramInstance=19); never accept a caption alone.
+function Get-WorksheetInstanceView($app, [string]$actual, [string]$pouName, [string]$sheetName) {
+    if($actual -cnotmatch '^/Hardware/([^/.\\]+)/([^/.\\]+)/Tasks/([^/.\\]+)/([^/.\\]+)$'){return $null}
+    $config=$Matches[1];$resource=$Matches[2];$task=$Matches[3];$name=$Matches[4]
+    try {
+        $instance=$app.ActiveProject.GetObjectByLogicalName($actual.TrimStart('/'),19)
+        if($null -eq $instance -or [string]$instance.LogicalName -cne $actual -or
+            [string]$instance.Name -cne $name -or [string]$instance.Type -cne $pouName){return $null}
+        return [ordered]@{logical_name=$actual;instance_name=$name;pou=$pouName;task_name=$task;
+            expected_caption=('{0}:{1} - {2}.{3}.{4}.{5}.{0}' -f $sheetName,$pouName,$config,$resource,$task,$name)}
+    }catch{return $null}
+}
+
 function Get-IdeDialogs {
     $idePid = Get-IdePid
     $script:dialogHwnds = @{}
@@ -899,7 +914,7 @@ while ($true) {
 
             'ping' {
                 $ok = $true
-                $data = [ordered]@{ alive = $true; workspace_protocol = 5; ide_window = (Get-IdeWindow -ne $null) }
+                $data = [ordered]@{ alive = $true; workspace_protocol = 6; ide_window = (Get-IdeWindow -ne $null) }
             }
 
             'stop' {
@@ -946,12 +961,14 @@ while ($true) {
             }
 
             'open_worksheet' {
+                if($null -ne $req.inspect_only -and $req.inspect_only -isnot [bool]){throw 'REFUSED: inspect_only must be a boolean'}
                 $app=Connect-App
                 [void](Assert-StagedOpen $app $verb)
                 if([IO.Path]::GetFullPath($app.ActiveProject.FullName) -ine [IO.Path]::GetFullPath([string]$req.project+'.mwt')) {throw 'REFUSED: wrong native project'}
                 $view=[string]$req.logical_name
                 $urn=[string]$req.urn
                 $documentView=[string]$req.document_logical_name
+                $pouName=$null;$sheetName=$null
                 if($documentView -cmatch '^/Pous/([^/.\\]+)/([^/.\\]+)$') {
                     $pouName=$Matches[1];$sheetName=$Matches[2]
                     $expectedCaption='{0}:{1}' -f $sheetName,$pouName
@@ -969,26 +986,37 @@ while ($true) {
                 $uiBefore=Get-IdeUiStatus
                 if($uiBefore.responding -ne $true){throw 'REFUSED: IDE frame responsiveness is false or unknown; inspect the live window before navigation'}
                 $beforeModified=$app.ActiveProject.IsModified
-                $userData=[object[]]@()
-                [void]$app.OpenDocument($urn,$true,[ref]$userData)
+                $inspectOnly=($req.inspect_only -eq $true)
+                if(-not $inspectOnly){
+                    $userData=[object[]]@()
+                    [void]$app.OpenDocument($urn,$true,[ref]$userData)
+                }
                 # COM can report the new view before its visible editor settles.
                 # Observe two responsive, matching frames without repeating OpenDocument.
-                $deadline=(Get-Date).AddSeconds(3);$readySamples=0
+                $deadline=(Get-Date).AddSeconds(3);$readySamples=0;$instanceView=$null
                 do {
                     $actual=[string]$app.ActiveProject.GetLogicalNameOfActiveView()
                     $afterModified=$app.ActiveProject.IsModified
-                    $editorState=Get-WorksheetEditorState $view $actual $beforeModified $afterModified (Get-IdeUiStatus) $expectedCaption
+                    $acceptedView=$view;$acceptedCaption=$expectedCaption
+                    if($pouName -and $actual -cne $view){
+                        if(-not $instanceView -or $instanceView.logical_name -cne $actual){
+                            $instanceView=Get-WorksheetInstanceView $app $actual $pouName $sheetName
+                        }
+                        if($instanceView){$acceptedView=$instanceView.logical_name;$acceptedCaption=$instanceView.expected_caption}
+                    }
+                    $editorState=Get-WorksheetEditorState $acceptedView $actual $beforeModified $afterModified (Get-IdeUiStatus) $acceptedCaption
                     if($editorState.editor_window_ready){$readySamples++}else{$readySamples=0}
                     if($readySamples -ge 2){break}
                     Start-Sleep -Milliseconds 250
                 }while((Get-Date) -lt $deadline)
                 $ok=$true
                 $data=[ordered]@{accepted=($readySamples -ge 2);
-                    action_performed=$true;method='native_com_urn';active_project=[string]$app.ActiveProject.FullName;
+                    action_performed=(-not $inspectOnly);method=$(if($inspectOnly){'native_com_inspection'}else{'native_com_urn'});active_project=[string]$app.ActiveProject.FullName;
                     requested_logical_name=$view;logical_name=$actual;urn=$urn;is_modified=$afterModified;
                     modified_state_unchanged=($beforeModified -is [bool] -and $afterModified -is [bool] -and $beforeModified -eq $afterModified);
                     editor_settled=($readySamples -ge 2);ready_observations=$readySamples;
-                    next_step=$(if($readySamples -ge 2){'Observe current editor focus through the connected computer tool before keyboard input. Native declaration/code APIs do not need editor focus.'}else{'STOP: navigation was requested, but the visible editor did not settle. Inspect current window state; do not repeat navigation or send keys automatically.'})}
+                    instance_view_verified=([bool]$instanceView -and $instanceView.logical_name -ceq $actual);
+                    next_step=$(if($readySamples -ge 2){'Observe current editor focus through the connected computer tool before keyboard input. Native declaration/code APIs do not need editor focus.'}else{'STOP: the current visible editor does not match or has not settled. Use inspect_only:true to check readiness without repeating navigation; do not send keys automatically.'})}
                 foreach($key in $editorState.Keys){$data[$key]=$editorState[$key]}
             }
 

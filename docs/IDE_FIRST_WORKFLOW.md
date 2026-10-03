@@ -24,6 +24,12 @@ readiness. It requires two responsive frames and the expected editor caption bef
 `accepted=true`. Caption is a readiness check; the full native project path and saved
 URN remain the identity checks. `keyboard_focus_verified=false` requires a current
 editable-focus observation through the connected computer tool before input.
+If OpenDocument reused a task-instance editor, the native instance must resolve
+by exact logical name and type to the requested POU, and its complete caption must
+match the requested worksheet and exact configuration/resource/task/instance.
+After an unsettled navigation, use `inspect_only:true` with the same target to
+check readiness without opening another document or sending input. A mismatched
+current worksheet remains refused. Inspection returns action_performed=false.
 If the frame is unresponsive/unknown or its caption still names an earlier editor,
 stop and inspect the existing request rather than opening again or sending keys.
 

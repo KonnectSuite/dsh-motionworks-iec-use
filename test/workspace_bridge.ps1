@@ -6,7 +6,7 @@ $ast = [System.Management.Automation.Language.Parser]::ParseFile(
 if ($errors.Count) { throw ($errors | Out-String) }
 $names = @('Normalize-MwPath', 'Set-RequestScope', 'Assert-NoLinkedPath',
     'Test-InsideWorkspace', 'Test-InsideStage', 'Test-SameProject', 'Assert-ProvenCopy',
-    'Get-OpenProjectPath', 'Assert-StagedOpen', 'Assert-CloseConsent', 'Get-WorksheetEditorState')
+    'Get-OpenProjectPath', 'Assert-StagedOpen', 'Assert-CloseConsent', 'Get-WorksheetEditorState', 'Get-WorksheetInstanceView')
 foreach ($fn in $ast.FindAll({param($node) $node -is [System.Management.Automation.Language.FunctionDefinitionAst]}, $true)) {
     if ($names -contains $fn.Name) { . ([scriptblock]::Create($fn.Extent.Text)) }
 }
@@ -27,6 +27,32 @@ foreach($case in @(@{view='/Pous/Other';before=$false;after=$false},@{view='/Pou
     if($state.native_navigation_verified -or $state.editor_window_ready){throw 'Wrong view, modification drift or unknown baseline passed readiness'}
 }
 Write-Output '8 injected editor readiness checks passed; no UI input'
+$instancePath='/Hardware/Configuration/Resource/Tasks/FastTsk/MainInstance'
+$instance=[pscustomobject]@{Name='MainInstance';Type='Main';LogicalName=$instancePath}
+$native=[pscustomobject]@{Instance=$instance}
+$native | Add-Member ScriptMethod GetObjectByLogicalName {
+    param($path,$kind)
+    if($path -cne 'Hardware/Configuration/Resource/Tasks/FastTsk/MainInstance' -or $kind -ne 19){throw 'Wrong native instance query'}
+    return $this.Instance
+}
+$app=[pscustomobject]@{ActiveProject=$native}
+$proof=Get-WorksheetInstanceView $app $instancePath 'Main' 'MainV'
+if(-not $proof -or $proof.expected_caption -cne 'MainV:Main - Configuration.Resource.FastTsk.MainInstance.MainV'){throw 'Exact native task instance not resolved'}
+$ui=@{responding=$true;caption=('MotionWorks IEC 3 Pro - Machine - ['+$proof.expected_caption+']')}
+$ready=Get-WorksheetEditorState $proof.logical_name $instancePath $false $false $ui $proof.expected_caption
+if(-not $ready.editor_window_ready -or $ready.keyboard_focus_verified){throw 'Exact task instance did not pass readiness or implied focus'}
+foreach($caption in @('Main:Main - Configuration.Resource.FastTsk.MainInstance.Main','MainV:Other - Configuration.Resource.FastTsk.MainInstance.MainV','MainV:Main - Configuration.Resource.OtherTask.MainInstance.MainV')){
+    $ui.caption='MotionWorks IEC 3 Pro - Machine - ['+$caption+']'
+    if((Get-WorksheetEditorState $proof.logical_name $instancePath $false $false $ui $proof.expected_caption).editor_window_ready){throw 'Wrong worksheet, POU or task caption passed'}
+}
+foreach($change in @(@{field='Type';value='Other'},@{field='Name';value='Wrong'},@{field='LogicalName';value='/Pous/Main'})){
+    $old=$instance.($change.field);$instance.($change.field)=$change.value
+    if(Get-WorksheetInstanceView $app $instancePath 'Main' 'MainV'){throw 'Mismatched native instance identity passed'}
+    $instance.($change.field)=$old
+}
+if(Get-WorksheetInstanceView $app '/Hardware/Configuration/Resource/Tasks/FastTsk/OtherInstance' 'Main' 'MainV'){throw 'Unknown instance passed'}
+if(Get-WorksheetInstanceView $app '/Pous/Main/MainV' 'Main' 'MainV'){throw 'POU path accepted as task instance'}
+Write-Output 'Native task-instance worksheet identity, exact caption and wrong POU/task/sheet refusal checks passed; no UI input'
 $tempBase = [IO.Path]::GetTempPath()
 $testRoot = Join-Path $tempBase ('mw-bridge-' + [guid]::NewGuid())
 $ws = Join-Path $testRoot 'a'

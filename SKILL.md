@@ -46,6 +46,11 @@ remains false. Observe current editable focus with the connected computer tool
 before keys or text; do not use a stale accessibility tree or infer focus from
 the native view/caption. An unsettled request may have opened the document already;
 inspect it before any next action and never repeat navigation automatically.
+Use the same `mw_ide_open_worksheet` arguments with `inspect_only:true` for that
+readiness check: it verifies the current editor without OpenDocument or input.
+An exact task-instance view is supported only when its native instance type
+matches the requested POU and the full worksheet/task-context caption matches.
+Inspection cannot establish keyboard focus; native edit APIs do not require it.
 The tool resolves the internal document URN from the saved tree; never
 send a slash-style logical name directly to OpenDocument or navigate by guessed
 tree coordinates. Code editors report the POU logical name as their active view.

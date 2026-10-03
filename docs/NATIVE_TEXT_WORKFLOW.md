@@ -43,8 +43,8 @@ editable focus before any fallback typing. Serialize native operations and
 desktop input. Use the current installed TextEd001/il001/ST001 help for editor
 commands and language semantics instead of assuming shortcuts or syntax.
 
-Bridge protocol 5 includes the explicit ST/IL import language and native variable
-flag edits. A stale bridge is
+Bridge protocol 6 includes the explicit ST/IL import language, native variable
+flag edits and inspection-only worksheet readiness. A stale bridge is
 refused; reload the updated plugin and restart its stale bridge rather than
 accepting an older import handler. The installed module's catalog and a running
 Arya chat's loaded catalog are separate verification results.

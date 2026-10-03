@@ -37,7 +37,7 @@ try {
   assert.match(graphicalGuide.graphical_guidance, /source baseline matched exactly/);
   assert.ok(tools.has('mw_code_read_text'));
   const ilGuide = await tools.get('mw_ide_edit_guide').execute({operation:'il'});
-  assert.match(ilGuide.text_guidance, /Bridge protocol 5/);
+  assert.match(ilGuide.text_guidance, /Bridge protocol 6/);
   assert.match(ilGuide.text_guidance, /\.AB/);
   const workspace = join(root, 'workspace');
   mkdirSync(join(workspace, 'Machine'), { recursive: true });
