@@ -4,13 +4,19 @@ For supported operations, prefer native APIs: `mw_ide_open_worksheet` resolves
 the exact code/variable document; `mw_ide_variable_change` manages declarations;
 `mw_ide_pou_change` creates blank ST/IL/FBD/LD POUs and manages copy/rename/delete; and
 `mw_ide_task_change` manages tasks, settings and exact program instances.
-`mw_ide_code_change` replaces existing ST/IL bodies through native ChangeCodeWS:
-read `mw_code_read_text` (`mw_code_read_st` remains ST-only), supply exact
-`expected_body` and complete ASCII `code`,
+`mw_ide_code_change` patches existing ST/IL bodies through native ChangeCodeWS:
+prefer `expected_body_sha256` from `mw_code_pous` plus exact `changes` snippets
+(`find`, `replace`, optional exact occurrence `count`, default one). Read the
+relevant code with `mw_code_read_text`; the plugin assembles the full replacement
+locally after checking the saved hash and every match. This avoids hand-reproducing
+large bodies. For complete replacements, supply exact `expected_body` and ASCII `code`,
 and reconcile/save before calling. It verifies code and native comment translations,
 declarations/flags, globals, tasks and other POU sources, retaining full evidence.
 These use the running IDE and verify saved/native results without mouse input. Require
 their accepted verdict, retain the verification report and finish Build/Make.
+Code and declaration results render compact summaries; full evidence is retained
+on disk and can be shown using `detailed_result:true`. A large POU is not a reason
+to ask the user to perform supported native edits manually.
 The UI recipes below remain fallbacks for editor operations not yet automated.
 
 Native navigation distinguishes the COM active-view identity from visible editor

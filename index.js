@@ -1345,6 +1345,15 @@ const openOutput = required => ({
   properties: Object.fromEntries(required.map(key => [key, {}])),
   required,
 });
+function renderNativeEdit(args,value){
+  if(args.detailed_result===true)return text(JSON.stringify(value,null,2));
+  const native=value.native_result??{};
+  return text(JSON.stringify({pou:value.pou,operation:value.operation,action_performed:value.action_performed,
+    method:value.method,verification:value.verification,evidence_path:value.evidence_path,
+    body_sha256:typeof value.body==='string'?createHash('sha256').update(value.body).digest('hex'):undefined,
+    variable_count:Array.isArray(value.expected_variables)?value.expected_variables.length:undefined,
+    native_result:{saved:native.saved,is_modified:native.is_modified},next_step:value.next_step},null,2));
+}
 function defineTools() {
   return [
     {
@@ -1506,9 +1515,9 @@ function defineTools() {
     },
     {
       name:'mw_ide_code_change',
-      description:'Replace an existing writable ST or IL worksheet through MotionWorks native ChangeCodeWS API. Requires exact expected_body from mw_code_read_text (mw_code_read_st also works for ST), reconciled saved baseline, and printable ASCII code. Retains the plan, guards complete saved/native source baselines, imports once, saves and verifies full code including comments, unchanged declarations/native flags, tasks, globals and other POUs. No mouse input, clipboard, disk source editing, controller action or automatic retry. Check verification.accepted, then fresh Build/Make. Graphical body editing is not supported by this tool; IL uses its native AB text worksheet.',
-      parameters:{type:'object',additionalProperties:false,required:['project','pou','baseline_saved','expected_body','code'],properties:{project:{type:'string'},pou:{type:'string'},baseline_saved:{type:'boolean'},expected_body:{type:'string'},code:{type:'string'}}},
-      output:{schema:openOutput(['pou','action_performed','method','native_result','verification','body','evidence_path','next_step']),render:(_a,v)=>text(JSON.stringify(v,null,2))},
+      description:'Edit an existing writable ST or IL worksheet through MotionWorks native ChangeCodeWS API. Prefer expected_body_sha256 from mw_code_pous plus small exact changes [{find,replace,count?}] for long bodies; count defaults to 1, ambiguous/missing matches refuse before import. Changes apply sequentially in memory to the independently read saved body. Alternatively supply exact expected_body plus complete code. Never reproduce a large body manually or ask the user to paste supported ST/IL edits. Requires reconciled saved baseline and printable ASCII code. Retains the plan, guards complete saved/native source baselines, imports once, saves and verifies full code including comments, unchanged declarations/native flags, tasks, globals and other POUs. Compact result by default; detailed_result:true exposes full output. No mouse input, clipboard, disk source editing, controller action or automatic retry. Check verification.accepted, then fresh Build/Make. Graphical body editing is not supported by this tool.',
+      parameters:{type:'object',additionalProperties:false,required:['project','pou','baseline_saved'],properties:{project:{type:'string'},pou:{type:'string'},baseline_saved:{type:'boolean'},expected_body:{type:'string'},code:{type:'string'},expected_body_sha256:{type:'string',description:'Exact 64-character lowercase body_sha256 from mw_code_pous; hashes saved UTF-8 body including comments and line endings.'},changes:{type:'array',items:{type:'object',additionalProperties:false,required:['find','replace'],properties:{find:{type:'string'},replace:{type:'string'},count:{type:'integer',description:'Exact expected nonoverlapping occurrence count, 1-100; defaults to 1.'}}}},detailed_result:{type:'boolean'}}},
+      output:{schema:openOutput(['pou','action_performed','method','native_result','verification','body','evidence_path','next_step']),render:renderNativeEdit},
       execute:async args=>{
         const project=projectOf(args),identity=await assertIdeProjectProven();
         if(resolve(identity.active_project).replace(/\.mwt$/i,'').toLowerCase()!==project.toLowerCase())throw new Error('REFUSED: wrong open project');
@@ -1554,16 +1563,23 @@ function defineTools() {
     {
       name:'mw_ide_variable_change',
       description:'Add, edit or delete ONE declaration through the native MotionWorks COM API by exact POU/resource, without grid input or worksheet navigation. Requires reconciled saved edits; compares the complete live/saved baseline before changing and verifies all saved declarations afterward. Uses the selected existing writable group. Externals require the matching global name/type. Edit accepts the complete desired seven-field declaration and optional explicit boolean flags (retain, pdd, opc, disabled, not_on_plc, redundant); omitted flags stay unchanged. Native flags are independently verified on every declaration. Delete requires explicit approval and reference review. Does not download, compile automatically, move groups or repair/retry partial failures.',
-      parameters:{type:'object',additionalProperties:false,required:['project','operation','baseline_saved'],properties:{project:{type:'string'},pou:{type:'string'},operation:{type:'string',enum:['add','edit','delete']},baseline_saved:{type:'boolean'},name:{type:'string',description:'Existing exact name for edit/delete'},declaration:VARIABLE_SCHEMA,flags:VARIABLE_FLAGS_SCHEMA,user_approved:{type:'boolean'},references_reviewed:{type:'boolean'},rename_reviewed:{type:'boolean'}}},
-      output:{schema:openOutput(['operation','action_performed','native_result','verification','baseline','expected_variables','next_step']),render:(_a,v)=>text(JSON.stringify(v,null,2))},
+      parameters:{type:'object',additionalProperties:false,required:['project','operation','baseline_saved'],properties:{project:{type:'string'},pou:{type:'string'},operation:{type:'string',enum:['add','edit','delete']},baseline_saved:{type:'boolean'},name:{type:'string',description:'Existing exact name for edit/delete'},declaration:VARIABLE_SCHEMA,flags:VARIABLE_FLAGS_SCHEMA,user_approved:{type:'boolean'},references_reviewed:{type:'boolean'},rename_reviewed:{type:'boolean'},detailed_result:{type:'boolean',description:'Return full inventories in the rendered result; defaults to compact verification and evidence path.'}}},
+      output:{schema:openOutput(['operation','action_performed','native_result','verification','baseline','expected_variables','next_step']),render:renderNativeEdit},
       execute:async args=>{
         const project=projectOf(args),identity=await assertIdeProjectProven();
         if(resolve(identity.active_project).replace(/\.mwt$/i,'').toLowerCase()!==project.toLowerCase())throw new Error('REFUSED: wrong open project');
         const saved=()=>runCode(args.pou?'read_st':'globals',{project,...(args.pou?{pou:args.pou}:{})});
-        return nativeVariableChange(args,{status:()=>verb('compile_state',{},30000),saved,
+        const directory=join(workspaceRoot(),'.motionworks','verification');
+        if(!isInsideWorkspace(directory))throw new Error('REFUSED: linked evidence directory');
+        mkdirSync(directory,{recursive:true});
+        const evidence_path=join(directory,'native-variable-'+randomUUID()+'.json');
+        const result=await nativeVariableChange(args,{status:()=>verb('compile_state',{},30000),saved,
           snapshot:()=>verb('variable_snapshot',{pou:args.pou},30000),
           mutate:request=>verb('variable_mutate',{...request,project},60000),
           compare:compareVariables,globals:()=>runCode('globals',{project})});
+        if(!isInsideWorkspace(evidence_path))throw new Error('REFUSED: linked evidence file');
+        writeFileSync(evidence_path,JSON.stringify({args,...result},null,2),{encoding:'utf8',flag:'wx'});
+        return {...result,evidence_path};
       },
     },
     {
@@ -3951,8 +3967,8 @@ export function apply(ctx) {
           + 'START HERE: run mw_project_find before anything else, and work only on a project inside '
           + 'the workspace — never one from elsewhere on the machine, even if you know where it is. '
           + 'Another program may be read with reference: true; that does not stage or open it. '
-          + 'Edit through the companion computer-use MCP after verifying the staged IDE project. Preserve unsaved changes. '
-          + 'Before declaration edits use mw_ide_edit_guide variables: prove new data-row insertion, never type into a group header, and verify the complete saved declaration plan. '
+          + 'Prefer native mw_ide_variable_change and mw_ide_code_change: patch long ST/IL bodies using a saved hash and exact replacement snippets. Preserve unsaved changes. '
+          + 'Use the companion computer-use MCP for operations without a supported native API; verify focus and resulting state before more input. '
           + 'For motion design/diagnosis, use the engineering guide and complete the authorized read-back, fresh compile, approved reopen/recompile and evidence handoff loop.',
         whenToUse: 'The user has MotionWorks IEC 3 Pro open or asks for work in it — a real build, a '
           + 'compile verdict, the live project model, reading or changing POU Structured Text, or '

@@ -3,21 +3,39 @@ const hash=text=>createHash('sha256').update(text).digest('hex');
 const stable=v=>JSON.stringify(v,(_k,x)=>x&&typeof x==='object'&&!Array.isArray(x)?Object.fromEntries(Object.keys(x).sort().map(k=>[k,x[k]])):x);
 const same=(a,b)=>stable(a)===stable(b);
 const canonical=text=>text.replace(/\r\n?/g,'\n');
+// Assemble small exact edits locally; never ask the model to reproduce the body.
+export function patchedCode(body,args){
+  if(!Array.isArray(args.changes)||args.changes.length===0||args.changes.length>50)throw new Error('Supply 1-50 exact code changes');
+  let code=canonical(body);
+  for(const change of args.changes){
+    if(!change||typeof change.find!=='string'||!change.find||typeof change.replace!=='string')throw new Error('Each change needs nonempty find and string replace');
+    const find=canonical(change.find),replacement=canonical(change.replace),count=change.count??1;
+    if(!Number.isInteger(count)||count<1||count>100)throw new Error('Change count must be 1-100');
+    const parts=code.split(find),actual=parts.length-1;
+    if(actual!==count)throw new Error(`Exact change expected ${count} occurrence(s), found ${actual}; nothing imported`);
+    code=parts.join(replacement);
+  }
+  return code;
+}
 const sorted=rows=>rows.sort((a,b)=>a.name.localeCompare(b.name));
 const inventory=s=>({pous:sorted(s.pous.map(({name,type})=>({name,type}))),tasks:sorted(s.tasks.map(({name,kind,instances})=>({name,kind,instances})))});
 export async function nativeCodeChange(args,deps){
   if(args.baseline_saved!==true||(await deps.status()).is_modified!==false)throw new Error('Reconcile/save native edits before code import');
   if(!/^[A-Za-z_][A-Za-z0-9_]{0,29}$/.test(args.pou??''))throw new Error('Invalid POU name');
-  if(typeof args.code!=='string'||typeof args.expected_body!=='string'||/[^\x09\x0a\x0d\x20-\x7e]/.test(args.code))throw new Error('Supply exact expected_body and printable ASCII ST/IL code');
+  const patchMode=args.changes!==undefined||args.expected_body_sha256!==undefined;
+  if(patchMode?(args.code!==undefined||args.expected_body!==undefined||! /^[a-f0-9]{64}$/.test(args.expected_body_sha256??'')):
+    (typeof args.code!=='string'||typeof args.expected_body!=='string'))throw new Error('Supply either expected_body + code, or expected_body_sha256 + changes');
   const before=await deps.saved(),live=await deps.snapshot(),body=await deps.read();
   const target=before.pous.find(p=>p.name.toLowerCase()===args.pou.toLowerCase());
   const native=live.pous.find(p=>p.name.toLowerCase()===args.pou.toLowerCase());
   const languages={ST:2,IL:1};
   if(!target||!Object.hasOwn(languages,target.language)||!native||native.language!==languages[target.language]||native.read_only)throw new Error('Target must be an existing writable ST/IL POU with matching saved/native language');
   if(!same(inventory(before),inventory(live)))throw new Error('Native/saved inventories disagree');
-  if(body.body_error||typeof body.body!=='string'||canonical(body.body)!==canonical(args.expected_body))throw new Error('Saved code differs from expected_body or cannot be resolved');
+  if(body.body_error||typeof body.body!=='string'||(patchMode?hash(body.body)!==args.expected_body_sha256:canonical(body.body)!==canonical(args.expected_body)))throw new Error('Saved code differs from expected_body/hash or cannot be resolved');
+  const desired=patchMode?patchedCode(body.body,args):args.code;
+  if(/[^\x09\x0a\x0d\x20-\x7e]/.test(desired))throw new Error('Supply printable ASCII ST/IL code');
   const document=await deps.document();
-  const code=canonical(args.code).replace(/\n/g,'\r\n');
+  const code=canonical(desired).replace(/\n/g,'\r\n');
   const input_text=code&&!code.endsWith('\r\n')?code+'\r\n':code;
   const declarations=await deps.declarations();
   const input=await deps.prepare(input_text,target.language);

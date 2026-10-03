@@ -68,6 +68,7 @@
     "test/smoke_manifest.py",
     "test/render_contract.mjs",
     "test/registration_contract.mjs",
+    "test/registration_contract_host.mjs",
     "test/replay_report.mjs",
     "test/pou_deletion_test.py",
     "test/ide_first.mjs",

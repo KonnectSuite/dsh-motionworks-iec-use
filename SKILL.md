@@ -130,8 +130,21 @@ channel is not verified for concurrent independent harness processes.
 
 ## Default: code inside the MotionWorks IDE
 
-For an existing writable ST or IL worksheet, prefer `mw_ide_code_change`. Read the
-current body with `mw_code_read_text` (or `mw_code_read_st` for ST), supply it as exact `expected_body`, and pass
+For an existing writable ST or IL worksheet, prefer `mw_ide_code_change`.
+For targeted edits, get `body_sha256` from `mw_code_pous`, read the relevant body
+with `mw_code_read_text`, and pass `expected_body_sha256` plus `changes`, an array
+of exact `{find, replace, count}` snippets. Count defaults to one; specify the exact
+count deliberately for repeated text. The plugin reads the full saved body, checks
+the hash and every match, assembles changes sequentially in memory, then imports
+once and verifies the complete saved result. Stale hashes, ambiguous matches or
+missing text refuse before import. Never hand-reproduce a long body or delegate
+supported ST/IL typing to the user because the body is large. Do not repeat a
+failed mutation automatically: inspect evidence/current state first.
+Code and declaration results render compact verification summaries by default;
+full inventories remain in `evidence_path` (`detailed_result:true` shows them).
+Physical wiring, controller downloads and running-machine tests remain human work.
+For a complete replacement, read the current body with `mw_code_read_text`
+(or `mw_code_read_st` for ST), supply it as exact `expected_body`, and pass
 the complete replacement `code` with `baseline_saved:true` only after native
 edits are reconciled/saved. This uses the native DDE ChangeCodeWS API, not
 keyboard input or a disk-source writer. Comments are resolved from the native

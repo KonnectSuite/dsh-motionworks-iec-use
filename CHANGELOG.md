@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Add hash-guarded exact snippet patches to native ST/IL code changes so agents
+  can edit large POUs without reproducing both complete bodies. Stale hashes and
+  wrong match counts refuse before import; full saved-body/collateral verification
+  remains enforced. Render native code/declaration results compactly by default,
+  retain full declaration evidence and prioritize native tools in the skill summary.
+  Session audit: `docs/SESSION_AUTONOMY_AUDIT_2026-10-02.md`.
 - Fix a registration defect that made the bundle load NO tools at all: 14 tools
   declared `required` names that were never declared in `properties`, so
   `ctx.tools.register` threw `JsonSchemaError` on the first of them and `apply()`

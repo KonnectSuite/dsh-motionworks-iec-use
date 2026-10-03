@@ -94,6 +94,18 @@ const names = registered.map((t) => t.name);
 const dupes = names.filter((n, i) => names.indexOf(n) !== i);
 assert.equal(dupes.length, 0, `duplicate tool name(s): ${[...new Set(dupes)].join(', ')}`);
 assert.ok(!names.includes('run_code'), 'run_code is reserved for the PTC transport and cannot be registered');
+// Large bodies/inventories must not be re-emitted into the agent's context.
+for(const name of ['mw_ide_code_change','mw_ide_variable_change']){
+  const tool=registered.find(t=>t.name===name);
+  const value={pou:'Main',action_performed:true,verification:{accepted:false,errors:['Mismatch']},
+    body:'RETURN;\r\n'.repeat(2322),baseline:Array(159).fill({name:'Keep'}),expected_variables:Array(160).fill({name:'Keep'}),
+    native_result:{saved:true,is_modified:false,variables:Array(160).fill({name:'Keep'})},evidence_path:'retained.json',next_step:'STOP'};
+  const compact=tool.output.render({},value)[0].text;
+  assert.ok(compact.length<1000,`${name} compact output is too large`);
+  assert.equal(JSON.parse(compact).verification.accepted,false);
+  assert.equal(JSON.parse(compact).evidence_path,'retained.json');
+  assert.deepEqual(JSON.parse(tool.output.render({detailed_result:true},value)[0].text),value);
+}
 
 console.log(`registration contract: ${registered.length} tool(s) registered, `
   + `${names.length} unique name(s), 0 schema violation(s)`);
