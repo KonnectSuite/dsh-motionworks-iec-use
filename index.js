@@ -1350,7 +1350,7 @@ function renderNativeEdit(args,value){
   const native=value.native_result??{};
   return text(JSON.stringify({pou:value.pou,operation:value.operation,action_performed:value.action_performed,
     method:value.method,verification:value.verification,evidence_path:value.evidence_path,
-    body_sha256:typeof value.body==='string'?createHash('sha256').update(value.body).digest('hex'):undefined,
+    text_body_sha256:typeof value.body==='string'?createHash('sha256').update(value.body).digest('hex'):undefined,
     variable_count:Array.isArray(value.expected_variables)?value.expected_variables.length:undefined,
     native_result:{saved:native.saved,is_modified:native.is_modified},next_step:value.next_step},null,2));
 }
@@ -1515,8 +1515,8 @@ function defineTools() {
     },
     {
       name:'mw_ide_code_change',
-      description:'Edit an existing writable ST or IL worksheet through MotionWorks native ChangeCodeWS API. Prefer expected_body_sha256 from mw_code_pous plus small exact changes [{find,replace,count?}] for long bodies; count defaults to 1, ambiguous/missing matches refuse before import. Changes apply sequentially in memory to the independently read saved body. Alternatively supply exact expected_body plus complete code. Never reproduce a large body manually or ask the user to paste supported ST/IL edits. Requires reconciled saved baseline and printable ASCII code. Retains the plan, guards complete saved/native source baselines, imports once, saves and verifies full code including comments, unchanged declarations/native flags, tasks, globals and other POUs. Compact result by default; detailed_result:true exposes full output. No mouse input, clipboard, disk source editing, controller action or automatic retry. Check verification.accepted, then fresh Build/Make. Graphical body editing is not supported by this tool.',
-      parameters:{type:'object',additionalProperties:false,required:['project','pou','baseline_saved'],properties:{project:{type:'string'},pou:{type:'string'},baseline_saved:{type:'boolean'},expected_body:{type:'string'},code:{type:'string'},expected_body_sha256:{type:'string',description:'Exact 64-character lowercase body_sha256 from mw_code_pous; hashes saved UTF-8 body including comments and line endings.'},changes:{type:'array',items:{type:'object',additionalProperties:false,required:['find','replace'],properties:{find:{type:'string'},replace:{type:'string'},count:{type:'integer',description:'Exact expected nonoverlapping occurrence count, 1-100; defaults to 1.'}}}},detailed_result:{type:'boolean'}}},
+      description:'Edit an existing writable ST or IL worksheet through MotionWorks native ChangeCodeWS API. Prefer expected_body_sha256 set to text_body_sha256 from mw_code_pous plus small exact changes [{find,replace,count?}] for long bodies; count defaults to 1, ambiguous/missing matches refuse before import. Changes apply sequentially in memory to the independently read saved body. Alternatively supply exact expected_body plus complete code. Never reproduce a large body manually or ask the user to paste supported ST/IL edits. Requires reconciled saved baseline and printable ASCII code. Retains the plan, guards complete saved/native source baselines, imports once, saves and verifies full code including comments, unchanged declarations/native flags, tasks, globals and other POUs. Compact result by default; detailed_result:true exposes full output. No mouse input, clipboard, disk source editing, controller action or automatic retry. Check verification.accepted, then fresh Build/Make. Graphical body editing is not supported by this tool.',
+      parameters:{type:'object',additionalProperties:false,required:['project','pou','baseline_saved'],properties:{project:{type:'string'},pou:{type:'string'},baseline_saved:{type:'boolean'},expected_body:{type:'string'},code:{type:'string'},expected_body_sha256:{type:'string',description:'Exact 64-character lowercase text_body_sha256 from mw_code_pous, not raw body_sha256; hashes readable UTF-8 body including restored native comments and line endings.'},changes:{type:'array',items:{type:'object',additionalProperties:false,required:['find','replace'],properties:{find:{type:'string'},replace:{type:'string'},count:{type:'integer',description:'Exact expected nonoverlapping occurrence count, 1-100; defaults to 1.'}}}},detailed_result:{type:'boolean'}}},
       output:{schema:openOutput(['pou','action_performed','method','native_result','verification','body','evidence_path','next_step']),render:renderNativeEdit},
       execute:async args=>{
         const project=projectOf(args),identity=await assertIdeProjectProven();
@@ -2709,6 +2709,8 @@ function defineTools() {
                   language: { oneOf: [{ type: 'string' }, { type: 'null' }] },
                   body_stream: { oneOf: [{ type: 'string' }, { type: 'null' }] },
                   body_sha256: { type: 'string' },
+                  text_body_sha256: { type: 'string', description: 'UTF-8 readable ST/IL body including restored native comments; use this for native code snippet patches.' },
+                  text_body_error: { type: 'string' },
                   has_st_body: { oneOf: [{ type: 'boolean' }, { type: 'null' }] },
                 },
               },
@@ -2721,7 +2723,9 @@ function defineTools() {
           (v.read_only ? 'READ ONLY. ' : '')
           + `${v.count} POUs:\n` + v.pous.map((p) => `  ${p.name} [${p.language ?? '?'}]`
             + (p.has_st_body ? ' ST text' : ' native graphical/body operations')
-            + (p.body_sha256 ? ' body_sha256='+p.body_sha256 : '')).join('\n'),
+            + (p.body_sha256 ? ' body_sha256='+p.body_sha256 : '')
+            + (p.text_body_sha256 ? ' text_body_sha256='+p.text_body_sha256 : '')
+            + (p.text_body_error ? ' text_body_error='+p.text_body_error : '')).join('\n'),
         ),
       },
       presentCall: () => ({ card: 'generic', title: 'List POUs from files', kind: 'read' }),

@@ -108,6 +108,16 @@ def verb_pous(req):
                 body = info.st_body() if stream[1] == 'ST' else None
                 raw = body.encode('utf-8') if body is not None else info.source().read_stream(stream[0])
                 entry["body_sha256"] = hashlib.sha256(raw).hexdigest()
+                # Native bodies can contain comment references whose actual text
+                # is in Translation.xml. Keep the raw hash for conversion guards,
+                # and expose a distinct hash of the exact readable ST/IL body.
+                if stream[1] in ('ST', 'IL'):
+                    try:
+                        readable = info.text_body_text()
+                        if readable is not None:
+                            entry["text_body_sha256"] = hashlib.sha256(readable.encode('utf-8')).hexdigest()
+                    except Exception as exc:
+                        entry["text_body_error"] = str(exc)
         except Exception as exc:
             entry["body_error"] = str(exc)
         try:

@@ -2,6 +2,25 @@
 
 This is work in progress. Version 0.5.5 did not establish complete IDE control.
 
+## Native trial and large-body patch live proof
+
+The real trial prompt was dismissed by native startup with trial_answered=true.
+A disposable 2,322-line commented ST POU was patched using two exact snippets,
+saved, fully read back and compiled with fresh Build/Make. Scratch POU removal
+and final Build/Make restored all original POU/task/global inventories, program
+streams and translations. Evidence: `native-patch-live-41bb526a-682c-4df1-bf40-e642077b6e31.json`,
+accepted=true, phase=cleaned. No customer project or controller was edited.
+
+The live test found a mismatch between the raw native body hash and restored
+comments. The inventory now exposes `text_body_sha256` for readable ST/IL;
+native patches consume it as `expected_body_sha256`. Existing `body_sha256`
+and conversion guards remain unchanged. Comment-only-change regressions cover
+both ST and IL, and missing translations cannot yield a usable readable hash.
+The first refused patch and later cleanup modified-flag stop remain recorded;
+completed native operations were not repeated. Both continuations checked saved
+and native state before progressing. Next investigate task-instance navigation
+and the earlier global VGR cleanup discrepancy, then continue graphical FB work.
+
 ## Trial-aware state follow-up
 
 `mw_ide_state` now reports the exact trial dialog and verifier process separately

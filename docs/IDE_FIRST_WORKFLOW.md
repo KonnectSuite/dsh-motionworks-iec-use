@@ -5,7 +5,7 @@ the exact code/variable document; `mw_ide_variable_change` manages declarations;
 `mw_ide_pou_change` creates blank ST/IL/FBD/LD POUs and manages copy/rename/delete; and
 `mw_ide_task_change` manages tasks, settings and exact program instances.
 `mw_ide_code_change` patches existing ST/IL bodies through native ChangeCodeWS:
-prefer `expected_body_sha256` from `mw_code_pous` plus exact `changes` snippets
+prefer `expected_body_sha256` set to `text_body_sha256` from `mw_code_pous` plus exact `changes` snippets
 (`find`, `replace`, optional exact occurrence `count`, default one). Read the
 relevant code with `mw_code_read_text`; the plugin assembles the full replacement
 locally after checking the saved hash and every match. This avoids hand-reproducing

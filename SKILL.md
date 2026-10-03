@@ -131,9 +131,10 @@ channel is not verified for concurrent independent harness processes.
 ## Default: code inside the MotionWorks IDE
 
 For an existing writable ST or IL worksheet, prefer `mw_ide_code_change`.
-For targeted edits, get `body_sha256` from `mw_code_pous`, read the relevant body
-with `mw_code_read_text`, and pass `expected_body_sha256` plus `changes`, an array
-of exact `{find, replace, count}` snippets. Count defaults to one; specify the exact
+For targeted edits, get `text_body_sha256` from `mw_code_pous`, read the relevant body
+with `mw_code_read_text`, and pass that hash as `expected_body_sha256` plus `changes`, an array
+of exact `{find, replace, count}` snippets. Use the readable hash, not `body_sha256` (raw native comment references).
+Count defaults to one; specify the exact
 count deliberately for repeated text. The plugin reads the full saved body, checks
 the hash and every match, assembles changes sequentially in memory, then imports
 once and verifies the complete saved result. Stale hashes, ambiguous matches or

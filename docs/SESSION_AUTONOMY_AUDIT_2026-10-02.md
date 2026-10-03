@@ -30,7 +30,8 @@ This day's problem was no longer a missing plugin catalog.
 
 ## Implemented changes
 
-`mw_ide_code_change` now accepts the saved `body_sha256` plus small exact changes.
+`mw_ide_code_change` now accepts the readable `text_body_sha256` from
+`mw_code_pous` as `expected_body_sha256`, plus small exact changes.
 The plugin reads the existing body independently, refuses stale hashes or wrong
 match counts, assembles sequential replacements in memory, and uses the existing
 single native import/save/full-verification path. Full-body replacement remains
@@ -71,8 +72,36 @@ renders preserve failures and evidence paths; full render remains available.
 The opt-in `test/registration_contract_host.mjs` calls the actual installed
 host's `ToolRuntime.register()` guards rather than a copied validator.
 
-The new patch success path still needs a disposable live-IDE import/Save/Build/Make
-round trip. No MotionWorks process was running during this audit; no customer
-project or controller was edited. Verify the new schema in Arya after plugin
-reload before an Arya-led operation. Next investigate task-instance navigation
-readiness and the earlier global VGR cleanup hash discrepancy separately.
+## Live follow-up
+
+The disposable live-IDE round trip passed in
+`native-patch-live-41bb526a-682c-4df1-bf40-e642077b6e31.json`, under the fixture's
+`.motionworks/verification`. Final verdict: accepted=true, phase=cleaned.
+
+- Native startup dismissed the real trial prompt: trial_dialog=true,
+  trial_answered=true. No mouse or keyboard automation was used.
+- Created CodexPatchProbe, imported a 2,322-line commented ST body, applied two
+  exact snippets and verified the complete readable result. Build and Make passed.
+- Stale readable hash and missing snippet attempts refused before mutation.
+- Cleared and deleted the scratch POU. Final fresh Build/Make passed with
+  is_modified=false. POUs, tasks, globals, program streams and comment translation
+  hashes matched the original baseline exactly.
+
+The first attempt exposed a real hash contract defect: existing `body_sha256`
+hashes native comment references, while the patch reader restores comments from
+Translation.xml. It correctly refused before mutation. Added `text_body_sha256`
+for the readable ST/IL body, keeping the old raw hash unchanged for conversions.
+Python regressions prove comment-only changes invalidate the readable hash even
+when the raw native hash stays unchanged, for both ST and IL. Missing translations
+report an error and do not produce a usable readable hash.
+
+The retained test continued only after confirming the scratch body and every
+saved inventory/source against its completed native import receipt; no create or
+import was repeated. A later cleanup Build returned is_modified=true and stopped
+the test. Subsequent inspection found is_modified=false with original saved/native
+inventories restored. Final fresh Build/Make and complete source comparison passed;
+no extra save was needed. Both stops remain recorded as evidence.
+
+No customer project or controller was edited. Verify the updated schema in Arya
+after plugin reload before an Arya-led operation. Next investigate task-instance
+navigation readiness and the earlier global VGR cleanup discrepancy separately.

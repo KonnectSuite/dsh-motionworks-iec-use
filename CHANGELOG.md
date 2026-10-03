@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Live-test native trial dismissal and a 2,322-line commented ST snippet patch,
+  fresh Build/Make and exact cleanup. Fix the discovered comment-reference hash
+  mismatch by exposing `text_body_sha256` for readable ST/IL bodies; raw
+  `body_sha256` stays unchanged for conversion guards. Comment-only changes now
+  invalidate the patch hash and missing translations report an explicit error.
 - Add hash-guarded exact snippet patches to native ST/IL code changes so agents
   can edit large POUs without reproducing both complete bodies. Stale hashes and
   wrong match counts refuse before import; full saved-body/collateral verification
