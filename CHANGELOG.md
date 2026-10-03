@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Allow up to 180 seconds for complete native package snapshots and the guarded
+  conversion/import/export requests that repeat them. A real saved snapshot
+  completed after 68 seconds, exceeding the old 60-second limit before any
+  conversion occurred. Preserve all declaration, flag and source drift checks;
+  this increases the observation budget without retrying failed operations.
 - Connect native ST VAR_IN_OUT bindings on both sides of an FB call using the
   same local variable, as required by the installed eCLR code generator. The
   missing post-call assignment caused TON_Retentive to fail when its PROGRAM

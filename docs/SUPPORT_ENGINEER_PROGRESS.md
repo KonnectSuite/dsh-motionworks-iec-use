@@ -2,6 +2,23 @@
 
 This is work in progress. Version 0.5.5 did not establish complete IDE control.
 
+## Full native inspection budget and outstanding group drift
+
+The October 3 follow-up increases the complete package inspection and guarded
+conversion/package request budgets from 60 to 180 seconds. A timed-out read
+actually completed successfully at 68,208 ms; the patched live read completed at
+105,545 ms. This changes the observation budget, not inspection performance or
+acceptance rules. The regular suite passes.
+
+The completed read revealed a native globals group ` n` differing from saved
+`System Variables`, so conversion stopped before mutation. Saving during probe
+unassignment materialized that rename as `n`; collateral checks refused acceptance.
+The exact probe was removed after receipt/source reconciliation and fresh Build/Make
+passed. Original POUs/tasks match, but the global group collateral is unresolved.
+No verified editable UI field appeared from double-click/right-click/F2; no text
+was typed. See the latest handoff and the retained toolbox-graph receipt. The
+two-block graphical route has not passed and cleanup is not fully verified.
+
 ## Assigned ST toolbox FB compilation
 
 The installed eCLR compiler requires each VAR_IN_OUT to connect to the same

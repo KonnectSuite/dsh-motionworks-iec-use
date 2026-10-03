@@ -390,6 +390,10 @@ function logTail(lines = 6) {
  * matches this call's Ã¢â‚¬â€ so an earlier call's answer is never mistaken for this one.
  */
 let bridgeQueue = Promise.resolve();
+// Complete declaration/flag snapshots measured 68s on the staged project.
+// Conversion and package mutations repeat that inspection before acting.
+const NATIVE_PACKAGE_TIMEOUT_MS = 180000;
+
 function call(verb, params = {}, timeoutMs = 30000) {
   const scope = ['ping', 'stop'].includes(verb) ? {} : {
     workspace: workspaceRoot(), stage_root: stageRoot(),
@@ -1373,10 +1377,10 @@ function defineTools() {
           const result=await convertPou(args,{
             status:()=>observe('status',()=>verb('compile_state',{},30000)),
             saved:()=>observe('saved',()=>runCode('structure_snapshot',{project})),
-            snapshot:()=>observe('native',()=>verb('pou_package_snapshot',{},60000)),
+            snapshot:()=>observe('native',()=>verb('pou_package_snapshot',{},NATIVE_PACKAGE_TIMEOUT_MS)),
             build:()=>{action_performed=true;record.phase='build_requested';retain();return observe('build',()=>defineTools().find(t=>t.name==='mw_ide_build').execute({}));},
             source:()=>observe('compiled_source',()=>runCode('compiled_source_evidence',{project,pou:args.pou})),
-            mutate:request=>{conversion_attempted=true;record.phase='conversion_requested';retain();return observe('conversion',()=>verb('pou_convert',{...request,project,conversion_reviewed:args.conversion_reviewed},60000));},
+            mutate:request=>{conversion_attempted=true;record.phase='conversion_requested';retain();return observe('conversion',()=>verb('pou_convert',{...request,project,conversion_reviewed:args.conversion_reviewed},NATIVE_PACKAGE_TIMEOUT_MS));},
             listing:()=>{record.phase='converted_build_requested';retain();return observe('listing',()=>defineTools().find(t=>t.name==='mw_ide_graphical_listing').execute({project,pou:args.pou,baseline_saved:true,limit:1}));},
           });
           record.phase=result.verification.accepted?'conversion_verified':'conversion_unverified';record.result=result;retain();
@@ -1415,10 +1419,10 @@ function defineTools() {
           const deps={
             status:()=>observe('status',()=>verb('compile_state',{},30000)),
             saved:()=>observe('saved',()=>runCode('structure_snapshot',{project})),
-            snapshot:()=>observe('native',()=>verb('pou_package_snapshot',{},60000)),
+            snapshot:()=>observe('native',()=>verb('pou_package_snapshot',{},NATIVE_PACKAGE_TIMEOUT_MS)),
             manifest:async()=>nativePackageManifest(directory),
             consume:async()=>{receipt.used=true;record.phase='import_token_consumed';retain();},
-            mutate:request=>{attempted=true;record.phase=request.operation+'_requested';retain();return observe('mutation',()=>verb('pou_package_mutate',{...request,project,package_directory:directory},60000));},
+            mutate:request=>{attempted=true;record.phase=request.operation+'_requested';retain();return observe('mutation',()=>verb('pou_package_mutate',{...request,project,package_directory:directory},NATIVE_PACKAGE_TIMEOUT_MS));},
           };
           if(args.operation==='export'){
             const exported=await exportPouPackage(args,deps),package_token=randomUUID();
