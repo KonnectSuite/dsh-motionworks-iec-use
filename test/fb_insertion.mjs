@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import {createHash} from 'node:crypto';
 import {fbInsertionPlan} from '../fb-insertion.js';
 const block={name:'Timer',kind:'FUNCTION_BLOCK',hidden:false,evidence_kind:'installed-declared-block-interface',pins:[{name:'IN',type:'BOOL',direction:'input'},{name:'Q',type:'BOOL',direction:'output'},{name:'State',type:'TIME',direction:'in_out'}]};
 const read={language:'ST',body:'(* Before *)\nRETURN;\n',variables:[{name:'Done',type:'BOOL'},{name:'Accum',type:'TIME'},{name:'Wrong',type:'INT'}]};
@@ -10,6 +11,16 @@ assert.equal(plan.declaration.initial_value,null);
 assert.equal(plan.declaration.description,null);
 assert.equal(plan.call,'NewTimer(IN := FALSE, State := Accum);\r\nDone := NewTimer.Q;\r\n');
 assert.ok(plan.code.endsWith('RETURN;\n'));
+const {expected_body,offset,...shortArgs}=args;
+const hashArgs={...shortArgs,expected_body_sha256:createHash('sha256').update(read.body).digest('hex'),before:'RETURN;'};
+assert.deepEqual(fbInsertionPlan(hashArgs,block,read),plan);
+for(const bad of [{...hashArgs,expected_body_sha256:'0'.repeat(64)},
+  {...hashArgs,expected_body:read.body},{...hashArgs,before:''},{...hashArgs,before:'Missing'},
+  {...hashArgs,offset:13},{...hashArgs,before:'ETURN;'}])assert.throws(()=>fbInsertionPlan(bad,block,read));
+const repeated={...read,body:'RETURN;\nRETURN;\n'};
+assert.throws(()=>fbInsertionPlan({...shortArgs,expected_body:repeated.body,before:'RETURN;'},block,repeated),/exactly once/);
+const commented={...read,body:'(*\nRETURN;\n*)\n'};
+assert.throws(()=>fbInsertionPlan({...shortArgs,expected_body:commented.body,before:'RETURN;'},block,commented),/comment\/string/);
 assert.throws(()=>fbInsertionPlan({...args,expected_body:'stale'},block,read));
 for(const bindings of [{IN:'FALSE',Q:'Wrong',State:'Accum'},{IN:'FALSE',Q:'Done'}, {Unknown:'0',State:'Accum'},{IN:'FALSE); RETURN;',State:'Accum'},{IN:'FALSE, Q => Done',State:'Accum'},{IN:'FALSE',in:'TRUE',State:'Accum'},{State:'Missing'}])assert.throws(()=>fbInsertionPlan({...args,bindings},block,read));
 assert.throws(()=>fbInsertionPlan({...args,instance:'Done'},block,read));

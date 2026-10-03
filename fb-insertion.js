@@ -1,3 +1,4 @@
+import {createHash} from 'node:crypto';
 const identifier=name=>typeof name==='string'&&/^[A-Za-z_][A-Za-z0-9_]{0,29}$/.test(name);
 const sameType=(a,b)=>a.replace(/\s+/g,'').toUpperCase()===b.replace(/\s+/g,'').toUpperCase();
 function expression(value){
@@ -29,7 +30,10 @@ function insertionPoint(body,offset){
 export function fbInsertionPlan(args,block,read){
   if(args.baseline_saved!==true||!identifier(args.instance))throw new Error('Saved baseline and valid new instance name required');
   if(block.kind!=='FUNCTION_BLOCK'||block.hidden||!identifier(block.name)||block.evidence_kind!=='installed-declared-block-interface')throw new Error('Requires a visible, declared function-block interface');
-  if(read.language!=='ST'||read.body_error||typeof read.body!=='string'||read.body!==args.expected_body)throw new Error('Exact saved ST expected_body required');
+  const hashMode=args.expected_body_sha256!==undefined;
+  if(hashMode&&(args.expected_body!==undefined||! /^[a-f0-9]{64}$/.test(args.expected_body_sha256)))throw new Error('Supply either exact expected_body or readable expected_body_sha256');
+  if(read.language!=='ST'||read.body_error||typeof read.body!=='string'||(hashMode?
+    createHash('sha256').update(read.body).digest('hex')!==args.expected_body_sha256:read.body!==args.expected_body))throw new Error('Exact saved ST expected_body/readable hash required');
   if(/[^\x09\x0a\x0d\x20-\x7e]/.test(read.body))throw new Error('Native ST insertion currently requires printable ASCII source');
   if(read.variables.some(v=>v.name.toUpperCase()===args.instance.toUpperCase()))throw new Error('Instance already declared');
   const bindings=args.bindings??{},pins=new Map(block.pins.map(p=>[p.name.toUpperCase(),p]));
@@ -50,7 +54,13 @@ export function fbInsertionPlan(args,block,read){
     else fields.push(pin.name+' := '+value);
   }
   for(const pin of block.pins)if(pin.direction==='in_out'&&!seen.has(pin.name.toUpperCase()))throw new Error('Required in-out binding missing: '+pin.name);
-  const offset=args.offset??read.body.length;insertionPoint(read.body,offset);
+  let offset=args.offset??read.body.length;
+  if(args.before!==undefined){
+    if(args.offset!==undefined||typeof args.before!=='string'||!args.before)throw new Error('Use either a nonempty before anchor or offset');
+    offset=read.body.indexOf(args.before);
+    if(offset<0||read.body.indexOf(args.before,offset+1)>=0)throw new Error('before anchor must match exactly once');
+  }
+  insertionPoint(read.body,offset);
   const call=args.instance+'('+fields.join(', ')+');\r\n'+outputs.join('');
   const prefix=read.body.slice(0,offset),suffix=read.body.slice(offset);
   return {declaration:{name:args.instance,type:block.name,section:'VAR',group:args.group??'Default',address:null,initial_value:null,description:null},

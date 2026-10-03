@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Add readable SHA-256 guards and unique insertion anchors to native ST
+  function-block insertion so large worksheets need not be reproduced. Return
+  the verified text hash for subsequent insertions. Live IEC TON and Yaskawa
+  TON_Retentive insertion/readback passed on a 2,322-line commented worksheet;
+  compilation with the new PROGRAM assigned remains unverified. Exact source
+  cleanup passed; the retained live acceptance record remains false.
 - Add inspection-only worksheet readiness so an unsettled native open can be
   checked without repeating navigation. Accept task-instance views only after
   exact native instance/type and complete worksheet/task-context caption checks.

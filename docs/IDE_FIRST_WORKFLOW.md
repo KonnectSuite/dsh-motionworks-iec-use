@@ -18,6 +18,13 @@ Code and declaration results render compact summaries; full evidence is retained
 on disk and can be shown using `detailed_result:true`. A large POU is not a reason
 to ask the user to perform supported native edits manually.
 The UI recipes below remain fallbacks for editor operations not yet automated.
+For new ST FB instances, resolve the installed interface with
+`mw_code_block_interface` and use `mw_ide_fb_insert` with explicit pin bindings,
+readable `text_body_sha256` supplied as `expected_body_sha256`, and a unique exact
+`before` insertion anchor (or explicit character offset; default is append).
+It creates the declaration and call natively, retaining completed phases if a
+later step fails. Do not repeat a partial insertion or ask the user to retype a
+large body. Verify the result and compile the intended task/POU context.
 
 Native navigation distinguishes the COM active-view identity from visible editor
 readiness. It requires two responsive frames and the expected editor caption before

@@ -56,7 +56,13 @@ send a slash-style logical name directly to OpenDocument or navigate by guessed
 tree coordinates. Code editors report the POU logical name as their active view.
 For ST function-block insertion, inspect `mw_code_block_interface` with an exact
 block name and library when ambiguous. Use `mw_ide_fb_insert` with a new instance,
-exact saved `expected_body`, `baseline_saved:true` and explicit pin bindings.
+`expected_body_sha256` set to readable `text_body_sha256` from `mw_code_pous`,
+`baseline_saved:true` and explicit pin bindings. Alternatively supply exact saved
+`expected_body`. For targeted placement use a unique exact `before` anchor at a
+line boundary outside strings/comments; use `offset` only when known exactly.
+Omit both to append. The tool assembles the full body internally; do not reproduce
+large POUs or ask the user to paste the call. Its returned `text_body_sha256` can
+guard a subsequent insertion after checking the accepted result.
 Outputs and in-out pins require existing direct variables of matching types;
 all in-out pins must be bound. The tool declares the instance and inserts the
 call through native APIs, retaining completed phases on failure. Inspect that
