@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Guide native preparation of new supported FBD logic through ST FB insertion
+  and reviewed native conversion. Assigned TON/TON_Retentive conversion and a
+  single observed Retentive Preset inline edit passed exact compiler-instruction,
+  declaration/flag/collateral and cleanup checks. Include guarded fixture-only
+  native group restoration and retained failure reconciliation in live tooling.
 - Allow up to 180 seconds for complete native package snapshots and the guarded
   conversion/import/export requests that repeat them. A real saved snapshot
   completed after 68 seconds, exceeding the old 60-second limit before any

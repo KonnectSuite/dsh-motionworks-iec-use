@@ -7,7 +7,34 @@ forward between a screenshot and a click. A submitted input is not acceptance.
 Observe the settled result before the next action; if an immediate screenshot
 still shows the earlier state, observe again instead of repeating the input.
 
+Assigned two-block acceptance on October 3 used native ST insertion of IEC TON
+and Yaskawa_Toolbox_v375 TON_Retentive followed by reviewed native FBD conversion.
+The fresh listing resolved both timer instances and both Accum in-out directions
+to the same local variable. The actual canvas displayed those connections.
+The Retentive Preset operand was selected, Tab opened its inline edit box, Ctrl+A
+selected only its text, `T#200ms` replaced the observed `TIME#100ms`, and Enter
+committed the label. Immediate captures after Tab/Enter were stale; an additional
+observation revealed the settled result, without repeating the key.
+
+Fresh graphical listing and exact instruction comparison verified one change:
+the constant feeding Retentive Preset became 200 ms. All other instructions,
+including TON and both Accum directions, were identical after ignoring compiler
+source coordinates. Saved declarations, native flags, task assignments and
+unrelated streams/translations stayed unchanged. Make passed with zero errors.
+Evidence: `toolbox-graph-299eeadd-536c-4b46-9905-20b3bd1c93d0.json`.
+This verifies that observed path; it does not establish every graphical operation.
+
 ## Prepare and observe
+
+For new supported FB logic, prepare an isolated ST POU and declarations through
+native tools, insert the calls with `mw_ide_fb_insert`, and use reviewed native
+`mw_ide_pou_convert` to generate FBD. Inspect the resulting canvas and full fresh
+listing. This route passed with both TON and TON_Retentive, including in-out
+bindings. It replaces that POU's original language/layout/comments and needs the
+conversion tool's exact source hash and compile evidence. A POU outside intended
+task execution can lack compiler artifacts; inspect the refusal rather than
+assigning a task merely to obtain evidence. For changes within an existing graph,
+use the observed canvas path below and preserve its other instructions.
 
 Retain the full saved project baseline and inspect the exact installed block
 interface with `mw_code_block_interface`. Prepare variables through

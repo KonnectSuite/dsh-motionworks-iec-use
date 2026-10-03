@@ -121,6 +121,17 @@ Unused POUs may have no compiled source; failure stops without assigning tasks,
 retrying or rolling back. Inspect retained phase evidence before another action.
 This creates native graphical source through compilation; canvas placement,
 individual pin wiring and machine behavior still need separate verification.
+For a new FBD POU whose logic can be expressed with supported ST calls, prepare
+an isolated ST POU and declarations through the native tools, insert library FBs
+with `mw_ide_fb_insert`, then use the reviewed conversion route above. Assigned
+TON and TON_Retentive conversion, including both sides of Accum, passed live
+compilation and canvas inspection. Read the full graphical listing to verify
+every generated network and compiler-resolved pin. Use observed canvas editing
+for individual graphical changes; Tab opens the selected operand's inline box.
+Verify its focus/text before replacing it, then inspect the settled result and
+fresh compiler instructions. An immediate stale screenshot requires another
+observation, not another key. See docs/GRAPHICAL_EDITOR_WORKFLOW.md for the
+verified two-block constant edit and its limits.
 For native POU exchange use `mw_ide_pou_package`: export an exact writable POU
 with `baseline_saved:true`, then retain its session-bound `package_token`.
 Import accepts only that unchanged native package into the same staged project

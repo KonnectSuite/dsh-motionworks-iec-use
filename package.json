@@ -91,6 +91,7 @@
     "test/pou_package.mjs",
     "test/pou_conversion.mjs",
     "test/toolbox_graph_live.mjs",
+    "test/restore_fixture_group.ps1",
     "test/trial_dialog.ps1",
     "test/native_snapshot.ps1",
     "test/output_pane.ps1",

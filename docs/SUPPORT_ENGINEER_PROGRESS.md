@@ -2,7 +2,23 @@
 
 This is work in progress. Version 0.5.5 did not establish complete IDE control.
 
-## Full native inspection budget and outstanding group drift
+## Assigned two-block FBD and observed constant editing
+
+Fresh acceptance `toolbox-graph-299eeadd-536c-4b46-9905-20b3bd1c93d0.json`
+is cleaned, accepted=true and cleanup_verified=true. Native ST insertion of IEC
+TON and Yaskawa_Toolbox_v375 TON_Retentive, BG assignment and reviewed native
+FBD conversion passed. Full fresh listings resolved both instances, public pins
+and both Accum in-out accesses to the same local variable. The actual canvas
+displayed those connections. Tab/Ctrl+A/text/Enter changed the selected Retentive
+Preset from 100 ms to 200 ms. Complete instruction comparison accepted exactly
+that one constant change, preserving the other network and all connections.
+Declarations, flags, tasks, unrelated sources and translations were unchanged.
+Make and zero-error reads passed. Exact unassign/delete and fresh Build/Make
+restored the complete original baseline; this was a fresh test after restoration.
+The skill now gives Arya this native preparation/conversion route for supported
+new FB graphs and the verified inline-edit procedure.
+
+## Full native inspection budget and restored group drift
 
 The October 3 follow-up increases the complete package inspection and guarded
 conversion/package request budgets from 60 to 180 seconds. A timed-out read
@@ -13,11 +29,18 @@ acceptance rules. The regular suite passes.
 The completed read revealed a native globals group ` n` differing from saved
 `System Variables`, so conversion stopped before mutation. Saving during probe
 unassignment materialized that rename as `n`; collateral checks refused acceptance.
-The exact probe was removed after receipt/source reconciliation and fresh Build/Make
-passed. Original POUs/tasks match, but the global group collateral is unresolved.
-No verified editable UI field appeared from double-click/right-click/F2; no text
-was typed. See the latest handoff and the retained toolbox-graph receipt. The
-two-block graphical route has not passed and cleanup is not fully verified.
+The exact probe was removed after receipt/source reconciliation. The installed
+type library declares VariableGroup.Name writable; the guarded fixture-only
+restoration used that native setter to restore System Variables for all 36
+members. Complete native global rows/flags/groups, saved source baseline, fresh
+Build/Make and zero errors passed. `fixture-group-restore.json` is accepted=true;
+the earlier toolbox receipt is now cleaned_without_conversion with
+cleanup_verified=true, preserving accepted=false for its failed conversion.
+The origin of the unexpected group rename has not been established.
+
+A readonly compiled C# reader prototype returned identical 164-row data but took
+7,953 ms versus 7,012 ms for the existing reader. It was not adopted. Evidence:
+`native-reader-timing.json`. Complete inspection speed remains a limitation.
 
 ## Assigned ST toolbox FB compilation
 
