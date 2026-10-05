@@ -111,6 +111,8 @@
     "test/native_groups_live.mjs",
     "test/native_group_grid_live.mjs",
     "test/native_group_reader.ps1",
+    "test/sdk_variable_reader_guards.ps1",
+    "test/sdk_variable_reader_live.mjs",
     "test/output_pane.ps1",
     "test/hidden_output_pane_live.ps1",
     "test/diagnostic_render.mjs",

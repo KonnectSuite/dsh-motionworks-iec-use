@@ -23,9 +23,31 @@ folder refused with .NET network-location error 0x80131515; that failed receipt
 is retained as `variable-reader-generated-verified.json`. A separate ordinary
 workspace cache loaded normally; no loader/security setting was changed.
 
-No production reader is switched yet. Next validate version/identity and load
-failure handling, full native package snapshots, and declaration mutation/flag
-read-back before integration. Generated SDK interop also identifies
+The production bridge now lazily generates interop in its private temporary
+mailbox for this exact SDK hash. Unknown SDKs and initialization failures use the
+complete existing reader; a changed SDK or native read failure refuses without
+retry or partial fallback. The synthetic guard tests pass in 32-bit and 64-bit
+PowerShell. No generated SDK DLL is committed or packaged, and no loader policy
+is changed. The complete native package (429 declarations, groups, libraries,
+POUs and tasks) matched the legacy reader exactly: 37.861s versus 44.515s in this
+run, receipt `sdk-reader-package-859ee054-0f7d-40ed-963f-7551247569e7.json`.
+Live local declaration flag edits in both directions, independent read-back,
+Build/Make and exact cleanup passed:
+`native-variable-flags-e6c37d60-e050-479f-8b5a-6603a9f3e5fa.json`.
+The complete local/string/global/external flag matrix also passed every native
+mutation and independent read-back, removed all scratch objects, and passed
+final Build/Make. Its strict binary cleanup receipt remains accepted=false:
+`native-variable-flag-matrix-6074b197-42ad-46b0-bf3e-3636e69daf4f.json`.
+Only the global VGR high-water counter at offset 4 changed from 1419 to 1420.
+The separate read-only `sdk-variable-flags-cleanup.json` proves reversing that
+counter in memory reproduces the retained original SHA256, every other source
+and translation is identical, and the full native package equals the pre-test
+429-declaration package, including every flag and group. It is accepted=true,
+binary_identical=false, compiled=true and modified=false. Reconstructed and
+current grid bytes are retained separately; no project stream or original
+baseline was rewritten. Use this reconciled checkpoint for subsequent fixture
+work; the old strict baseline audit correctly still refuses this counter delta.
+Generated SDK interop also identifies
 _Variable.FbInstance as a Boolean getter, not a pin-object getter; this corrects
 the interpretation of the earlier failed object probe below.
 

@@ -720,7 +720,49 @@ function Get-VariableSheet($app,[string]$pou) {
     if(-not $resource){throw 'REFUSED: exact resource not found'}
     return ,($resource.Variables)
 }
+function Initialize-SdkVariableReader {
+    if ($script:SdkReaderAttempted) { return }
+    $script:SdkReaderAttempted=$true
+    $script:SdkReaderEnabled=$false
+    if ($env:MW_DISABLE_SDK_READER -eq '1') {
+        Log 'SDK variable reader disabled by diagnostic override; using complete legacy reader'
+        return
+    }
+    try {
+        $sdk=Join-Path ([Environment]::GetFolderPath('ProgramFilesX86')) 'Yaskawa\MotionWorks IEC 3 Pro\Ade.tlb'
+        # Only the exact SDK whose full native rows and signatures were verified.
+        $supported='7ccec37b8fcff5d1a55198f51a7f97ded0429b2eb0ab740b5cede8cfd9950c6e'
+        if (-not (Test-Path -LiteralPath $sdk) -or (Get-MwSha256 $sdk) -ine $supported) {
+            Log 'SDK variable reader unavailable: unverified SDK; using complete legacy reader'
+            return
+        }
+        $directory=Join-Path $BridgeDir ('sdk-reader-'+[guid]::NewGuid().ToString())
+        [void](New-Item -ItemType Directory -Path $directory -ErrorAction Stop)
+        Add-Type -Path (Join-Path $PSScriptRoot 'sdk-interop-importer.cs') -ErrorAction Stop
+        [void][MwSdkInteropImporter]::Generate($sdk,$directory)
+        if ((Get-MwSha256 $sdk) -ine $supported) { throw 'SDK changed during generation' }
+        $assembly=Join-Path $directory 'ADELib.dll'
+        $assemblyHash=Get-MwSha256 $assembly
+        [void][Reflection.Assembly]::LoadFrom($assembly)
+        Add-Type -Path (Join-Path $PSScriptRoot 'sdk-variable-reader.cs') -ReferencedAssemblies $assembly -ErrorAction Stop
+        if ((Get-MwSha256 $assembly) -ine $assemblyHash) { throw 'Generated assembly changed during loading' }
+        $script:SdkReaderFile=$sdk
+        $script:SdkReaderHash=$supported
+        $script:SdkReaderEnabled=$true
+        Log 'SDK variable reader enabled: verified installed SDK and locally generated interop'
+    } catch {
+        # Initialization reads SDK metadata only. No native declaration read has
+        # started, so the complete existing reader remains a safe fallback.
+        Log ('SDK variable reader initialization unavailable; using complete legacy reader: '+$_.Exception.Message)
+    }
+}
+
 function Get-VariableRows($vars) {
+    if ($script:SdkReaderEnabled) {
+        if ((Get-MwSha256 $script:SdkReaderFile) -ine $script:SdkReaderHash) { throw 'SDK changed after reader initialization; inspect before further native operations' }
+        # Never fall back or retry if a typed native read fails partway through.
+        return ,([MwSdkVariableReader]::Read($vars))
+    }
     $sections=@{1='VAR';2='VAR_INPUT';3='VAR_OUTPUT';4='VAR_IN_OUT';5='VAR_EXTERNAL';6='VAR_GLOBAL'}
     $rows=@()
     $count=[int]$vars.Count
@@ -1009,6 +1051,9 @@ while ($true) {
     $data = $null; $err = $null; $ok = $false
     try {
         Set-RequestScope $req
+        if ($verb -in @('variable_snapshot','variable_mutate','variable_group_snapshot','variable_group_mutate','pou_package_snapshot','pou_package_mutate','pou_convert','code_mutate')) {
+            Initialize-SdkVariableReader
+        }
         switch ($verb) {
 
             'ping' {

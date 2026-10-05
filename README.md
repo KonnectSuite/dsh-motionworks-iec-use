@@ -29,6 +29,11 @@ code or variables by exact saved tree identity and verify the active view. These
 operations use COM without mouse input. The [worksheet workflow](docs/VARIABLE_WORKSHEET_WORKFLOW.md)
 also covers dialog fallbacks and the retained planning/verification tools.
 
+For the verified MotionWorks IEC 3 Pro SDK, the bridge generates local interop
+to read complete declarations more efficiently. Unknown SDKs or loader failures
+use the complete legacy reader. Native read failures remain errors. Generated
+SDK binaries are not bundled; no .NET loader policy change is required.
+
 ## Requirements and installation
 
 - Windows with MotionWorks IEC 3 Pro installed and usable under your own license or

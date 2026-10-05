@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Read complete native declarations through interop generated locally from the
+  exact verified installed SDK. Preserve all fields and six flags, use the full
+  legacy reader for unknown SDKs or initialization failures, and propagate native
+  read failures without retry. No generated SDK binary or loader policy change
+  is shipped. Full 429-declaration package equivalence and live local/string/
+  global/external flag read-back passed. Cleanup preserves all native declarations
+  and sources, with one explicitly proved global grid high-water increment.
+
 - Refuse invalid graphical listing ranges before native inspection or Build,
   and correct the pending CommWatchdog harness to the supported 50-network limit.
   Native CamGenerator ST-to-FBD conversion now passed complete pin-direction
