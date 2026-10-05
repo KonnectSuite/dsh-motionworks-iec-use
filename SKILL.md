@@ -71,6 +71,11 @@ readiness check: it verifies the current editor without OpenDocument or input.
 An exact task-instance view is supported only when its native instance type
 matches the requested POU and the full worksheet/task-context caption matches.
 Inspection cannot establish keyboard focus; native edit APIs do not require it.
+`mw_ide_screenshot` captures without activating or restoring the main frame and
+checks foreground/active/focused window identity before accepting the image.
+It refuses minimized windows or an unsafe screen fallback. Own-window rendering
+may omit an owned inline dialog; use the companion's current observation for
+that dialog. A successful capture does not establish editable selection.
 If compilation reports `completion_unverified`, inspect native state and the
 exact Errors, Warnings and Build panes through `mw_ide_errors`. Informational
 messages have the exact pane name `Infos`. An unverified timeout or empty pane
@@ -274,6 +279,12 @@ For an existing stage, call `mw_workflow_check` with its explicit directory befo
 editing. It reports identity/binding problems, native validation and next steps without
 starting the IDE. In a relocated workspace it can inspect stale identities read-only;
 that does not authorize writes. Never clear this failure by restaging over unsynced work.
+`mw_ide_stage` now refuses replacing an existing stage unless
+`replace_existing:true` records a reviewed fresh-copy operation. Prefer continuing
+the verified stage. Replacement refuses an open target stage or unknown IDE state,
+prepares/binds the incoming copy first, and retains the old expanded directory,
+wrapper and available identity together in `previous_stage_backup` with hashes.
+On a staging failure, inspect retained paths and current state before another call.
 Back up each stage as three matching items: its expanded project directory,
 the sibling `.mwt`, and the sibling `<project>.identity.json` under
 `.motionworks/stage/`. The identity is outside the expanded directory. Missing

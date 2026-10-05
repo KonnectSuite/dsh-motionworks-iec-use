@@ -2,6 +2,46 @@
 
 This is work in progress. Version 0.5.5 did not establish complete IDE control.
 
+## October 5 wrap-up and next acceptance test
+
+Native screenshot capture no longer restores or activates the main IDE frame,
+which could dismiss a graphical inline editor. It checks foreground/active/focus
+identity and refuses an unverified fallback. Production-body mock tests covered
+stable capture, minimized refusal, unsafe fallback and focus drift. Live capture
+passed with saved sources unchanged and compiled=true, modified=false:
+`focus-capture-76a6dc29-ec56-4db1-80f1-8d1080d21abd.json`. No inline editor was
+open in that check; popup preservation and correct operand selection remain unproven.
+
+Staging guard tests and all 14 workspace boundary checks passed. The actual open
+fixture replacement was refused with all 714 backing files unchanged:
+`stage-open-guard-865924cd-5398-47db-aa51-df47a64d2a02.json`. Initial startup
+timed out after 300 seconds; the same instance later responded and the resumed
+check passed without starting another IDE. The timeout cause remains unresolved.
+
+The previously pending scratch fixture cleanup is now complete. Native unassign,
+POU removal, fresh Build/Make and the complete original baseline comparison
+passed: seven POUs, 164 globals and five tasks; compiled=true, modified=false.
+Receipt: `arya-toolbox-resume-cleanup-4a373020-e7b7-4de0-8f3f-b5664635bf49.json`.
+The earlier failed cleanup and graphical receipts remain retained.
+
+Next: in the dedicated disposable Arya fixture chat, verify capture with the
+actual inline editor open, then replace the connected CommWatchdog operand from
+DINT#1000 to DINT#2000. Require exact generated instructions, fresh Build/Make,
+unchanged collateral sources and full cleanup. Compressed CamGenerator interfaces
+and broader graphical autonomy remain open. Customer projects are outside this test.
+
+## Preserve existing stages during fresh-copy preparation
+
+Staging previously deleted an existing target before preparing/binding the new
+copy. It now requires reviewed `replace_existing:true`, refuses an open target
+or unknown/modal IDE state, prepares the incoming copy before replacement, and
+retains the prior folder/wrapper/identity together with content hashes. A final
+state/content check refuses intervening writes. Concurrent requests for the same
+target in this plugin process are refused. Partial commit failure retains prior
+backup and pending paths for inspection; no automatic native repair is attempted.
+These checks do not replace the requirement to preserve unsaved IDE work or
+review the intended source before staging. Graphical autonomy remains open.
+
 The October 5 field export demonstrates repeated successful native edits,
 navigation and compilation; see [field session audit](FIELD_SESSION_AUDIT_2026-10-05.md)
 for actual result counts, refusals, release notes and remaining acceptance work.
@@ -27,15 +67,15 @@ Fresh graphical Build completion was unverified and Errors reported
 conversion in `pou-conversion-92be4e8f-440f-4fa7-8491-b8cde60450ee.json`.
 This does not pass the requested graphical editing lifecycle. The guide now
 explains temporary inline handles and requires selection/connection rechecking
-after focus recovery. Further testing is paused at the user's request.
+after focus recovery. Testing was paused at the user's request; the later
+wrap-up above records cleanup and the remaining acceptance test.
 
 Cleanup was requested before pausing, but its initial native Save was refused:
 the bridge found no running MotionWorks IDE window. No cleanup mutation ran and
-the IDE was not relaunched. The disposable staged fixture still contains the
-scratch POU/assignment pending observed-state cleanup on resume. This does not
+the IDE was not relaunched. At that pause the disposable staged fixture contained
+the scratch POU/assignment pending observed-state cleanup on resume. This did not
 affect a customer source project. Receipt: `arya-toolbox-pause-cleanup.json`.
-Next: reopen only the disposable fixture when authorized to resume, inspect and
-clean that exact scratch state, then verify selection-preserving inline edits.
+That cleanup subsequently passed as recorded above. Next verify selection-preserving inline edits.
 Compressed CamGenerator interfaces and broader graphical autonomy remain open.
 
 ## Named user-library declaration worksheets

@@ -7,6 +7,13 @@ forward between a screenshot and a click. A submitted input is not acceptance.
 Observe the settled result before the next action; if an immediate screenshot
 still shows the earlier state, observe again instead of repeating the input.
 
+Native screenshot capture now preserves foreground/active/focused window identity
+and never activates or restores the main frame. Minimized capture and an unsafe
+screen fallback are refused. Own-window rendering may omit a separately owned
+inline dialog, so use the companion observation for that editor. This change
+has passed stable live capture and refusal tests; capture with an actual inline
+editor open and a correct CommWatchdog operand replacement remain the next test.
+
 Assigned two-block acceptance on October 3 used native ST insertion of IEC TON
 and Yaskawa_Toolbox_v375 TON_Retentive followed by reviewed native FBD conversion.
 The fresh listing resolved both timer instances and both Accum in-out directions

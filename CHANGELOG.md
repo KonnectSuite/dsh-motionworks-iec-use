@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- Preserve prior stage edits and provenance during reviewed replacement: prepare
+  the incoming copy first, retain a hashed backup, and refuse open targets,
+  unknown IDE state, concurrent requests or intervening file changes.
+- Capture IDE screenshots without activating the main frame. Verify foreground
+  and focus identity and refuse minimized or unsafe fallback captures. Stable
+  live capture passed; actual inline-editor preservation remains to be tested.
+- Complete disposable Arya toolbox fixture cleanup with fresh Build/Make and
+  the full original baseline. Retain failed graphical evidence and next steps.
+
 - Deliver complete programming-review findings, references, interface resolution
   and coverage limits instead of a truncated write acknowledgement. Read-only
   fixture testing retains the complete report and verifies source preservation.

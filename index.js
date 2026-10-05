@@ -29,8 +29,9 @@
  * -----------------------------------
  * MotionWorks registers an out-of-process COM automation server
  * (`Ade.Application.550`). The bridge handles guarded inspection, project operations
- * and compilation. Coding defaults to visible native editors via the companion
- * computer-use MCP. Offline code editor tools are retired, not a UI fallback.
+ * and compilation. Guarded native APIs handle declarations, structure and ST/IL
+ * code changes; the companion handles the observed graphical canvas. Offline
+ * code editor tools are retired, not a UI fallback.
  * It must be driven from a 32-bit client, so the work is delegated to a 32-bit
  * Windows PowerShell bridge process that speaks req.json/res.json with this file.
  *
@@ -50,7 +51,7 @@ import { AsyncLocalStorage } from 'node:async_hooks';
 import { randomUUID,createHash } from 'node:crypto';
 import {
   copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, realpathSync, renameSync,
-  rmSync, statSync, writeFileSync,
+  rmSync, statSync, lstatSync, writeFileSync,
 } from 'node:fs';
 import { dirname, isAbsolute, join, resolve, sep } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -72,11 +73,12 @@ const [
   { convertPou },
   { fbInsertionPlan },
   { nativeGroupChange },
+  { assertStageClosed },
 ] = await Promise.all([
   'verification.js', 'edit-session.js', 'native-variables.js',
   'native-structure.js', 'native-code.js', 'graphical-listing.js',
   'pou-package.js', 'pou-conversion.js', 'fb-insertion.js',
-  'native-groups.js',
+  'native-groups.js', 'stage-copy.js',
 ].map(file => import(pathToFileURL(join(HERE, file)).href)));
 
 export const name = 'motionworks-iec-use';
@@ -323,14 +325,10 @@ const PS32 = join(
 
 // Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ the code engine Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
 //
-// Coding does NOT go through the IDE's automation API, because that API cannot
-// touch POU code. Measured, all three candidate routes closed:
-//   * no body accessor exists (_Pou has 35 members, none is Source/Body/Text);
-//   * ExecuteCommand is a stub ("The method or operation is not implemented");
-//   * the import/export providers are untyped IDispatch whose Execute() is a
-//     no-op from automation (returned OK, wrote 0 files).
-//
-// Current source edits use the visible IDE through the separate computer MCP.
+// ST/IL changes use the native ChangeCodeWS import protocol after independently
+// checking saved source and complete native/saved baselines. The lack of a Pou
+// body property or working ExecuteCommand does not imply this route is absent.
+// Actual graphical canvas edits use the separate computer MCP.
 // The Python helper supplies read-only native inspection and guarded staging/
 // verification infrastructure. Historical container writers are private fixtures,
 // not a public source-editing fallback.
@@ -610,6 +608,7 @@ function assertStaged(p) {
 }
 
 const IDENTITY_SUFFIX = '.identity.json';
+const stageRequests = new Set();
 
 function identityPathFor(baseName) {
   return join(stageRoot(), `${baseName}${IDENTITY_SUFFIX}`);
@@ -1862,7 +1861,11 @@ function defineTools() {
         + '— that does not stage it and does not open it. '
         + 'After the copy, the .mwt is rewritten so the path stored inside it is the staged '
         + 'directory. Left alone, opening the wrapper loads whatever directory it still names, '
-        + 'which has been a project outside the workspace.',
+        + 'which has been a project outside the workspace. Existing stages require '
+        + 'replace_existing:true after reviewing replacement; the old folder, wrapper and '
+        + 'identity are retained together in a hashed backup. Incoming copy/binding is prepared '
+        + 'before replacing files. Refuses an open target stage or unknown IDE state. '
+        + 'Prefer continuing the existing verified stage; never restage to repair an attach error.',
       parameters: {
         type: 'object',
         additionalProperties: false,
@@ -1872,6 +1875,7 @@ function defineTools() {
             type: 'string',
             description: 'Path to the project folder or its .mwt file. Must be inside the workspace.',
           },
+          replace_existing: {type:'boolean',description:'Explicitly reviewed replacement of an existing stage. Defaults false; the prior stage is backed up before replacement. Does not permit replacing an open stage.'},
         },
       },
       output: {
@@ -1888,6 +1892,7 @@ function defineTools() {
             workspace: { type: 'string' },
             bound_to: { oneOf: [{ type: 'string' }, { type: 'null' }] },
             previous_embedded_path: { oneOf: [{ type: 'string' }, { type: 'null' }] },
+            previous_stage_backup: {oneOf:[{type:'string'},{type:'null'}]},
           },
         },
         render: (_a, v) => text(
@@ -1896,7 +1901,8 @@ function defineTools() {
             ? `The wrapper pointed at ${v.previous_embedded_path}; it now points at ${v.bound_to}. `
             : '')
           + `Open with: ${v.staged_mwt}. Backups must also retain the expanded directory and sibling `
-          + `identity record: ${identityPathFor(v.name)}`,
+          + `identity record: ${identityPathFor(v.name)}`
+          + (v.previous_stage_backup?`. Previous stage retained at: ${v.previous_stage_backup}`:''),
         ),
       },
       presentCall: (a) => ({
@@ -1938,28 +1944,42 @@ function defineTools() {
         mkdirSync(stageRoot(), { recursive: true });
         const targetMwt = join(stageRoot(), `${base}.mwt`);
         const targetDir = join(stageRoot(), base);
-
-        // REPLACE, do not merge. Copying onto an existing staged copy left POUs and
-        // edits from the previous run in place, so "re-stage" did not produce a
-        // clean copy — a repeat test then ran against a dirty project.
-        const stageBoundary = resolve(stageRoot());
-        for (const target of [targetMwt, targetDir]) {
-          if (resolve(target).startsWith(stageBoundary + sep) || resolve(target) === targetMwt) {
-            rmSync(target, { recursive: true, force: true });
-          }
+        const targetIdentity=identityPathFor(base),targets=[targetMwt,targetDir,targetIdentity];
+        const stageKey=canonical(targetMwt).toLowerCase();
+        if(stageRequests.has(stageKey))throw Error('REFUSED: this stage already has an active staging request');
+        stageRequests.add(stageKey);
+        try {
+        const previousExists=targets.some(path=>existsSync(path));
+        if(previousExists&&args.replace_existing!==true)
+          throw Error('REFUSED: an existing stage would be replaced. Continue its verified work, or review replacement and pass replace_existing:true; nothing copied or removed');
+        const checkClosed=async()=>{
+          const state=await verb('ide_state',{},45000);
+          if(state.ide_running!==true||state.blocked===true||state.verifier_running===true){assertStageClosed(canonical(targetDir),state);return;}
+          const status=await verb('status',{},20000);
+          assertStageClosed(canonical(targetDir),state,status);
+        };
+        for(const path of targets){
+          assertStaged(path);
+          if(existsSync(path)&&lstatSync(path).isSymbolicLink())throw Error('REFUSED: linked staged target');
         }
-
+        if(existsSync(targetDir))validateCopyTree(targetDir);
+        await checkClosed();
+        const pending=join(stageRoot(),'.pending-stage-'+randomUUID());
+        if(!isInsideWorkspace(pending))throw Error('REFUSED: linked staging preparation directory');
+        mkdirSync(pending);
+        const incomingMwt=join(pending,base+'.mwt'),incomingDir=join(pending,base);
+        let previous_stage_backup=null,commitStarted=false,priorManifest;
         let copied = 0;
         try {
-          copyFileSync(mwt, targetMwt);
+          copyFileSync(mwt, incomingMwt);
           copied += 1;
           if (existsSync(dir) && statSync(dir).isDirectory()) {
-            copyTree(dir, targetDir, () => { copied += 1; });
+            copyTree(dir, incomingDir, () => { copied += 1; });
           }
           // The wrapper carries an absolute directory. Opening it loads THAT directory,
           // not the sibling of the file you passed. Rewrite it to the staged directory
           // before anything is allowed to open the copy.
-          const bound = await runCode('bind_mwt', { mwt: targetMwt, directory: targetDir });
+          const bound = await runCode('bind_mwt', { mwt: incomingMwt, directory: targetDir });
           const previous = Array.isArray(bound.paths) && bound.paths[0]
             ? bound.paths[0].from
             : null;
@@ -1974,7 +1994,43 @@ function defineTools() {
             previous_embedded_path: previous,
             staged_at: new Date().toISOString(),
           };
+          // Copy and hash-check all prior items before any replacement. A failed
+          // incoming bind leaves the previous stage and its provenance intact.
+          if(previousExists){
+            previous_stage_backup=join(stageRoot(),'backups','stage-'+randomUUID());
+            if(!isInsideWorkspace(previous_stage_backup))throw Error('REFUSED: linked stage backup directory');
+            mkdirSync(previous_stage_backup,{recursive:true});
+            const manifest=[];
+            const backupFile=(from,to)=>{
+              const before=createHash('sha256').update(readFileSync(from)).digest('hex');
+              copyFileSync(from,to);
+              if(before!==createHash('sha256').update(readFileSync(to)).digest('hex')||before!==createHash('sha256').update(readFileSync(from)).digest('hex'))throw Error('Stage backup content changed during copying');
+              manifest.push({file:from.slice(stageRoot().length+1),sha256:before});
+            };
+            const backupTree=(from,to)=>{mkdirSync(to,{recursive:true});for(const entry of readdirSync(from,{withFileTypes:true})){const src=join(from,entry.name),dst=join(to,entry.name);if(entry.isSymbolicLink())throw Error('REFUSED: linked prior stage member');if(entry.isDirectory())backupTree(src,dst);else backupFile(src,dst);}};
+            for(const path of targets)if(existsSync(path)){const dest=join(previous_stage_backup,path.slice(stageRoot().length+1));if(statSync(path).isDirectory())backupTree(path,dest);else backupFile(path,dest);}
+            writeFileSync(join(previous_stage_backup,'backup-manifest.json'),JSON.stringify({source,workspace,stage:targetDir,files:manifest},null,2));
+            priorManifest=manifest;
+          }
+          await checkClosed();
+          // Validate resolved paths before recursive removal, including on Windows.
+          const boundary=resolve(stageRoot())+sep;
+          for(const path of targets){
+            if(!resolve(path).startsWith(boundary)||!isInsideWorkspace(path)||(existsSync(path)&&lstatSync(path).isSymbolicLink()))throw Error('REFUSED: changed staged target boundary');
+          }
+          if(!previousExists&&targets.some(path=>existsSync(path)))throw Error('REFUSED: another writer created this stage during preparation');
+          if(previousExists){
+            const current=[];
+            const observe=path=>{if(lstatSync(path).isSymbolicLink())throw Error('REFUSED: changed prior stage member');if(statSync(path).isDirectory()){for(const child of readdirSync(path))observe(join(path,child));}else current.push({file:path.slice(stageRoot().length+1),sha256:createHash('sha256').update(readFileSync(path)).digest('hex')});};
+            for(const path of targets)if(existsSync(path))observe(path);
+            const sorted=rows=>[...rows].sort((a,b)=>a.file.localeCompare(b.file));
+            if(JSON.stringify(sorted(current))!==JSON.stringify(sorted(priorManifest)))throw Error('REFUSED: prior stage changed after backup; preserve current work');
+          }
+          commitStarted=true;
+          for(const path of targets)rmSync(path,{recursive:true,force:true});
+          renameSync(incomingMwt,targetMwt);renameSync(incomingDir,targetDir);
           writeIdentity(record);
+          rmSync(pending,{recursive:true,force:true});
           return {
             staged_mwt: targetMwt,
             staged_directory: targetDir,
@@ -1984,12 +2040,13 @@ function defineTools() {
             workspace,
             bound_to: record.bound_to,
             previous_embedded_path: previous,
+            previous_stage_backup,
           };
         } catch (err) {
-          rmSync(targetMwt, { force: true });
-          rmSync(targetDir, { recursive: true, force: true });
-          throw err;
+          if(!commitStarted)rmSync(pending,{recursive:true,force:true});
+          throw Error(err.message+(previous_stage_backup?`; previous stage retained at ${previous_stage_backup}`:'')+(commitStarted?`; replacement incomplete; inspect ${pending} and staged files before another action`:''));
         }
+        } finally { stageRequests.delete(stageKey); }
       },
     },
 
@@ -3928,7 +3985,9 @@ function defineTools() {
       description:
         'Capture the MotionWorks IDE window to a PNG and return its path, so you can see what '
         + 'the IDE is actually showing Ã¢â‚¬â€ a dialog, the Project Tree, or the Message Window error '
-        + 'list. Read the returned path with the image-reading tool.',
+        + 'list. Capture preserves foreground and keyboard focus; minimized windows and '
+        + 'unverified screen fallback are refused. Owned inline dialogs may require a '
+        + 'companion screenshot. Read the returned path with the image-reading tool.',
       parameters: { type: 'object', additionalProperties: false, properties: {} },
       output: {
         schema: {

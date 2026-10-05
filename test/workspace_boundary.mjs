@@ -73,6 +73,44 @@ try {
     await assert.rejects(run('mw_ide_stage', { source: stagedA.staged_mwt }, a), /existing staged copy/);
     assert.ok(existsSync(stagedA.staged_mwt));
   });
+  await check('repeated staging refuses unreviewed replacement and preserves all prior items', async () => {
+    const wrapper=readFileSync(stagedA.staged_mwt),identity=readFileSync(join(a,'.motionworks/stage/Machine.identity.json'));
+    await assert.rejects(run('mw_ide_stage',{source:sourceA},a),/replace_existing:true/);
+    assert.deepEqual(readFileSync(stagedA.staged_mwt),wrapper);
+    assert.deepEqual(readFileSync(join(a,'.motionworks/stage/Machine.identity.json')),identity);
+    assert.equal(readFileSync(join(stagedA.staged_directory,'marker.txt'),'utf8'),a);
+  });
+  await check('concurrent staging of one target cannot erase another request', async () => {
+    const ws=join(root,'concurrent'),originalSource=source(ws);
+    const attempts=await Promise.allSettled([run('mw_ide_stage',{source:originalSource},ws),run('mw_ide_stage',{source:originalSource},ws)]);
+    assert.equal(attempts.filter(r=>r.status==='fulfilled').length,1);
+    assert.match(attempts.find(r=>r.status==='rejected').reason.message,/active staging request/);
+    assert.equal(readFileSync(join(ws,'.motionworks/stage/Machine/marker.txt'),'utf8'),ws);
+  });
+  await check('bad incoming wrapper leaves edited stage intact; reviewed replacement retains full hashed backup', async () => {
+    const ws=join(root,'replacement'),originalSource=source(ws);
+    const staged=await run('mw_ide_stage',{source:originalSource},ws),valid=readFileSync(originalSource);
+    writeFileSync(join(staged.staged_directory,'marker.txt'),'unsynced-stage-edit');
+    writeFileSync(join(staged.staged_directory,'extra-pou.txt'),'prior-only-source');
+    const priorWrapper=readFileSync(staged.staged_mwt),priorIdentity=readFileSync(join(ws,'.motionworks/stage/Machine.identity.json'));
+    writeFileSync(originalSource,'invalid-container');
+    await assert.rejects(run('mw_ide_stage',{source:originalSource,replace_existing:true},ws),/CFB|compound|magic|container|signature/i);
+    assert.deepEqual(readFileSync(staged.staged_mwt),priorWrapper);
+    assert.deepEqual(readFileSync(join(ws,'.motionworks/stage/Machine.identity.json')),priorIdentity);
+    assert.equal(readFileSync(join(staged.staged_directory,'marker.txt'),'utf8'),'unsynced-stage-edit');
+    writeFileSync(originalSource,valid);
+    const replaced=await run('mw_ide_stage',{source:originalSource,replace_existing:true},ws);
+    assert.ok(replaced.previous_stage_backup);
+    assert.deepEqual(readFileSync(join(replaced.previous_stage_backup,'Machine.mwt')),priorWrapper);
+    assert.deepEqual(readFileSync(join(replaced.previous_stage_backup,'Machine.identity.json')),priorIdentity);
+    assert.equal(readFileSync(join(replaced.previous_stage_backup,'Machine/marker.txt'),'utf8'),'unsynced-stage-edit');
+    assert.equal(readFileSync(join(replaced.previous_stage_backup,'Machine/extra-pou.txt'),'utf8'),'prior-only-source');
+    const manifest=JSON.parse(readFileSync(join(replaced.previous_stage_backup,'backup-manifest.json'),'utf8'));
+    assert.equal(manifest.files.length,4);
+    assert.ok(manifest.files.every(f=>/^[a-f0-9]{64}$/.test(f.sha256)));
+    assert.equal(readFileSync(join(staged.staged_directory,'marker.txt'),'utf8'),ws);
+    assert.equal(existsSync(join(staged.staged_directory,'extra-pou.txt')),false);
+  });
   await check('tampered identity is refused', async () => {
     const file = join(a, '.motionworks', 'stage', 'Machine.identity.json');
     const raw = readFileSync(file, 'utf8');
@@ -99,6 +137,7 @@ try {
   });
   console.log(`${count} workspace boundary checks passed`);
 } finally {
+  await i.stopBridge();
   // root comes directly from mkdtempSync; no project or user-supplied path is removed.
   rmSync(root, { recursive: true, force: true });
 }

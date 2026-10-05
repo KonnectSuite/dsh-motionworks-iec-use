@@ -126,6 +126,22 @@ public class MWW {
   [DllImport("user32.dll")] public static extern IntPtr SendMessage(IntPtr h, uint m, IntPtr w, IntPtr l);
   [DllImport("user32.dll")] public static extern bool PostMessage(IntPtr h, uint m, IntPtr w, IntPtr l);
   [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr h);
+  [DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow();
+  [DllImport("user32.dll")] public static extern IntPtr GetAncestor(IntPtr h, uint flags);
+  [StructLayout(LayoutKind.Sequential)] public struct GUITHREADINFO {
+    public uint cbSize, flags;
+    public IntPtr hwndActive, hwndFocus, hwndCapture, hwndMenuOwner, hwndMoveSize, hwndCaret;
+    public RECT rcCaret;
+  }
+  [DllImport("user32.dll")] public static extern bool GetGUIThreadInfo(uint thread, ref GUITHREADINFO info);
+  public static IntPtr[] CaptureFocus() {
+    IntPtr foreground = GetForegroundWindow(); uint process;
+    uint thread = GetWindowThreadProcessId(foreground, out process);
+    GUITHREADINFO info = new GUITHREADINFO(); info.cbSize = (uint)Marshal.SizeOf(typeof(GUITHREADINFO));
+    if (foreground == IntPtr.Zero || thread == 0 || !GetGUIThreadInfo(thread, ref info))
+      throw new InvalidOperationException("Foreground/focus identity unavailable; capture unverified");
+    return new IntPtr[] { foreground, info.hwndActive, info.hwndFocus };
+  }
   [DllImport("user32.dll")] public static extern IntPtr SetFocus(IntPtr h);
   [DllImport("user32.dll")] public static extern bool BringWindowToTop(IntPtr h);
   [DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr h, int c);
@@ -2314,12 +2330,10 @@ while ($true) {
                 if (-not $ideW) { throw 'no running MotionWorks IDE window to capture' }
                 $ideW = [IntPtr]$ideW
 
-                # A minimized or hidden window cannot be captured either way.
-                if ([MWW]::IsIconic($ideW)) { [void][MWW]::ShowWindow($ideW, 9) }   # SW_RESTORE
-                [void][MWW]::ShowWindow($ideW, 5)                                   # SW_SHOW
-                [void][MWW]::BringWindowToTop($ideW)
-                [void][MWW]::SetForegroundWindow($ideW)
-                Start-Sleep -Milliseconds 350
+                # Observing must not focus the main frame and dismiss an owned
+                # graphical inline editor. No activation or implicit restoration.
+                if ([MWW]::IsIconic($ideW)) { throw 'IDE is minimized; capture would require a window-state change. Restore deliberately before observing again' }
+                $focusBefore = @([MWW]::CaptureFocus())
 
                 Add-Type -AssemblyName System.Drawing
                 $rc = New-Object MWW+RECT
@@ -2346,7 +2360,7 @@ while ($true) {
 
                 $method = $null
                 $bmp = New-Object System.Drawing.Bitmap $w, $h
-
+                try {
                 foreach ($flags in @(2, 0)) {          # PW_RENDERFULLCONTENT, then plain
                     if ($method) { break }
                     $g = [System.Drawing.Graphics]::FromImage($bmp)
@@ -2358,20 +2372,26 @@ while ($true) {
                 }
 
                 if (-not $method) {
+                    if ([MWW]::GetAncestor($focusBefore[0], 3) -ne $ideW) {
+                        throw 'Own-window rendering failed and the IDE is not the foreground owner; screen-region capture refused without changing focus'
+                    }
                     $g = [System.Drawing.Graphics]::FromImage($bmp)
                     $g.CopyFromScreen($rc.Left, $rc.Top, 0, 0, (New-Object System.Drawing.Size $w, $h))
                     $g.Dispose()
                     $method = 'screen-region'
                 }
-
+                $focusAfter = @([MWW]::CaptureFocus())
+                $beforeKey = ($focusBefore | ForEach-Object { $_.ToInt64() }) -join ':'
+                $afterKey = ($focusAfter | ForEach-Object { $_.ToInt64() }) -join ':'
+                if ($beforeKey -ne $afterKey) { throw 'Foreground/active/focused window changed during capture; image acceptance unverified. Reobserve before input' }
                 $bmp.Save($out, [System.Drawing.Imaging.ImageFormat]::Png)
-                $bmp.Dispose()
+                } finally { $bmp.Dispose() }
 
                 # Which route was taken is a diagnostic, so it goes to the log rather
                 # than the response: the registered output schema for this tool is an
                 # exact shape (additionalProperties: false) and a running DSH keeps
                 # the schema it loaded, so an extra field fails output validation.
-                Log "screenshot $out via $method (${w}x${h})"
+                Log "screenshot $out via $method (${w}x${h}); foreground/active/focus preserved $beforeKey"
 
                 $ok = $true
                 $data = [ordered]@{ path = $out; width = $w; height = $h }

@@ -23,6 +23,7 @@ const commands = [
   [process.execPath, ['test/skill_delivery.mjs', root]],
   [process.execPath, ['test/workspace_session.mjs']],
   [process.execPath, ['test/workspace_boundary.mjs']],
+  [process.execPath, ['test/stage_copy.mjs']],
   [process.execPath, ['test/packaged_runtime.mjs']],
   [process.execPath, ['test/close_consent.mjs']],
   [i.pythonExe(), ['-B', 'test/workspace_engine.py']],
@@ -49,6 +50,8 @@ const commands = [
     ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', 'test/native_group_reader.ps1']],
   [join(process.env.SystemRoot ?? 'C:\\Windows', 'System32/WindowsPowerShell/v1.0/powershell.exe'),
     ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', 'test/output_pane.ps1']],
+  [join(process.env.SystemRoot ?? 'C:\\Windows', 'System32/WindowsPowerShell/v1.0/powershell.exe'),
+    ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', 'test/focus_screenshot.ps1']],
 ];
 for (const [command, args] of commands) {
   const result = spawnSync(command, args, { cwd: root, stdio: 'inherit', windowsHide: true });

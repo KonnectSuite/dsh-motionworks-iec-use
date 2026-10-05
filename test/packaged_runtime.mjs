@@ -15,7 +15,7 @@ let mod;
 try {
   for (const p of [virtual, physical]) {
     mkdirSync(p, { recursive: true });
-    for (const f of (p === virtual ? ['index.js', 'package.json'] : ['index.js', 'verification.js', 'edit-session.js', 'native-variables.js', 'native-groups.js', 'native-structure.js', 'native-code.js', 'graphical-listing.js', 'pou-package.js', 'pou-conversion.js', 'fb-insertion.js', 'package.json'])) copyFileSync(join(repo, f), join(p, f));
+    for (const f of (p === virtual ? ['index.js', 'package.json'] : ['index.js', 'verification.js', 'edit-session.js', 'native-variables.js', 'native-groups.js', 'native-structure.js', 'native-code.js', 'graphical-listing.js', 'pou-package.js', 'pou-conversion.js', 'fb-insertion.js', 'stage-copy.js', 'package.json'])) copyFileSync(join(repo, f), join(p, f));
   }
   cpSync(join(repo, 'code'), join(physical, 'code'), { recursive: true });
   cpSync(join(repo, 'bridge'), join(physical, 'bridge'), { recursive: true });
@@ -52,8 +52,9 @@ try {
   assert.ok(existsSync(mod.__internals.IPC_DIR));
   assert.ok(!readdirSync(join(physical, 'code')).some(n => /^req-|^res-/.test(n)));
   assert.ok(!existsSync(join(physical, 'bridge', 'req.json')));
-  console.log('Packaged ASAR path, physical child helper, private IPC and session workspace checks passed; no IDE invoked');
+  console.log('Packaged ASAR path, physical child helper, private IPC and session workspace checks passed; no IDE started or edited');
 } finally {
+  if(mod)await mod.__internals.stopBridge();
   rmSync(root, { recursive: true, force: true });
   if (mod) rmSync(mod.__internals.IPC_DIR, { recursive: true, force: true });
 }

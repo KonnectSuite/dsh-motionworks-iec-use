@@ -85,6 +85,7 @@ try {
   check('a session with no workspace path is refused', refused.includes('no workspace path'), refused.split('\n')[0]);
   check('the refusal does not name the profile root as the workspace', !refused.includes(profile), '');
 } finally {
+  await mod.__internals.stopBridge();
   rmSync(sessionDir, { recursive: true, force: true });
 }
 
