@@ -1,11 +1,41 @@
-import sys,tempfile,unittest
+import sys,tempfile,unittest,struct
+from types import SimpleNamespace
 from pathlib import Path
 from unittest.mock import patch
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]/'code'/'engine'))
-from motionworks_iec_mcp.block_interfaces import parse_parameter_table,sources,inspect
+from motionworks_iec_mcp.block_interfaces import parse_parameter_table,sources,inspect,_user_library_declarations
+from motionworks_iec_mcp.variables import CompressedStreamError
 
 PT=b'pouKind:\tFUNCTION_BLOCK\r\npouName:\tTimer\r\nparNum:\t2\r\nparameters:\r\n\tVAR_INPUT\tIN\tBOOL\tYES\tNO\r\n\tVAR_OUTPUT\tQ\tBOOL\tYES\tNO\r\n'
 class Interfaces(unittest.TestCase):
+    def test_named_user_library_worksheet_identity_and_refusals(self):
+        declarations=b'VAR_INPUT\nRun : BOOL;\nEND_VAR\nVAR_OUTPUT\nReady : BOOL;\nEND_VAR\n'
+        streams={'Variables.VB':declarations,'Variables.VGR':struct.pack('<III',0,0,2),'Variables.VB.sn':b'snapshot-not-declarations'}
+        class Container:
+            def stream_names(self):return list(streams)
+            def read_stream(self,name):return streams[name]
+        pou=SimpleNamespace(name='NamedBlock',declaration_stream_name=lambda:None,source=lambda:Container())
+        node=SimpleNamespace(path='POE\\NamedBlock\\Variables.VGR\tignored',start_line=0)
+        document=SimpleNamespace(warnings=[],lines=['8'],walk_with_ancestors=lambda:[(node,[])])
+        class RootContainer:
+            def __init__(self,*args):pass
+            def read_stream(self,name):return b'fixture-tree'
+        with patch('motionworks_iec_mcp.block_interfaces.CompoundFile',RootContainer),patch('motionworks_iec_mcp.block_interfaces.parse_document',return_value=document):
+            table=_user_library_declarations('root',pou)
+            self.assertEqual(table.source_stream,'Variables.VB');self.assertFalse(table.warnings)
+            self.assertEqual([(v.name,v.section) for v in table.variables],[('Run','VAR_INPUT'),('Ready','VAR_OUTPUT')])
+            streams['Other.VB']=declarations
+            with self.assertRaisesRegex(ValueError,'ambiguous'):_user_library_declarations('root',pou)
+            del streams['Other.VB'];node.path='POE/WrongBlock/Variables.VGR'
+            with self.assertRaisesRegex(ValueError,'tree identity'):_user_library_declarations('root',pou)
+            node.path='POE/NamedBlock/Variables.VGR';document.lines=['23']
+            with self.assertRaisesRegex(ValueError,'tree identity'):_user_library_declarations('root',pou)
+            document.lines=['8'];streams['Variables.VGR']=struct.pack('<III',0,0,3)
+            self.assertTrue(_user_library_declarations('root',pou).warnings)
+            streams['Variables.VGR']=b'short'
+            with self.assertRaisesRegex(ValueError,'count unavailable'):_user_library_declarations('root',pou)
+            streams['Variables.VGR']=struct.pack('<III',0,0,2);streams['Variables.VB']=bytes.fromhex('00000000cadac758')+b'unsupported'
+            with self.assertRaises(CompressedStreamError):_user_library_declarations('root',pou)
     def test_declared_parameter_directions_and_bad_tables(self):
         result=parse_parameter_table(PT)
         self.assertEqual([p['direction'] for p in result['pins']],['input','output'])

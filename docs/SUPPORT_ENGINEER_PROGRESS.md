@@ -2,6 +2,22 @@
 
 This is work in progress. Version 0.5.5 did not establish complete IDE control.
 
+## Named user-library declaration worksheets
+
+The interface reader now recognizes a single named declaration worksheet such
+as `Variables.VB`, after checking its paired grid, exact saved tree identity and
+declaration count. Project and firmware interface paths remain unchanged.
+Focused identity/refusal tests passed. A read-only native-bound fixture check
+retained all eight ReadMotorSpeed pins and seven CommWatchdog pins with source
+and registry hashes. Saved source snapshots matched and the IDE remained
+compiled and unmodified. Evidence is retained as
+`user-library-interfaces-6e98250c-d359-4fd4-a4a5-f6cf425a5640.json`.
+
+CamGenerator's named worksheet is recognized, but its declaration payload uses
+the unsupported MotionWorks compressed container. The tool reports that exact
+limitation rather than guessing pins. This check does not yet prove Arya's
+insertion, graphical editing or build lifecycle with these toolbox blocks.
+
 ## Complete programming-review output
 
 The generic write renderer previously cut programming-review output after 400

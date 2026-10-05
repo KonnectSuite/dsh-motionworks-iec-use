@@ -9,6 +9,8 @@ import re
 from pathlib import Path
 from .cfb import CompoundFile
 from .project import Project
+from .tree import parse_document
+from .variables import decode_declarations,read_grid_variable_count,cross_check
 
 SECTIONS={'VAR_INPUT':'input','VAR_OUTPUT':'output','VAR_IN_OUT':'in_out'}
 KINDS={'FUNCTION':'FUNCTION','FUNCTION_BLOCK':'FUNCTION_BLOCK','FUNCTIONBLOCK':'FUNCTION_BLOCK','PROGRAM':'PROGRAM'}
@@ -47,6 +49,31 @@ def _registry(path):
     return rows
 
 def _same_path(a,b):return str(Path(a).resolve()).casefold()==str(Path(b).resolve()).casefold()
+
+def _user_library_declarations(root,pou):
+    if pou.declaration_stream_name() is not None:
+        return pou.declarations()
+    # User libraries can name their worksheets Variables/Code instead of
+    # <POU>V/<POU>. Bind the one declaration stream to its saved grid worksheet;
+    # do not infer directions from compiler heaps or unrelated streams.
+    container=pou.source();names=container.stream_names()
+    matches=[n for n in names if n.upper().endswith('.VB')]
+    if len(matches)!=1 or not matches[0][:-3]:
+        raise ValueError('User-library declaration worksheet absent or ambiguous')
+    declaration=matches[0];grid=declaration[:-3]+'.VGR'
+    grids=[n for n in names if n.casefold()==grid.casefold()]
+    if len(grids)!=1:raise ValueError('User-library declaration/grid worksheet pair absent or ambiguous')
+    document=parse_document(CompoundFile(Path(root)/'src.st1').read_stream('PROJECT.TRE').decode('latin1'))
+    expected=('POE/'+pou.name+'/'+grids[0]).casefold()
+    nodes=[n for n,_ in document.walk_with_ancestors()
+           if n.path.split('\t')[0].replace('\\','/').casefold()==expected]
+    if document.warnings or len(nodes)!=1 or document.lines[nodes[0].start_line].strip()!='8':
+        raise ValueError('User-library variable worksheet tree identity absent or ambiguous')
+    table=decode_declarations(container.read_stream(declaration),declaration)
+    count=read_grid_variable_count(container.read_stream(grids[0]))
+    if count is None:raise ValueError('User-library variable grid count unavailable')
+    table.warnings.extend(cross_check(table,count))
+    return table
 
 def sources(root,native_libraries):
     root=Path(root);project=Project(root)
@@ -99,7 +126,8 @@ def inspect(root,native_libraries,name=None,library=None):
         if interface['name'].casefold()!=row['name'].casefold() or interface['kind']!=row['kind']:raise ValueError('Registry/parameter interface identity mismatch')
         row.update(interface);row.update(source_stream=matches[0],source_sha256=hashlib.sha256(data).hexdigest(),origin='firmware_parameter_table')
     else:
-        pou=Project(source['root']).pou(row['name']);table=pou.declarations()
+        pou=Project(source['root']).pou(row['name'])
+        table=_user_library_declarations(source['root'],pou) if source['kind']=='USER' else pou.declarations()
         if table.warnings:raise ValueError('Declaration interface parse warnings: '+str(table.warnings))
         file=pou.source_path
         row['pins']=[dict(name=v.name,type=v.type_name,section=v.section,direction=SECTIONS[v.section],initial_value=v.initial_value,description=v.description)

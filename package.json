@@ -86,6 +86,7 @@
     "test/st_comments.py",
     "test/fb_insertion.mjs",
     "test/block_interfaces.py",
+    "test/user_library_interface_live.mjs",
     "test/installed_help.py",
     "test/graphical_listing.py",
     "test/graphical_listing.mjs",
