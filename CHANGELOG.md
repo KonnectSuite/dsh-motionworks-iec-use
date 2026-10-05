@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Recover a hidden Message Window directly through the installed native View
+  command, verified against its menu resource before posting once. Live fixture
+  recovery preserves all four diagnostic panes and original project sources.
+  Preserve fresh Build warning evidence when Make clears subsequent pane rows.
+
 - Verify a running Arya native ST/local-group/TON/task-assignment lifecycle and
   exact fixture cleanup. Retain initial routing mistakes and the assisted Make
   follow-up. Clarify the exposed task-model name and separate Build/Make checks

@@ -19,6 +19,11 @@ public class MWW {
  public static object Accessible;
  public static bool Ambiguous=false;
  public static int ActiveRows=2;
+ public static bool ParentVisible=true, CommandVerified=true, Modal=false, PostAccepted=true;
+ public static int RecoveryRequests=0;
+ public static bool HasMessageWindowCommand(string path){return CommandVerified;}
+ public static bool IsWindowEnabled(IntPtr h){return !Modal;}
+ public static bool PostMessage(IntPtr h,uint m,IntPtr w,IntPtr l){RecoveryRequests++;if(PostAccepted)ParentVisible=true;return PostAccepted;}
  public static bool EnumChildWindows(IntPtr root,EnumWindowsProc cb,IntPtr l) {
   if(root.ToInt32()==1)cb(new IntPtr(2),l);
   else {cb(new IntPtr(3),l);cb(new IntPtr(4),l);cb(new IntPtr(5),l);}
@@ -26,7 +31,7 @@ public class MWW {
  }
  public static string ReadText(IntPtr h){return h.ToInt32()==2?"Message Window":"";}
  public static int GetClassNameW(IntPtr h,StringBuilder b,int n){b.Append("SysListView32");return 13;}
- public static bool IsWindowVisible(IntPtr h){return true;}
+ public static bool IsWindowVisible(IntPtr h){return ParentVisible;}
  public static bool GetWindowRect(IntPtr h,out RECT r){r=new RECT();if(h.ToInt32()==3||Ambiguous){r.Right=600;r.Bottom=200;}return true;}
  public static object GetAccessible(IntPtr h){return Accessible;}
  public static int ListRowCount(IntPtr h){return h.ToInt32()==3?ActiveRows:100;}
@@ -34,6 +39,8 @@ public class MWW {
 '@
 function Get-IdeWindow {return [IntPtr]1}
 function Get-IdePid {return 99}
+function Get-Process {param($Id,$ErrorAction);return [pscustomobject]@{Path='verified-fixture-ide.exe'}}
+function Log {param($message)}
 function Assert-StagedOpen {param($app,$verb)}
 function Start-Sleep {param($Milliseconds)}
 $script:activateFails=$false;$script:activationCount=0
@@ -41,7 +48,7 @@ $pane=[pscustomobject]@{Name='Errors'}
 $pane|Add-Member ScriptMethod Activate {if($script:activateFails){throw 'Activation failed'};$script:activationCount++}
 $ow=[pscustomobject]@{Count=1;Pane=$pane}
 $ow|Add-Member ScriptMethod Item {param($n);return $this.Pane}
-$app=[pscustomobject]@{OutputWindows=$ow}
+$app=[pscustomobject]@{OutputWindows=$ow;ActiveProject=[pscustomobject]@{IsModified=$false}}
 function Connect-App {return $app}
 $acc=[pscustomobject]@{Rows=@('First error','Last error')}
 $acc|Add-Member ScriptMethod accName {param($n);if($n -lt 1){return 'SELF'};return $this.Rows[$n-1]}
@@ -61,4 +68,15 @@ $req.pane='Missing';Expect-Refusal {. $read};$req.pane='Errors'
 [MWW]::Ambiguous=$true;Expect-Refusal {. $read};[MWW]::Ambiguous=$false
 [MWW]::Accessible=$null;Expect-Refusal {. $read}
 $acc.Rows=@('First error','');[MWW]::Accessible=$acc;$req.limit=200;Expect-Refusal {. $read}
+$acc.Rows=@('First error','Last error');[MWW]::ParentVisible=$false
+. $read
+if([MWW]::RecoveryRequests -ne 1 -or $data.count -ne 2 -or -not [MWW]::ParentVisible){throw 'Hidden pane was not recovered exactly once'}
+. $read
+if([MWW]::RecoveryRequests -ne 1){throw 'Visible pane caused another toggle'}
+[MWW]::ParentVisible=$false;[MWW]::CommandVerified=$false;Expect-Refusal {. $read}
+if([MWW]::RecoveryRequests -ne 1){throw 'Unverified command posted'}
+[MWW]::CommandVerified=$true;[MWW]::Modal=$true;Expect-Refusal {. $read}
+if([MWW]::RecoveryRequests -ne 1){throw 'Modal IDE received command'}
+[MWW]::Modal=$false;[MWW]::PostAccepted=$false;Expect-Refusal {. $read}
+if([MWW]::RecoveryRequests -ne 2){throw 'Rejected command repeated'}
 Write-Output 'Output pane activation, zero-area sibling exclusion, ambiguity/read refusal and first/last row checks passed; no IDE input'

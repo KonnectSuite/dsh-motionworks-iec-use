@@ -2252,7 +2252,7 @@ function defineTools() {
         + 'the Message Window list control through MSAA and returns each line verbatim, e.g. '
         + '"No matching global variable found for \'x:y\' in resource \'Resource\'!". Panes: '
         + 'Errors (default), Warnings, Build, Infos, PLC Errors, Print, Statistics, SCC. '
-        + 'Activates the exact named pane and requires one visible list with nonzero area. '
+        + 'Activates the exact named pane, exposes a hidden Message Window through its verified native menu command, and requires one visible list with nonzero area. '
         + 'Unknown panes, ambiguous controls and unreadable rows refuse instead of returning another pane or a false empty result. '
         + 'AN EMPTY PANE IS NOT BY ITSELF A CLEAN BUILD: this tool also reads the compile state, and '
         + 'when the pane is empty while the project is NOT compiled it says so, because that pair is '

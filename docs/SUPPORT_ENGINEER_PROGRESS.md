@@ -18,7 +18,21 @@ and Make (already up to date), preserving those initial mistakes in the report.
 Skill guidance now names the actual tools and requires separate Build/Make
 checks. This is accepted with assisted follow-up, not complete autonomous
 acceptance. See ARYA_ENGINEERING_ACCEPTANCE_2026-10-05.md and the retained fixture
-receipts. A fresh autonomous run and broader graphical flows remain unverified.
+receipts. A fresh run now completed the bounded lifecycle without a corrective
+message, including autonomous diagnostics visibility recovery. It disclosed
+omitted flag enumeration and truncated code-check output; broader graphical
+flows through Arya remain unverified.
+
+The hidden Message Window recovery is now implemented directly in the plugin.
+The installed Mwt.exe menu resource 501 verifies View > Message Window command
+36554. The bridge posts it once only when the exact Message Window is hidden,
+refuses modal or unverified command identities, observes recovery, and preserves
+project modified state. Fixture-only `hidden_output_pane_live.ps1` passed with
+Errors 0, Warnings 0, Build 22 and Infos 9 unchanged across each recovery. Full
+saved/native fixture equality passed afterward. Receipt
+`hidden-output-f58454ca-2a2f-465a-a844-5d1b982921c2.json` retains this proof; the
+earlier off-screen experiment remains failed evidence. Zero current warning rows
+do not override the fresh lifecycle Build's 25 retained warnings.
 
 ## Updated tools verified in the running Arya chat
 

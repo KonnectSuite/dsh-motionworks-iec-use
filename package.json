@@ -103,6 +103,8 @@
     "test/native_group_grid_live.mjs",
     "test/native_group_reader.ps1",
     "test/output_pane.ps1",
+    "test/hidden_output_pane_live.ps1",
+    "test/diagnostic_render.mjs",
     "test/ide_ui_session.mjs",
     "!bridge/*.lock"
   ],

@@ -129,6 +129,39 @@ public class MWW {
   [DllImport("user32.dll")] public static extern IntPtr SetFocus(IntPtr h);
   [DllImport("user32.dll")] public static extern bool BringWindowToTop(IntPtr h);
   [DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr h, int c);
+  [DllImport("kernel32.dll", CharSet=CharSet.Unicode)] public static extern IntPtr LoadLibraryExW(string path, IntPtr file, uint flags);
+  [DllImport("kernel32.dll")] public static extern bool FreeLibrary(IntPtr module);
+  [DllImport("user32.dll")] public static extern IntPtr LoadMenuW(IntPtr module, IntPtr name);
+  [DllImport("user32.dll")] public static extern bool DestroyMenu(IntPtr menu);
+  [DllImport("user32.dll")] public static extern IntPtr GetSubMenu(IntPtr menu, int position);
+  [DllImport("user32.dll")] public static extern int GetMenuItemCount(IntPtr menu);
+  [DllImport("user32.dll")] public static extern uint GetMenuItemID(IntPtr menu, int position);
+  [DllImport("user32.dll", CharSet=CharSet.Unicode)] public static extern int GetMenuStringW(IntPtr menu, uint position, StringBuilder text, int size, uint flags);
+  public static bool HasMessageWindowCommand(string executable) {
+    // Read resource data only: never execute another module or guess a command.
+    IntPtr module = LoadLibraryExW(executable, IntPtr.Zero, 2);
+    if (module == IntPtr.Zero) return false;
+    IntPtr menu = IntPtr.Zero;
+    try {
+      menu = LoadMenuW(module, new IntPtr(501));
+      if (menu == IntPtr.Zero) return false;
+      int matches = 0;
+      for (int i=0; i<GetMenuItemCount(menu); i++) {
+        var label = new StringBuilder(512);
+        GetMenuStringW(menu, (uint)i, label, 512, 0x400);
+        if (label.ToString().Replace("&", "").Split('\t')[0] != "View") continue;
+        IntPtr sub = GetSubMenu(menu, i);
+        for (int j=0; j<GetMenuItemCount(sub); j++) {
+          label.Clear(); GetMenuStringW(sub, (uint)j, label, 512, 0x400);
+          if (label.ToString().Replace("&", "").Split('\t')[0] == "Message Window") {
+            if (GetMenuItemID(sub, j) != 36554) return false;
+            matches++;
+          }
+        }
+      }
+      return matches == 1;
+    } finally { if (menu != IntPtr.Zero) DestroyMenu(menu); FreeLibrary(module); }
+  }
   [DllImport("user32.dll")] public static extern IntPtr SetActiveWindow(IntPtr h);
   [DllImport("user32.dll")] public static extern bool AttachThreadInput(uint a, uint b, bool f);
   [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr h, out uint p);
@@ -2168,6 +2201,25 @@ while ($true) {
                         return $true
                     }
                     [void][MWW]::EnumChildWindows([IntPtr]$ideWin, $cbTop, [IntPtr]::Zero)
+                }
+
+                # Activate() can select a tab without exposing its hidden dock bar.
+                # Recover exactly View > Message Window via the installed menu
+                # resource, once, with no focus dependence, mouse or keyboard input.
+                if ($script:msgWin -and -not [MWW]::IsWindowVisible([IntPtr]$script:msgWin)) {
+                    if (-not [MWW]::IsWindowEnabled([IntPtr]$ideWin)) { throw 'IDE is modal; Message Window recovery refused' }
+                    $executable = (Get-Process -Id $idePid -ErrorAction Stop).Path
+                    if (-not $executable -or -not [MWW]::HasMessageWindowCommand($executable)) { throw 'Exact installed View > Message Window command not verified; recovery refused' }
+                    $modifiedBefore = [bool]$app.ActiveProject.IsModified
+                    if (-not [MWW]::PostMessage([IntPtr]$ideWin, 0x0111, [IntPtr]36554, [IntPtr]::Zero)) { throw 'Message Window command not accepted' }
+                    $recoveryDeadline = (Get-Date).AddSeconds(4)
+                    while (-not [MWW]::IsWindowVisible([IntPtr]$script:msgWin) -and (Get-Date) -lt $recoveryDeadline) { Start-Sleep -Milliseconds 100 }
+                    if (-not [MWW]::IsWindowVisible([IntPtr]$script:msgWin)) { throw 'Message Window recovery unverified; do not repeat the toggle' }
+                    [void](Assert-StagedOpen $app 'read_output')
+                    if ([bool]$app.ActiveProject.IsModified -ne $modifiedBefore) { throw 'Project modified state changed during Message Window recovery' }
+                    $w.Activate()
+                    Start-Sleep -Milliseconds 700
+                    Log 'read_output exposed hidden Message Window via verified native command 36554'
                 }
 
                 $script:best = $null

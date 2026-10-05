@@ -15,6 +15,12 @@ invoke `mw_ide_build`, then `mw_ide_make`, and inspect `mw_ide_errors` plus
 `mw_ide_compile_state`. Build and Make are separate tools; an up-to-date Make
 verdict does not establish another fresh compilation. Track requested checks
 until they are actually called; disclose any omitted check or corrective follow-up.
+Use `mw_ide_errors` directly even when the Message Window is hidden. It can expose
+that dock bar through the verified installed native View command; no mouse or
+hotkey recovery is needed. If command identity, modal state or resulting pane
+identity cannot be proven, it refuses rather than toggling repeatedly. Retain
+the diagnostics from fresh Build: Make may clear them, so an empty later pane
+does not erase earlier warnings.
 The DEFAULT is IDE-FIRST: the agent actually enters code and declarations in MotionWorks.
 Prefer a verified native IDE operation over mouse/grid input. Use known keyboard
 commands when the native API does not support the operation; inspect the resulting
