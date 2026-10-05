@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Align the public graphical edit guide with the verified multi-contact ladder
+  keyboard selection and assigned two-block FBD workflow. Document the live Arya
+  host restart needed to replace cached plugin code. Include a read-only full
+  saved/native fixture baseline and cleanup audit for Arya engineering tests.
+
 - Teach verified keyboard selection and Ctrl+T ladder branches spanning several
   contacts. A two-contact serial path with a parallel Alternate contact passed
   exact compiler-instruction, declaration/flag/collateral and cleanup checks.

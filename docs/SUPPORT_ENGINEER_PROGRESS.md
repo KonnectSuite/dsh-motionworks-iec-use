@@ -2,6 +2,17 @@
 
 This is work in progress. Version 0.5.5 did not establish complete IDE control.
 
+## Updated tools verified in the running Arya chat
+
+The authorized October 5 read-only check exposed stale executable caching after
+a plugin disable/re-enable: 61 tools and archived discovery remained while the
+skill text updated from disk. Application > Restart App and Host fixed it.
+The fresh running-chat request exposed all 62 tools, including variable groups;
+skill loading, current-project discovery, native IDE state and report-only trial
+checks passed. Exact record references are in SESSION_RUNTIME_AUDIT_2026-10-05.md.
+This establishes live catalog/read-only execution; it does not establish an
+Arya-led editing lifecycle or arbitrary graphical work.
+
 ## Multi-contact ladder branch and keyboard selection
 
 Fresh `ld-branch-df0f0799-47e8-4b87-b07f-437bbe83dd7d.json` is cleaned,
@@ -42,8 +53,8 @@ Next investigate the grid difference with a retained raw before/after stream,
 complete native global flags/membership and an explicitly scoped fresh fixture.
 No failed mutation should be repeated; all scratch mutations already completed.
 
-Running Arya chat catalog exposure remains unverified; installed host registration
-alone does not prove a chat has reloaded the plugin.
+Installed-host registration alone does not prove a chat has reloaded the plugin.
+The subsequent live-chat check and full host restart above establish exposure.
 
 ### Raw grid follow-up and discovery correction
 
