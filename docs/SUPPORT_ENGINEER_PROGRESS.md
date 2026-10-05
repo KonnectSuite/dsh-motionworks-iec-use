@@ -2,6 +2,29 @@
 
 This is work in progress. Version 0.5.5 did not establish complete IDE control.
 
+## CamGenerator saved compiler metadata
+
+The installed CamGenerator `tmp.sto` contains a readable `@$@$@$@$.clu`
+declaration listing even though its Variables.VB worksheet is unsupported.
+The fixture's ICI00036.DIT names the same 140 source declarations plus a generated
+private `@T_Code_00` row. The dependency parser previously missed that row and
+rejected the complete 141-row table. It now recognizes the observed private
+temporary spelling for completeness, but never exposes it as a public pin.
+Unknown private spellings, duplicate ordinals and private names in public
+sections remain refused. Nine graphical-listing regressions passed.
+
+The opt-in read-only `test/cam_dependency_saved.py` compared the actual library
+declaration listing with the actual saved dependency and resolved all eight
+public pin names/directions. It retains explicit type names from the listing and
+hashes of both caches, source container and library registry. All watched hashes
+remained unchanged. Evidence:
+`cam-dependency-saved-f925415c-231c-4769-8872-29fde7da1e11.json`.
+This is saved metadata evidence, with freshness_verified=false; it does not prove
+a fresh native Build, a newly inserted CamGenerator, runtime cam behavior or
+decompression of Variables.VB. The public block-interface tool still refuses that
+worksheet. Next bind this alternative declaration source to verified native
+library identity and fresh compiler/source evidence before permitting insertion.
+
 ## October 5 wrap-up and next acceptance test
 
 Startup inspection found a concrete mismatch: the interactive Mwt launcher used

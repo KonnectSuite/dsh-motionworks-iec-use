@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Count the observed private `@T_Code_00` compiler temporary when validating FB
+  dependency completeness, while excluding it from public pins. CamGenerator's
+  saved 141-row dependency and eight public pins passed read-only comparison;
+  compressed worksheet decoding and fresh live insertion remain unsupported.
+
 - Launch the interactive MotionWorks IDE with a normal visible window instead of
   hiding a frame that native readiness requires to be visible. Preserve the
   existing-process recovery path after timeout; refuse disabled frames before

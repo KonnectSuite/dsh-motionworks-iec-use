@@ -10,7 +10,9 @@ from pathlib import Path, PureWindowsPath
 HEADER = re.compile(r'\A\(\*\s*T: (PROGRAM|FUNCTION_BLOCK|FUNCTION) ([A-Za-z_][A-Za-z_0-9]*)\s', re.S)
 SYMBOL = re.compile(r'@IFBP (\d+)\.(\d+)(?![\d.])|@(RV|IV|IFB) (\d+)(?!\d)')
 DECLARATION = re.compile(r'^([A-Za-z_][A-Za-z_0-9]*)\t(\d+)\t(VAR[A-Z_]*)\t([^\r\n]+)\r?\n([^;]*);', re.M)
-DEPENDENCY_DECLARATION = re.compile(r'^([A-Za-z_][A-Za-z_0-9@]*)\t(\d+)\t(VAR[A-Z_]*)\t([^\r\n]+)\r?\n([^;]*);', re.M)
+# Generated private code temporaries are counted for completeness, never exposed
+# as public pins. CamGenerator contains @T_Code_00 after its 140 source rows.
+DEPENDENCY_DECLARATION = re.compile(r'^((?:[A-Za-z_][A-Za-z_0-9@]*|@T_Code_[0-9]+))\t(\d+)\t(VAR[A-Z_]*)\t([^\r\n]+)\r?\n([^;]*);', re.M)
 MAX_BYTES = 2_000_000
 
 

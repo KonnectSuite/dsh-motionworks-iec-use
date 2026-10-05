@@ -96,6 +96,7 @@
     "test/user_library_interface_live.mjs",
     "test/installed_help.py",
     "test/graphical_listing.py",
+    "test/cam_dependency_saved.py",
     "test/graphical_listing.mjs",
     "test/pou_package.mjs",
     "test/pou_conversion.mjs",

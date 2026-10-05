@@ -122,6 +122,20 @@ class Listing(unittest.TestCase):
             dependency.unlink()
             with self.assertRaises(FileNotFoundError):inspect(project,'Main')
 
+    def test_generated_code_temporary_counts_without_becoming_a_public_pin(self):
+        with tempfile.TemporaryDirectory() as temp:
+            project,path,dependency,text=self.fb_fixture(Path(temp))
+            dependency.write_text(text.replace('Code@@80','@T_Code_00'))
+            pins=[line['symbols'][0] for line in inspect(project,'Main')['networks'][0]['lines']]
+            self.assertEqual([pin['declaration']['name'] for pin in pins],['Q','ET'])
+            path.write_text(CODE.replace('@IV 1','@IFBP 3.5'))
+            self.assertFalse(inspect(project,'Main')['networks'][0]['lines'][0]['symbols'][0]['resolved'])
+            for bad in [text.replace('Code@@80','@Unknown'),
+                        text.replace('Code@@80\t5\tVAR','@T_Code_00\t5\tVAR_INPUT'),
+                        text.replace('Code@@80\t5','@T_Code_00\t4')]:
+                dependency.write_text(bad)
+                with self.assertRaises(ValueError):inspect(project,'Main')
+
     def test_fb_dependency_changed_after_read_refused(self):
         with tempfile.TemporaryDirectory() as temp:
             project,path,dependency,text=self.fb_fixture(Path(temp))
