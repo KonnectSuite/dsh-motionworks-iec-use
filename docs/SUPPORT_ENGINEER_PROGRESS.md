@@ -58,6 +58,13 @@ listing, so this was not an exclusively MotionWorks-tool-only turn. The source
 baseline check passed again after the chat ended. Retained actual tool evidence:
 `arya-hidden-diagnostics-chat-evidence.json` in the fixture verification folder.
 
+Visibility is now checked before COM tab activation, because activation itself
+can expose a hidden dock bar. The strengthened native test explicitly records
+one verified command recovery per hidden setup. Receipt
+`hidden-output-c612c1e6-75c6-46bc-82d5-03e7b5cfe432.json` proves all four command
+paths, unchanged diagnostics and restored visible layout. Earlier readable-pane
+checks alone were weaker evidence of which recovery route ran.
+
 ## Updated tools verified in the running Arya chat
 
 The authorized October 5 read-only check exposed stale executable caching after

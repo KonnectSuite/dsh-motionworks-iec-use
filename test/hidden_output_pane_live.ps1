@@ -14,7 +14,8 @@ foreach($name in 'Get-IdeWindow','Get-IdePid'){
 }
 $app=New-Object -ComObject Ade.Application.550
 function Connect-App {return $app}
-function Log {param($message)}
+$script:recoveries=@()
+function Log {param($message);$script:recoveries+=$message}
 function Assert-StagedOpen {param($app,$verb)
  if(-not $app.IsProjectOpen -or [IO.Path]::GetFullPath([string]$app.ActiveProject.FullName) -ne [IO.Path]::GetFullPath($project)){throw 'Fixture identity mismatch'}
 }
@@ -42,6 +43,7 @@ try{
   Start-Sleep -Milliseconds 700
   if([MWW]::IsWindowVisible($root)){throw 'Hidden setup not observed'}
   . $read;$hidden=$data
+  if($script:recoveries.Count -ne $record.panes.Count+1){throw 'Exact native recovery command path was not observed once per hidden setup'}
   if(-not [MWW]::IsWindowVisible($root)){throw 'Native recovery did not expose parent'}
   if(($before.lines|ConvertTo-Json -Compress) -cne ($hidden.lines|ConvertTo-Json -Compress)){throw "Hidden $pane diagnostics differ"}
   . $read;$restored=$data
@@ -50,6 +52,7 @@ try{
  }
  if(-not ($record.panes | Where-Object {$_.count -gt 0})){throw 'Nonempty diagnostic evidence required'}
  $record.accepted=$true
+ $record.native_recovery_messages=$script:recoveries
 }catch{$record.error=$_.Exception.Message;throw}
 finally{
  if($root -ne [IntPtr]::Zero -and $visible){

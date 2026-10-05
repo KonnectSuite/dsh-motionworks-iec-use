@@ -2176,11 +2176,9 @@ while ($true) {
                 $ow = $app.OutputWindows
                 for ($i = 1; $i -le $ow.Count; $i++) {
                     $w = $ow.Item($i)
-                    if ("$($w.Name)" -ceq $name) { $w.Activate(); $activated = $true; break }
+                    if ("$($w.Name)" -ceq $name) { $activated = $true; break }
                 }
                 if (-not $activated) { throw "No exact output pane '$name'; no diagnostic list was read" }
-                Start-Sleep -Milliseconds 700
-
                 $idePid = Get-IdePid
 
                 # Find the MESSAGE WINDOW first, then read only its lists.
@@ -2217,10 +2215,12 @@ while ($true) {
                     if (-not [MWW]::IsWindowVisible([IntPtr]$script:msgWin)) { throw 'Message Window recovery unverified; do not repeat the toggle' }
                     [void](Assert-StagedOpen $app 'read_output')
                     if ([bool]$app.ActiveProject.IsModified -ne $modifiedBefore) { throw 'Project modified state changed during Message Window recovery' }
-                    $w.Activate()
-                    Start-Sleep -Milliseconds 700
                     Log 'read_output exposed hidden Message Window via verified native command 36554'
                 }
+                # Select the requested tab only after visibility recovery. This
+                # keeps activation side effects from masking a hidden baseline.
+                $w.Activate()
+                Start-Sleep -Milliseconds 700
 
                 $script:best = $null
                 $script:readableLists = @()
