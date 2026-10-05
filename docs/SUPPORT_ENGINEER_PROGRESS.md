@@ -2,6 +2,12 @@
 
 This is work in progress. Version 0.5.5 did not establish complete IDE control.
 
+The October 5 field export demonstrates repeated successful native edits,
+navigation and compilation; see [field session audit](FIELD_SESSION_AUDIT_2026-10-05.md)
+for actual result counts, refusals, release notes and remaining acceptance work.
+The latest polish routes unassigned-POU warnings to native task assignment and
+makes stage identity/backup recovery explicit without bypassing provenance guards.
+
 ## Arya toolbox graphical test: partial, stopped
 
 The authorized fixture chat's next test ended at sequence 1657. Arya read both

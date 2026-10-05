@@ -1124,9 +1124,11 @@ async function unassignedWarning(project, names) {
     if (!hit.length) return null;
     return `${hit.join(', ')} ${hit.length === 1 ? 'is' : 'are'} assigned to NO TASK, so `
       + `${hit.length === 1 ? 'it' : 'they'} will never run — and a clean build does NOT prove `
-      + `otherwise: a POU with an undeclared variable built cleanly while unassigned. Assign it in `
-      + `the MotionWorks Project Tree (right-click the task, add the program), then confirm with `
-      + `mw_code_tasks. A build attempted before that can stall for ~90s and end with an empty `
+      + `otherwise: a POU with an undeclared variable built cleanly while unassigned. Use `
+      + `mw_ide_task_change with operation:'assign', the exact task, POU and unique instance, `
+      + `and baseline_saved:true after reconciling saved state. Confirm with mw_code_task_model `
+      + `and mw_code_tasks. Task assignment changes execution and must be in the authorized scope. `
+      + `A build attempted before that can stall for ~90s and end with an empty `
       + `Errors pane.`;
   } catch {
     // No project, no task list, or no IDE: the warning is worth having and not worth failing for.
@@ -1162,7 +1164,11 @@ function assertProven(p) {
   if (!id?.source) {
     throw new Error(
       `REFUSED: staged project '${name}' has no recorded source, so it will not be opened or edited. `
-      + `Stage it from the workspace with mw_ide_stage. `
+      + `Inspect the sibling identity record '${identityPathFor(name)}'. Backups of a stage must `
+      + `include its expanded directory, .mwt and sibling .identity.json. Preserve existing staged `
+      + `edits; do not repair this by restaging over unsynced work or inventing an identity. `
+      + `Restore a verified matching identity only with reviewed backup recovery while the IDE is `
+      + `closed. Use mw_ide_stage from the original workspace source only for a reviewed fresh copy. `
       + `A program elsewhere can be read with reference: true.`,
     );
   }
@@ -1889,7 +1895,8 @@ function defineTools() {
           + (v.previous_embedded_path
             ? `The wrapper pointed at ${v.previous_embedded_path}; it now points at ${v.bound_to}. `
             : '')
-          + `Open with: ${v.staged_mwt}`,
+          + `Open with: ${v.staged_mwt}. Backups must also retain the expanded directory and sibling `
+          + `identity record: ${identityPathFor(v.name)}`,
         ),
       },
       presentCall: (a) => ({

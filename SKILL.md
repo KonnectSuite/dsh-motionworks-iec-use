@@ -274,6 +274,13 @@ For an existing stage, call `mw_workflow_check` with its explicit directory befo
 editing. It reports identity/binding problems, native validation and next steps without
 starting the IDE. In a relocated workspace it can inspect stale identities read-only;
 that does not authorize writes. Never clear this failure by restaging over unsynced work.
+Back up each stage as three matching items: its expanded project directory,
+the sibling `.mwt`, and the sibling `<project>.identity.json` under
+`.motionworks/stage/`. The identity is outside the expanded directory. Missing
+identity after restore is a provenance failure, not permission to manufacture
+one or overwrite current work. Inspect matching backup evidence and the source
+binding before reviewed recovery with the IDE closed. Relocated identities need
+separate binding review; copying one from another project does not establish it.
 Wrappers with no embedded absolute path can legitimately use their sibling directory;
 verify the IDE's actual project after opening instead of inventing a wrapper path.
 

@@ -59,6 +59,16 @@ reviewed correction, then fresh Build/Make and full source preservation checks.
    save/reopen/recompile; harness/UI capability tested; bench; field commissioning.
    No tool result promotes itself to the next evidence level.
 
+Stage backups must retain the expanded directory, sibling `.mwt` and sibling
+`<project>.identity.json` together. The identity sits in `.motionworks/stage`,
+outside the expanded directory; copying only the directory loses provenance.
+Before restoring, preserve current work and inspect the exact matching backup,
+recorded workspace/source/stage paths and wrapper binding. Perform approved
+recovery only with the IDE closed. A missing identity refusal must not trigger
+blind restaging, invented records or restoration from another project's identity.
+After recovery, use `mw_workflow_check` before opening, then verify the actual
+open project, source hashes, declarations, tasks and fresh compiler results.
+
 The official [core manuals page][core] contains both software and hardware editions;
 the linked programming manuals include 2013 MotionWorks IEC 2.5-era material.
 The [Application Code Toolboxes page][toolboxes] provides versioned releases and
