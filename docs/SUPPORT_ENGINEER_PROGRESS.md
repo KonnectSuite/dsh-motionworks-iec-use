@@ -34,6 +34,16 @@ saved/native fixture equality passed afterward. Receipt
 earlier off-screen experiment remains failed evidence. Zero current warning rows
 do not override the fresh lifecycle Build's 25 retained warnings.
 
+After installing the fix and restarting App and Host, the same Arya fixture
+chat passed a read-only hidden-window check (sequences 905-950). The skill reload
+was 906; Errors 912, Warnings 922, Build 924 and Infos 926 returned the expected
+0/0/22/9 rows. Compile state 914 was compiled=true, modified=false; task model
+916 contained the original five tasks and no scratch binding. Arya made no
+mouse/keyboard recovery calls; it also used read-only system status and element
+listing, so this was not an exclusively MotionWorks-tool-only turn. The source
+baseline check passed again after the chat ended. Retained actual tool evidence:
+`arya-hidden-diagnostics-chat-evidence.json` in the fixture verification folder.
+
 ## Updated tools verified in the running Arya chat
 
 The authorized October 5 read-only check exposed stale executable caching after
