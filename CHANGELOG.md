@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Verify a newly created native ST CamGenerator call on the exact disposable
+  fixture, including all eight pins, task assignment, fresh Build/Make and full
+  cleanup. Complete source/native baselines and all 357 installed library files
+  were preserved. Automatic insertion and protected source binding remain guarded.
+
 - Scope trial fallback input-thread attachments to one native button action,
   detach successful unique attachments on success/failure, and report cleanup
   failures without retrying an ambiguous action. Production-function regressions

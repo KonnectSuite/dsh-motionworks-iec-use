@@ -4,6 +4,25 @@ This is work in progress. Version 0.5.5 did not establish complete IDE control.
 
 ## CamGenerator saved compiler metadata
 
+A newly created CamGenerator call has now passed an offline native lifecycle.
+`CodexCamProof` was created as ST; native declarations added CamSegmentStruct,
+Y_MS_CAM_STRUCT, four output variables and a CamGenerator instance. Reviewed
+code bound both in-out structures, Execute=FALSE, TableSize=UDINT#2880 and all
+four outputs. A distinct BG instance was assigned. Fresh Build (6.8 seconds),
+Make, zero compiler errors, exact source read-back and all four fresh target
+compiler artifacts passed. This used the general native code API, not the
+guarded automatic FB insertion planner, and sent no desktop/controller input.
+
+Cleanup unassigned the exact scratch instance and deleted its POU, then passed
+fresh Build (5.5 seconds), Make and full original saved/native baseline checks.
+All 357 installed Cam Toolbox files remained hash-identical. Retained receipt:
+`cam-native-6e62a31e-9e6d-4fbc-b3a7-5d7cf3fa4491.json`, cleaned, accepted=true.
+`test/cam_native_lifecycle_live.mjs` retains each native action and supports
+explicit cleanup from its receipt after a stopped run. This proves the reviewed
+call compiles against these installed references; it does not prove cam runtime
+behavior, arbitrary protected block signatures, worksheet decoding or the
+library cache's source binding. Automatic insertion eligibility remains false.
+
 An authorized fresh native Build now passed on the exact disposable fixture:
 Compile(2) showed an observed pending-to-compiled transition and rewrote both
 ICI00036.DIT and TYLLIST.TYP during the request window. All eight diagnostic
