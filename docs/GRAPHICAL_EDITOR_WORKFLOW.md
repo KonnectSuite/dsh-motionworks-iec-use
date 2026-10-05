@@ -154,9 +154,8 @@ BOOL declaration. Inspect the actual symbol and connections after OK.
 
 For a single parallel contact, select the intended contact and use the observed
 Ctrl+F7 command; confirm the branch rejoins before the next serial object.
-Selecting the wrong contact creates a different expression. Installed
-`ld001/InsertingParallelLDBranches.htm` also documents multi-object branches
-with Ctrl+T, but that separate path was not exercised here. Verify it before use.
+Selecting the wrong contact creates a different expression. The multi-object
+Ctrl+T path is covered by the separate verified workflow below.
 
 The live canvas contained Run and Alternate in parallel, followed by normally
 closed Stop and the Ready coil. Fresh Build/listing and Make were clean and
@@ -173,3 +172,40 @@ the disposable verification directory. This proves the described basic ladder
 workflow, not arbitrary LD graphs or active Arya execution. Keep native
 workflows and companion input serialized throughout, and observe again after
 native calls before relying on keyboard focus or screen geometry.
+
+## Parallel branch spanning several contacts
+
+Installed `ld001/InsertingParallelLDBranches.htm` documents selecting several
+contacts and using Ctrl+T. Installed GraphEd001 topic
+`movingthecursorandmarkingobjectsinthegraphiceditorusingthekeyboard.htm`
+distinguishes the gray object cursor from explicit selection: arrow keys move
+the object cursor, Space selects, Shift+Space extends selection and Ctrl+Space
+toggles a member. Confirm the actual effect because shortcuts can be customized.
+
+The disposable probe first created `Run` and `Enable` contacts in series and a
+`Ready` coil through F6/F7 and observed Tab inline editing. Right moved the object
+cursor from Enable to the coil; Space selected it before Tab bound Ready.
+Fresh compiler read-back matched LD Run, AND Enable, ST Ready before branch work.
+
+For the branch, focus was restored inside the observed Run contact after native
+compilation. Right moved the object cursor to Enable, Shift+Space selected it,
+Left moved the object cursor back to Run while preserving Enable's selection,
+and Shift+Space extended the selection to Run. Both contacts were marked and the
+coil was excluded. Ctrl+T inserted one lower contact with a branch beginning
+before Run and rejoining after Enable. Tab opened that new contact's inline
+editor; its selected placeholder was replaced with the existing Alternate BOOL.
+The settled label and both branch junctions were inspected before native Save.
+
+Fresh Build/listing matched exactly LD Run, AND Enable, OR Alternate, ST Ready,
+representing `Ready := (Run AND Enable) OR Alternate`. Make passed. Complete
+native declaration fields, all six flags and groups stayed unchanged, as did
+tasks, globals and every unrelated source/translation. Saving introduced only
+the target code worksheet's empty translation file; its parsed empty ItemList
+was inspected and retained. Do not broadly ignore translation changes.
+
+Native unassignment/deletion and fresh Build/Make restored the exact full
+baseline, with zero errors. Evidence: `ld-branch-df0f0799-47e8-4b87-b07f-437bbe83dd7d.json`,
+phase cleaned, accepted=true, cleanup_verified=true. This proves a branch spanning
+two serial contacts, not arbitrary branch topologies or controller behavior.
+Observe again when an immediate screenshot is stale; do not repeat keys solely
+because the first capture still shows the old state.

@@ -439,5 +439,11 @@ current menu shortcuts, use F6 for a basic network, F7 for a serial contact and
 Ctrl+F7 for a single parallel contact. Name existing BOOL operands through an
 observed inline editor or Contact/Coil Properties, preserve declaration fields
 and flags, and match the intended expression to fresh compiler instructions.
-Multi-object Ctrl+T branches and arbitrary ladder graphs require separate
-verification. Keep native workflows and desktop input serialized.
+For a parallel path spanning several contacts, use the observed object-cursor
+and multi-selection workflow in that guide: arrow keys move the object cursor,
+Space selects and Shift+Space extends selection. Confirm the intended contacts
+are selected and the coil is excluded before Ctrl+T. A two-contact spanning
+branch compiled exactly as `(Run AND Enable) OR Alternate`, with native flags,
+collateral sources and exact cleanup verified. Arbitrary graphs still require
+their own geometry and instruction checks. Keep native workflows and desktop
+input serialized.

@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Teach verified keyboard selection and Ctrl+T ladder branches spanning several
+  contacts. A two-contact serial path with a parallel Alternate contact passed
+  exact compiler-instruction, declaration/flag/collateral and cleanup checks.
+  Include the fixture-only phased acceptance harness and empty target-translation
+  reconciliation without relaxing unrelated source checks.
+
 - Exclude `_backups` and case variants of known archive/runtime folders from
   automatic project discovery. Explicitly requested backup roots still work;
   the real cutter workspace now yields two current projects instead of archives.

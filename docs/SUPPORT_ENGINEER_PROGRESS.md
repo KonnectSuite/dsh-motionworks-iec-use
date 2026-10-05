@@ -2,6 +2,29 @@
 
 This is work in progress. Version 0.5.5 did not establish complete IDE control.
 
+## Multi-contact ladder branch and keyboard selection
+
+Fresh `ld-branch-df0f0799-47e8-4b87-b07f-437bbe83dd7d.json` is cleaned,
+accepted=true, cleanup_verified=true. Native APIs created an isolated LD PROGRAM,
+four BOOL declarations and a disposable BG assignment. F6/F7 and Tab inline
+editing established a serial rung whose fresh listing matched LD Run, AND Enable,
+ST Ready. Right/Space selected its coil through the documented object cursor.
+
+Right/Shift+Space/Left/Shift+Space selected both contacts while excluding the
+coil. Ctrl+T inserted a lower contact spanning those two serial contacts. Binding
+Alternate through Tab produced the observed branch and exact fresh instructions
+LD Run, AND Enable, OR Alternate, ST Ready. Make passed; complete native fields,
+six flags, groups and saved collateral matched. Save created an empty target-body
+translation file, accounted for only after parsed empty ItemList verification.
+Native cleanup and fresh Build/Make restored the exact full source/structure
+baseline with zero errors. The installed graphical guide and skill now teach
+this route. Arbitrary branch topologies and active Arya-led execution remain
+unverified. No online/controller operations occurred.
+
+The Windows capture helper failed FrameArrived and window-capture retries.
+The separately connected Konnect companion supplied observations and input;
+native operations and canvas input were serialized throughout.
+
 ## Native declaration groups and crash recovery
 
 The new `mw_ide_variable_group_change` registers as tool 62. Automated planning,
