@@ -1013,6 +1013,19 @@ const WRITE_SCHEMA = {
   },
 };
 
+function renderProgrammingReview(_a, v) {
+  const report = v?.result;
+  if (!report || !Array.isArray(report.findings) || !Array.isArray(report.coverage)) {
+    return text(`Programming review unverified: complete findings and coverage are unavailable.\n${JSON.stringify(v ?? {}, null, 2)}`);
+  }
+  // This is a read-only engineering report, not a write acknowledgement. The
+  // generic write preview truncated later findings, references and limitations.
+  return text(`Read-only programming review: ${report.findings.length} finding(s); `
+    + `errors=${report.errors ?? 'unknown'}, warnings=${report.warnings ?? 'unknown'}.\n`
+    + `Static source review only; compiler, controller, timing and motion behavior are not verified.\n`
+    + JSON.stringify(report, null, 2));
+}
+
 function renderWrite(_a, v) {
   // Why Array.isArray: `text()` returns ContentBlock[] and the two branches below each build one,
   // so appending a warning has to put it INSIDE the block, not beside it. Returning
@@ -2914,7 +2927,7 @@ function defineTools() {
         project: { type: 'string' }, pou: { type: 'string' }, body: { type: 'string' }, installed_interfaces: { type: 'boolean' },
         interface_libraries: {type:'object',description:'Explicit type-to-library selection for duplicate installed FB names, e.g. {TON: "IEC"}. Requires installed_interfaces:true; project-defined interfaces still take precedence.',additionalProperties:true},
       } },
-      output: { schema: WRITE_SCHEMA, render: renderWrite },
+      output: { schema: WRITE_SCHEMA, render: renderProgrammingReview },
       execute: async (args) => {
         const project=projectOf(args),request={...(args??{}),project};
         if(args?.installed_interfaces===true){

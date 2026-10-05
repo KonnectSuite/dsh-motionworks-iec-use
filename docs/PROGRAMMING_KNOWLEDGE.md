@@ -4,6 +4,14 @@ Current workflow: IDE-first editing, read-only offline review, and guarded nativ
 Build/Make verification. Read ENGINEERING_WORKFLOW.md for engineering decisions;
 IDE_FIRST_WORKFLOW.md governs editing. Historical tests are not current capability promises.
 
+`mw_code_check_program` returns the complete read-only report, including every
+finding, source reference, unresolved interface, reviewed/skipped POU and coverage
+limit. Zero static errors does not establish complete interface coverage or
+compiler acceptance. Duplicate block names require an explicit library selector;
+inspect the candidates before choosing one. An unreadable declaration interface
+remains unresolved. Use the compiler and exact installed interface tools for
+checks this source review cannot perform.
+
 ## Tools and working sequence
 
 | Tool | Purpose |

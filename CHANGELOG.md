@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Deliver complete programming-review findings, references, interface resolution
+  and coverage limits instead of a truncated write acknowledgement. Read-only
+  fixture testing retains the complete report and verifies source preservation.
+
 - Recover a hidden Message Window directly through the installed native View
   command, verified against its menu resource before posting once. Live fixture
   recovery preserves all four diagnostic panes and original project sources.

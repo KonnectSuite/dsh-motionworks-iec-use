@@ -2,6 +2,20 @@
 
 This is work in progress. Version 0.5.5 did not establish complete IDE control.
 
+## Complete programming-review output
+
+The generic write renderer previously cut programming-review output after 400
+characters. A dedicated read-only renderer now preserves the complete report,
+including final findings, citations, unresolved signatures and coverage limits.
+The focused render checks and live native-bound fixture check passed. Evidence
+`program-review-render-66e9a69a-b3f8-4509-9725-0426b757f560.json` retains the full
+14,326-character report and identical before/after source snapshot digests.
+Four ST POUs were reviewed, three graphical POUs explicitly skipped. It reported
+one warning about fbReadMaster's Error output, not a proven machine fault.
+TON remained ambiguous between IEC and eCLR; CamGenerator's declaration stream
+could not be parsed. Those unresolved interfaces are now visible to Arya. This
+test does not prove broader graphical analysis, timer timing or motion behavior.
+
 ## Running Arya native engineering lifecycle
 
 Authorized dedicated fixture session `d637dc30-4a0d-470d-8c45-f88c710d2be0`
