@@ -32,7 +32,7 @@ function Get-TrialDialog {if($script:trial){return @([IntPtr]200,[IntPtr]201)};r
 function Answer-TrialDialog {
  $script:answers++
  if($script:case -eq 'trial_unverified'){return @{dismissed=$false}}
- $script:trial=$false;$script:window=[IntPtr]123;return @{dismissed=$true}
+ $script:trial=$false;$script:window=[IntPtr]123;return @{dismissed=$true;method='fixture_single_action'}
 }
 function Get-Date {
  $script:clockCalls++
@@ -49,7 +49,7 @@ function Reset-Case($name){
  $script:case=$name;$script:already=$false;$script:trial=$false;$script:window=$null
  $script:launches=0;$script:answers=0;$script:connections=0;$script:clockCalls=0
  [MWW]::Enabled=$true
- $script:req=@{path='C:\fixture\stage\Probe.mwt';wrapper_sha256='verified-hash';exe='C:\fixture\Mwt.exe'}
+ $script:req=@{path='C:\fixture\stage\Probe.mwt';wrapper_sha256='verified-hash';exe='C:\fixture\Mwt.exe';include_trial_method=$true}
 }
 Reset-Case 'fresh';. $startup
 if($script:launches -ne 1 -or $script:connections -ne 1 -or $data.already_running){throw 'Fresh visible launch not accepted'}
@@ -57,6 +57,9 @@ Reset-Case 'existing';$script:already=$true;$script:window=[IntPtr]123;. $startu
 if($script:launches -ne 0 -or $script:connections -ne 1 -or -not $data.already_running){throw 'Existing IDE relaunched'}
 Reset-Case 'trial';$script:already=$true;$script:trial=$true;. $startup
 if($script:launches -ne 0 -or $script:answers -ne 1 -or -not $data.trial_answered){throw 'Existing pre-frame trial not answered exactly once'}
+if($data.trial_method -cne 'fixture_single_action'){throw 'Verified trial method omitted from startup evidence'}
+Reset-Case 'trial';$script:already=$true;$script:trial=$true;$req.Remove('include_trial_method');. $startup
+if($data.Contains('trial_method') -or -not $data.trial_answered){throw 'Cached caller schema changed or trial result lost'}
 foreach($name in @('trial_unverified','disabled','timeout','bad_hash')){
  Reset-Case $name
  if($name -eq 'trial_unverified'){$script:already=$true;$script:trial=$true}

@@ -2467,11 +2467,11 @@ function defineTools() {
     {
       name: 'mw_ide_start',
       description:
-        'Start MotionWorks IEC (a bare Mwt.exe launch, no project), including an approved close/reopen persistence check. '
+        'Start MotionWorks IEC visibly with the verified workspace project wrapper. '
         + 'Resolves the exact native Use Trial prompt during initial startup or an already-running blocked startup; do not launch a second IDE. '
         + 'Source edits happen inside the open IDE. '
-        + 'Follow it with mw_ide_open to load a project: a '
-        + 'freshly launched IDE has no project services until one is opened. If MotionWorks '
+        + 'Inspect mw_ide_status afterward; continue the exact stage if it is already open, '
+        + 'or use mw_ide_open when no project is open. If MotionWorks '
         + 'restores another project, it is left open until the user approves saving and closing it.',
       parameters: {
         type: 'object',
@@ -2496,6 +2496,7 @@ function defineTools() {
               description: 'A licence/trial dialog appeared during startup and was answered.',
             },
             trial_answered: { oneOf: [{ type: 'boolean' }, { type: 'null' }] },
+            trial_method: { oneOf: [{ type: 'string' }, { type: 'null' }] },
             dismissed_project: { oneOf: [{ type: 'string' }, { type: 'null' }] },
             foreign_project: { oneOf: [{ type: 'string' }, { type: 'null' }] },
           },
@@ -2503,6 +2504,7 @@ function defineTools() {
         render: (_a, v) => text(
           `MotionWorks IEC ${v.version} running at ${v.ide_window}`
           + (v.already_running ? ' (was already up)' : ' (launched)')
+          + (v.trial_dialog ? `. Use Trial closure verified${v.trial_method ? ' via '+v.trial_method : ''}` : '')
           + (v.foreign_project
             ? `. Another project is open (${v.foreign_project}). Ask the user before saving and closing it; do not build it.`
             : ''),
@@ -2516,6 +2518,7 @@ function defineTools() {
         const path = `${projectOf(args)}.mwt`;
         const binding = await runCode('check_mwt', { project: path });
         return verb('start_ide', {
+          include_trial_method: true,
           ...(args?.exe ? { exe: String(args.exe) } : {}),
           path, wrapper_sha256: binding.wrapper_sha256,
         }, 330000);

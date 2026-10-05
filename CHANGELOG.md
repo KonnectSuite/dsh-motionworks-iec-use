@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+- Verify fresh visible fixture startup and real Use Trial dismissal through the
+  native posted button fallback, including scoped input-thread cleanup, fresh
+  Build/Make and complete baseline preservation. Report the verified trial method
+  only to requesting callers, preserving cached callers' closed output schema,
+  and correct stale bare-launch guidance.
+
+- Verify connected CommWatchdog inline replacement through the supported
+  foreground-input companion, preserving editor focus and comparing every
+  compiler instruction. Teach this path separately from companions requiring a
+  window handle; never bypass required handle guards. Exact scratch cleanup and
+  fresh Build/Make passed on the reconciled disposable fixture baseline.
+
 - Read complete native declarations through interop generated locally from the
   exact verified installed SDK. Preserve all fields and six flags, use the full
   legacy reader for unknown SDKs or initialization failures, and propagate native

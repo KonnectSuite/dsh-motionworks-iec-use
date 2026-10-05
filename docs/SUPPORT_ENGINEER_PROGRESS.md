@@ -2,6 +2,52 @@
 
 This is work in progress. Version 0.5.5 did not establish complete IDE control.
 
+## Fresh visible startup and real trial dismissal accepted
+
+`startup-trial-7b8164f8-3209-4733-b042-0d69e677a2ae.json` is accepted=true,
+trial_popup_verified=true. The clean disposable fixture IDE was closed normally,
+its old process/window was confirmed absent without repeating Alt+F4, and the
+public native start tool launched one visible Mwt process with the verified
+wrapper. A real Use Trial dialog appeared and the production posted_bm_click
+fallback verified closure. This also exercised the scoped input-thread detach
+fix. The ready frame was visible, enabled and unblocked; no verifier or modal
+remained. New Mwt PID 24380, frame 0x40920. The exact fixture was open. Fresh Build
+and Make compiled successfully with modified=false, and full native package and
+saved source/translation baselines matched. No customer/controller action occurred.
+
+The start tool's stale bare-launch description now matches its verified-wrapper
+launch. New callers request and receive the verified trial method; cached callers
+retain their existing closed output schema. Synthetic startup tests cover both
+output shapes. Existing-process blocked-start recovery, other licence states and
+running Arya chat execution remain distinct acceptance work; this proves the
+actual fresh startup path, not every possible popup or complete autonomy.
+
+## Connected CommWatchdog inline replacement accepted
+
+Fresh `comm-graph-92b2b405-c83a-464d-94a5-897f23d9801d.json` is cleaned,
+accepted=true and cleanup_verified=true. Native APIs created the ST PROGRAM,
+declarations, installed FB call, BG assignment and reviewed FBD conversion.
+The foreground companion selected the actual connected WatchDog operand,
+opened Tab inline editing, selected only its text with Ctrl+A, typed DINT#2000
+and committed with Enter. Separate observations checked each step. No activation
+or native workflow was interleaved while the inline box was open. The current
+companion API has no handle parameter; it was used as supported, without
+bypassing the earlier handle-based companion's guard. Window enumeration returned
+only the main frame, accessibility was null, and immediate Tab/Enter captures
+were stale. Those observations did not trigger repeated input or focus recovery.
+
+Fresh native Save/Build/listing compared every normalized instruction: only the
+typed load feeding WatchDog changed from DINT#1000 to DINT#2000. All seven pins,
+declarations/flags, task assignment and unrelated sources/translations matched.
+Make and zero-error checks passed. Native unassign/delete, final Build/Make and
+the complete preparation-time saved/native baseline matched after cleanup. This
+baseline includes the separately verified global grid counter checkpoint above;
+no new global counter change occurred. The earlier wrong extra-operand failure
+remains retained. Guides now distinguish actual supported companion APIs and
+teach the verified focus-preserving path. Native own-window screenshot capture
+with an active inline editor, trial startup and arbitrary graphical editing are
+still separate requirements; fresh startup/trial acceptance is recorded above.
+
 ## Native declaration reader performance investigation
 
 Read-only benchmarks now compared all 429 declarations across globals and seven

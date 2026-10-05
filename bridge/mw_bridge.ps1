@@ -2044,6 +2044,7 @@ while ($true) {
                 }
                 $already = [bool](Get-Process -Name Mwt -ErrorAction SilentlyContinue)
                 $trialAnswered = $null
+                $trialMethod = $null
                 $trialSeen = $false
                 if (-not $already) {
                     if (-not (Test-Path $exe)) { throw "Mwt.exe not found at $exe" }
@@ -2059,6 +2060,7 @@ while ($true) {
                         $trialSeen = $true
                         $answer = Answer-TrialDialog
                         $trialAnswered = [bool]$answer.dismissed
+                        $trialMethod = [string]$answer.method
                         if (-not $trialAnswered) { throw 'Use Trial was submitted but closure was not verified; inspect mw_ide_trial before further input' }
                     }
                     $readyWindow = Get-IdeWindow
@@ -2102,6 +2104,8 @@ while ($true) {
                     dismissed_project  = $dismissed
                     foreign_project    = $foreign
                 }
+                # Cached callers retain their existing closed output schema.
+                if ($req.include_trial_method -eq $true) { $data.trial_method=$trialMethod }
             }
 
             # What the IDE is ACTUALLY doing, including modal dialogs the COM API

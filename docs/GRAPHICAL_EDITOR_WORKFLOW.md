@@ -11,8 +11,9 @@ Native screenshot capture now preserves foreground/active/focused window identit
 and never activates or restores the main frame. Minimized capture and an unsafe
 screen fallback are refused. Own-window rendering may omit a separately owned
 inline dialog, so use the companion observation for that editor. This change
-has passed stable live capture and refusal tests; capture with an actual inline
-editor open and a correct CommWatchdog operand replacement remain the next test.
+has passed stable live capture and refusal tests. Capture with an actual inline
+editor open remains unverified. The separate companion path below now passed a
+correct connected CommWatchdog operand replacement and compiler comparison.
 
 Assigned two-block acceptance on October 3 used native ST insertion of IEC TON
 and Yaskawa_Toolbox_v375 TON_Retentive followed by reviewed native FBD conversion.
@@ -100,11 +101,37 @@ parallel branch. Do not reuse example coordinates across layouts.
 ### Inline editor window identity
 
 Tab can open a temporary `#32770` window at the selected operand. Its foreground
-handle differs from the main IDE handle. A keyboard refusal against the main
-handle does not mean the editor is broken, and omitting `window_handle` also
-refuses input. Keep the guard intact.
+handle can differ from the main IDE handle. Use the actual companion's supported
+input API. If it requires `window_handle`, a keyboard refusal against the main
+handle does not mean the editor is broken: identify the visible inline window
+and keep the required handle guard intact.
 
-After observing the inline box, use the companion's element metadata on the
+The current foreground-input companion also has a verified route when its API
+does not accept a window handle. In the October 5 disposable CommWatchdog test:
+
+1. One click selected the existing connected DINT#1000 operand. Tab opened its
+   inline editor. An immediate screenshot showed only the selected label;
+   `list_windows` returned only the main frame and accessibility returned null.
+   These observations did not justify switching focus or repeating Tab.
+2. Ctrl+A through the supported foreground keyboard API, without activating a
+   window, followed by a fresh screenshot showed the actual combo-box editor
+   with only DINT#1000 highlighted. The canvas objects were not selected.
+3. Literal DINT#2000 was typed through that same API. A fresh screenshot showed
+   the new text in the box before Enter. No native workflow, activation or focus
+   recovery was interleaved while the box was open.
+4. Enter committed the editor. The immediate capture still showed the old label;
+   selecting blank canvas then revealed the settled connected DINT#2000. Do not
+   repeat an acknowledged edit because its immediate capture is stale.
+
+Fresh Save, graphical Build/listing and Make accepted exactly the changed typed
+load feeding WatchDog, with the other instructions, seven pins, declarations,
+flags and unrelated sources unchanged. Do not type unless the current
+observation proves text selection inside the intended inline box. If Ctrl+A
+selects canvas objects instead, stop and reobserve; do not send replacement text.
+This route does not bypass a companion that requires a handle or prove arbitrary
+editor focus. It was exercised through the foreground-input companion API.
+
+For a handle-based companion, after observing the inline box use its element metadata on the
 exact IDE window to identify that visible, enabled inline window. Match its
 process and rectangle to the observed operand; refuse multiple or unrelated
 dialogs. Use its freshly returned handle for Ctrl+A, literal replacement text
@@ -120,9 +147,15 @@ canvas to its baseline before Save/Build. A previous handle became invalid after
 focus. Never reuse it after closing/reopening the editor or focus recovery.
 
 Do not focus the main frame between opening the inline box and typing, since
-that can close the box. The companion's `get_active` operation failed in this
-installed runtime; element metadata supplied the observed handle instead.
+that can close the box. In the earlier handle-based runtime, `get_active` failed
+and element metadata supplied the observed handle instead.
 Close/commit the box before native Save, Build or other native workflows.
+
+The new CommWatchdog receipt is
+`comm-graph-92b2b405-c83a-464d-94a5-897f23d9801d.json`, phase cleaned,
+accepted=true. Scratch unassign/delete, fresh Build/Make and complete saved/native
+baseline comparison passed. The original failed receipt remains failed; this
+fresh test establishes the corrected path without rewriting that evidence.
 
 If a recent scratch insertion is wrong, inspect the actual Undo command and
 its result. One observed Ctrl+Z removed the mistaken operand here. Do not use

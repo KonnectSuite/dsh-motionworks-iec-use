@@ -488,9 +488,13 @@ their own geometry and instruction checks. Keep native workflows and desktop
 input serialized.
 
 Graphical Tab inline editors can own a temporary foreground window handle.
-Observe its visible enabled element metadata and exact operand rectangle, then
-use that freshly returned handle for Ctrl+A, typing and Enter. The main IDE
-handle may be refused while the inline box is active. Do not omit the handle,
-weaken the keyboard guard, or focus the main frame and close the box. See the
-graphical guide's inline window identity procedure; commit the box before native
-Save/Build.
+If the companion requires a handle, observe the inline window's visible enabled
+metadata and exact operand rectangle and use its fresh handle. Do not omit a
+required handle or weaken that guard. If the companion exposes supported
+foreground keyboard input, use that API without reactivating the main frame:
+Tab, observed Ctrl+A text selection, literal replacement, observed text, Enter,
+and a fresh settled observation. The CommWatchdog connected constant edit passed
+this route with exact compiler comparison. Stop before typing if Ctrl+A selects
+canvas objects. See the graphical guide's inline window identity procedure;
+commit the box before native Save/Build. An immediate stale screenshot alone is
+not a reason to repeat an acknowledged edit.
