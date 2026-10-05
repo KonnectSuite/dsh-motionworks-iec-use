@@ -16,6 +16,15 @@ TON remained ambiguous between IEC and eCLR; CamGenerator's declaration stream
 could not be parsed. Those unresolved interfaces are now visible to Arya. This
 test does not prove broader graphical analysis, timer timing or motion behavior.
 
+The installed fix was verified after an Arya host restart in the same authorized
+fixture chat (ending sequence 994). Actual tool result 970 contained all 14,326
+characters and parsed exactly equal to the retained native-bound engine report.
+Arya's response 992 explicitly confirmed the final limitations arrived, reported
+all findings and both unresolved interfaces, and used one read-only ST read to
+corroborate its warning. No source or IDE editing occurred. The full fixture
+baseline check passed after completion. Actual tool evidence is retained as
+`arya-program-review-chat-evidence.json` in the fixture verification folder.
+
 ## Running Arya native engineering lifecycle
 
 Authorized dedicated fixture session `d637dc30-4a0d-470d-8c45-f88c710d2be0`
