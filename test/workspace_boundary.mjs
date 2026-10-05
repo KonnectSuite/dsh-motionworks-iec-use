@@ -24,6 +24,16 @@ try {
   const a = join(root, 'a'), b = join(root, 'b');
   const sourceA = source(a), sourceB = source(b);
   const original = readFileSync(sourceA);
+  await check('automatic discovery excludes backup archives in either casing; explicit backup lookup still works', async () => {
+    for(const folder of ['backups','_BACKUPS','Node_Modules','Stage'])source(join(a,folder));
+    source(join(a,'BackupPump'));
+    const found=await run('mw_project_find',{},a);
+    assert.equal(found.count,2);
+    assert.ok(found.projects.every(p=>p.mwt===sourceA||p.mwt===join(a,'BackupPump','Machine.mwt')));
+    const archived=await run('mw_project_find',{root:'_BACKUPS'},a);
+    assert.equal(archived.count,1);
+    assert.equal(archived.projects[0].mwt,join(a,'_BACKUPS','Machine.mwt'));
+  });
   delete process.env.MOTIONWORKS_MCP_WORKSPACE;
   await check('missing session refuses rather than using process cwd', async () => {
     await assert.rejects(tools.get('mw_project_find').execute({}, {}), /no session workspace/);

@@ -230,8 +230,9 @@ function isInsideWorkspace(target) {
   }
 }
 
-//: Directories that never hold a user's project and are expensive to walk.
-const SKIP_DIRS = new Set(['node_modules', '.git', 'stage', 'backups', '__pycache__',
+// Avoid surfacing archived copies as current projects during automatic discovery.
+// An explicitly requested root can still be a backup directory.
+const SKIP_DIRS = new Set(['node_modules', '.git', 'stage', 'backups', '_backups', '__pycache__',
                            'chm_out', 'help_extract', '.dsh']);
 
 /**
@@ -252,7 +253,7 @@ function findProjects(root, maxDepth = 5) {
       if (found.length >= 50) return;
       if (entry.name.startsWith('.') && entry.name !== '.') continue;
       if (entry.isDirectory()) {
-        if (SKIP_DIRS.has(entry.name)) continue;
+        if (SKIP_DIRS.has(entry.name.toLowerCase())) continue;
         walk(join(dir, entry.name), depth + 1);
       } else if (entry.name.toLowerCase().endsWith('.mwt')) {
         const full = join(dir, entry.name);

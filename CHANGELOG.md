@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Exclude `_backups` and case variants of known archive/runtime folders from
+  automatic project discovery. Explicitly requested backup roots still work;
+  the real cutter workspace now yields two current projects instead of archives.
+- Retain raw global grid bytes in a fixture-only native roundtrip experiment.
+  Complete native declarations/flags and every variable record returned unchanged;
+  two allocation counters advanced, with all other bytes and sources preserved.
+  Keep ordinary source guards strict and retain earlier cleanup failures.
+
 - Add `mw_ide_variable_group_change` for native local/global group creation,
   rename and approved empty deletion. Guard complete project memberships,
   declaration flags, source streams and saved/native structural baselines;

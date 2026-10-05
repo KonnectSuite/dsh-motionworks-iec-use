@@ -22,6 +22,34 @@ No failed mutation should be repeated; all scratch mutations already completed.
 Running Arya chat catalog exposure remains unverified; installed host registration
 alone does not prove a chat has reloaded the plugin.
 
+### Raw grid follow-up and discovery correction
+
+Fresh receipt `native-group-grid-4772c014-fb2a-4d7a-a6d3-a625fbc8d5eb.json`
+is `cleaned_with_verified_counters`, accepted=true, cleanup_verified=true and
+binary_identical=false. Raw before/after streams are retained. All 164 records
+are byte-identical and complete native flags/groups/declarations match. Only
+the variable high-water counter at offset 4 (1418 to 1419) and the group trailer
+counter at offset 22282 (17 to 18) changed after one native group/member roundtrip.
+Every other byte matched. Fresh Build/Make, zero errors and all other sources,
+tasks and translations passed. This exact fixture experiment accounts for those
+two counters; ordinary source verification is unchanged. The older lifecycle
+receipt remains accepted=false because its initial raw bytes were not captured.
+
+The diagnostic grid parser refuses the temporary retain/OPC row (165 declared,
+164 parsed). It assumes zero record flag fields. The native variable API fully
+verified the row/flags; the parser was not relaxed for offline mutation. Raw bytes
+were retained, the successful addition was reconciled, and exact deletion followed
+without repeating the add.
+
+The October 4 Arya session `668068a5-191f-4fc5-ae01-9747a1ce6e0d` has 61
+MotionWorks tools in both recorded request catalogs. Skill loading, discovery
+and saved POU reads succeeded. Startup/trial tools were present but not invoked;
+the status call reported no running IDE. This does not prove startup failure or
+current chat reload. Automatic discovery did surface archived copies. It now
+excludes `backups` and `_backups` case-insensitively, while an explicitly requested
+backup root remains searchable. Read-only verification in the actual cutter
+workspace returns only BottomCutterS5 and TopCutterS5 (two projects).
+
 ## Assigned two-block FBD and observed constant editing
 
 Fresh acceptance `toolbox-graph-299eeadd-536c-4b46-9905-20b3bd1c93d0.json`
