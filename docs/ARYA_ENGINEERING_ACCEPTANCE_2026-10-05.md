@@ -1,5 +1,36 @@
 # Arya native engineering acceptance on the disposable fixture
 
+## Fresh run after revised skill delivery
+
+The same authorized chat completed a second lifecycle with `AryaFreshProbe` and
+`AryaFreshInstance`, ending at sequence 892. No corrective message was sent during
+this run. Native POU creation, three declarations, IEC TON insertion, populated
+group rename, BG assignment, unassignment and deletion all returned accepted
+mutation receipts. The initial read-only declaration check incorrectly expected
+Delay in Support; Arya corrected its expectation to the actual Default group.
+
+The first compiler verification was unverified because the Message Window was
+hidden (report `1791187822490-bb5b9702-180a-4fff-a8ee-ed91e9bac397.json`). Arya
+recovered its visibility using UI input without user help, then verified fresh
+Build and Make while assigned and again after cleanup. Reports
+`1791187969520-dd385385-8154-4209-b89d-fe196105dd3b.json` and
+`1791188041428-ae6d8242-6711-4d14-846f-761085511191.json` both report
+`ide_compile_verified_persistence_not_tested`. Errors were empty; fresh Build
+reported the 25 existing warnings. Make subsequently cleared diagnostic rows.
+An empty post-Make Warnings pane does not erase the preceding Build warnings.
+
+After the chat ended, `test/arya_fixture_audit.mjs check` independently matched
+every original POU, task, global declaration, program source and translation file
+against the retained baseline: seven POUs, 164 globals, native structure equal,
+compiled=true and modified=false. No controller behavior was tested.
+
+This proves the bounded editing lifecycle with autonomous recovery, not the full
+support-engineer goal. Arya explicitly omitted per-flag enumeration and had
+truncated code-check output. Hidden-pane recovery still needs a direct plugin
+path; broader graphical editing remains to be verified through Arya. The pending
+fresh receipt harness is not yet an accepted gate: it currently expects direct
+Build/Make calls instead of their retained `mw_ide_verify` substep evidence.
+
 The user explicitly authorized creation of a dedicated Arya fixture chat and its
 edit/build/read-back/cleanup test. Session
 `d637dc30-4a0d-470d-8c45-f88c710d2be0`, displayed as

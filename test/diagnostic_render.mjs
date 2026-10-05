@@ -1,0 +1,14 @@
+import assert from 'node:assert/strict';
+import {__internals as i} from '../index.js';
+const tool=i.defineTools().find(t=>t.name==='mw_ide_errors');
+const render=value=>tool.output.render({}, {pane:'Warnings',count:0,lines:[],...value}).map(c=>c.text??'').join('\n');
+const compiled=render({compiles:true,is_modified:false});
+assert.match(compiled,/Make may clear messages/);
+assert.match(compiled,/not proof of a fresh compile or zero warnings/);
+assert.doesNotMatch(compiled,/genuine clean result/);
+const unknown=render({compiles:true,is_modified:null});
+assert.match(unknown,/modified state is unknown/);
+assert.doesNotMatch(unknown,/is_modified=false/);
+assert.match(render({compiles:false,is_modified:false}),/NOT a clean build/);
+assert.match(render({compiles:true,is_modified:true}),/EDITED SINCE/);
+console.log('Diagnostic renders preserve Build warnings and unknown modified state');

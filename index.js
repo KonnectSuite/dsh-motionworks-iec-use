@@ -2317,9 +2317,14 @@ function defineTools() {
                 + `EDITED SINCE. An empty pane is expected here, but the edits are not compiled yet,\n`
                 + `so this says nothing about them. Run mw_ide_build before trusting the code.` + shot);
             }
+            if (v.compiles === true && v.is_modified === false) {
+              return text(`${head} Current IDE state: is_compiled=true, is_modified=false. `
+                + `This is the current pane contents, not proof of a fresh compile or zero warnings. `
+                + `Make may clear messages from the preceding Build; retain and review that Build's diagnostics.` + shot);
+            }
             if (v.compiles === true) {
-              return text(`${head} Consistent with the clean compile verdict `
-                + `(is_compiled=true, is_modified=false), so this is a genuine clean result.` + shot);
+              return text(`${head} is_compiled=true, but modified state is unknown. `
+                + `Neither current source acceptance nor fresh compiler diagnostics are established.` + shot);
             }
             // compiles === null: the IDE did not answer the verdict question at all.
             return text(`${head}\n`
