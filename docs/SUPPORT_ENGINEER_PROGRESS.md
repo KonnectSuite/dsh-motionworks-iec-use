@@ -2,6 +2,24 @@
 
 This is work in progress. Version 0.5.5 did not establish complete IDE control.
 
+## Running Arya native engineering lifecycle
+
+Authorized dedicated fixture session `d637dc30-4a0d-470d-8c45-f88c710d2be0`
+created an ST PROGRAM, three local declarations and a group, inserted an IEC TON
+call, renamed the populated group, assigned the PROGRAM to BG and passed fresh
+Build and exact read-back. Native worksheet navigation, exact unassign/delete
+and final Build passed. Independent full saved/native baseline equality and
+clean compiled state passed, preserving all seven original POUs, five tasks and
+164 globals. No manual IDE editing or controller action was needed.
+
+The initial run guessed the wrong task-model tool name and omitted Make. A
+verification-only corrective follow-up used the existing `mw_code_task_model`
+and Make (already up to date), preserving those initial mistakes in the report.
+Skill guidance now names the actual tools and requires separate Build/Make
+checks. This is accepted with assisted follow-up, not complete autonomous
+acceptance. See ARYA_ENGINEERING_ACCEPTANCE_2026-10-05.md and the retained fixture
+receipts. A fresh autonomous run and broader graphical flows remain unverified.
+
 ## Updated tools verified in the running Arya chat
 
 The authorized October 5 read-only check exposed stale executable caching after

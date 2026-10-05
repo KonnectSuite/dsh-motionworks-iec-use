@@ -7,6 +7,14 @@ whenToUse: The user has MotionWorks IEC 3 Pro open or asks for work in it — a 
 # MotionWorks IEC workspace editing
 
 Use the installed tools for discovery, staging, IDE editing and IDE verification.
+Use exact registered tool names: `mw_code_task_model` reads the live task model;
+there is no `mw_ide_task_model`. An unknown name is a routing error, not proof
+that the installed plugin is missing a capability. Check the available catalog
+and this guide before making that claim. After intended edits and cleanup,
+invoke `mw_ide_build`, then `mw_ide_make`, and inspect `mw_ide_errors` plus
+`mw_ide_compile_state`. Build and Make are separate tools; an up-to-date Make
+verdict does not establish another fresh compilation. Track requested checks
+until they are actually called; disclose any omitted check or corrective follow-up.
 The DEFAULT is IDE-FIRST: the agent actually enters code and declarations in MotionWorks.
 Prefer a verified native IDE operation over mouse/grid input. Use known keyboard
 commands when the native API does not support the operation; inspect the resulting

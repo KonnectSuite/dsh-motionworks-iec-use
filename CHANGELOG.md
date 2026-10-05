@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Verify a running Arya native ST/local-group/TON/task-assignment lifecycle and
+  exact fixture cleanup. Retain initial routing mistakes and the assisted Make
+  follow-up. Clarify the exposed task-model name and separate Build/Make checks
+  in the skill; package read-only fixture and receipt acceptance harnesses.
+
 - Align the public graphical edit guide with the verified multi-contact ladder
   keyboard selection and assigned two-block FBD workflow. Document the live Arya
   host restart needed to replace cached plugin code. Include a read-only full

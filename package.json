@@ -94,6 +94,7 @@
     "test/toolbox_graph_live.mjs",
     "test/ld_branch_live.mjs",
     "test/arya_fixture_audit.mjs",
+    "test/arya_fixture_receipts.mjs",
     "test/restore_fixture_group.ps1",
     "test/trial_dialog.ps1",
     "test/native_snapshot.ps1",
