@@ -61,13 +61,14 @@ Do not restart a field session while a tool or unsaved operation is active.
 
 The known fixture graphical failure remains open: the temporary inline editor
 handle accepted keyboard input, but focus recovery changed graph selection and
-inserted an unconnected operand. Its compiler check failed. The disposable
-fixture also retains AryaToolboxProbe/AryaToolboxInstance pending cleanup;
-the pause cleanup refused because no IDE was running and was not relaunched.
+inserted an unconnected operand. Its compiler check failed. The initial pause
+cleanup refused because no IDE was running. Subsequent authorized fixture work
+completed native unassign/removal, fresh Build/Make and full baseline verification.
+The fixture now has its original seven POUs, 164 globals and five tasks,
+compiled=true and modified=false. See SUPPORT_ENGINEER_PROGRESS.md for receipts.
 
-On the next authorized fixture run: inspect the exact saved/native state,
-clean only that scratch assignment and POU, establish the full original baseline,
-then verify one selection-preserving inline replacement with complete compiler
+On the next authorized fixture run: inspect the exact saved/native state and
+confirm the original baseline, then verify one selection-preserving inline replacement with complete compiler
 instruction comparison and final cleanup. CamGenerator's compressed declarations
 remain unsupported. Broader arbitrary graphical editing and complete support
 engineer autonomy are not yet achieved. Do not use this field audit to mark the
