@@ -4,6 +4,23 @@ This is work in progress. Version 0.5.5 did not establish complete IDE control.
 
 ## October 5 wrap-up and next acceptance test
 
+Startup inspection found a concrete mismatch: the interactive Mwt launcher used
+`-WindowStyle Hidden`, while `Get-IdeWindow` accepts only visible frames. The IDE
+launcher now requests Normal; background bridge helpers remain hidden. This is
+a plausible contributor to the retained 300-second timeout, not a verified sole
+cause. Microsoft documents the [Start-Process window styles](https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.management/start-process?view=powershell-5.1).
+The startup clause also refuses a still-disabled frame before COM and preserves
+existing-process recovery instructions on timeout; it no longer directs Arya
+to manual trial clicks or claims retired offline tools bypass the licence.
+
+Production-body synthetic startup tests passed for fresh visible launch,
+existing-process reuse without a duplicate launch, one exact pre-frame trial
+action, unverified trial closure, disabled frame, observation timeout and invalid
+wrapper hash. Trial discovery/state tests also passed. These tests launch no IDE
+and perform no UI input. A fresh real startup and visible trial-dialog dismissal
+are still required when the desktop is available; the current fixture IDE was
+not restarted while FactoryTalk was in front.
+
 Native screenshot capture no longer restores or activates the main IDE frame,
 which could dismiss a graphical inline editor. It checks foreground/active/focus
 identity and refuses an unverified fallback. Production-body mock tests covered

@@ -1962,11 +1962,9 @@ while ($true) {
                 $data = [ordered]@{ pous = $result }
             }
 
-            # Launch the IDE deliberately. Needed after close_ide, because the write
-            # engine requires the IDE to be closed while code changes are applied.
-            # Connect-App refuses to launch implicitly, so this is the only place
-            # that starts the IDE - and Mwt.exe is launched with no project, then
-            # `open` loads one, because a bare launch has no project services.
+            # Launch the interactive IDE deliberately with its verified wrapper.
+            # Connect-App refuses implicit launch. Background bridge helpers stay
+            # hidden; the IDE frame must be visible for native readiness/trial checks.
             'start_ide' {
                 $launchProject = [string]$req.path
                 Assert-ProvenCopy $launchProject
@@ -1983,7 +1981,7 @@ while ($true) {
                 $trialSeen = $false
                 if (-not $already) {
                     if (-not (Test-Path $exe)) { throw "Mwt.exe not found at $exe" }
-                    Start-Process -FilePath $exe -ArgumentList ('"' + $launchProject + '"') -WindowStyle Hidden | Out-Null
+                    Start-Process -FilePath $exe -ArgumentList ('"' + $launchProject + '"') -WindowStyle Normal | Out-Null
                 }
                 # A running process or blocked frame is not a ready IDE. Inspect
                 # the licence owner before COM and never start a duplicate instance.
@@ -2005,9 +2003,12 @@ while ($true) {
                 if (-not $w) {
                     $pair = Get-TrialDialog
                     if ($pair[0]) {
-                        throw 'the IDE never showed its window because the LICENCE dialog is up and could not be answered automatically. Click "Use Trial" by hand, or activate a licence. This affects only the mw_ide_* tools: the mw_code_* tools work without the IDE and without a licence.'
+                        throw 'Startup remains blocked by the licence dialog. Inspect mw_ide_state and use mw_ide_trial(attempt:true) for one exact native Use Trial action. Do not start another IDE or use a generic dialog answer.'
                     }
-                    throw 'the IDE window did not appear within 300s'
+                    throw 'No visible IDE frame was observed within 300s. Inspect mw_ide_state and the existing Mwt process before any retry; observation timeout does not prove process exit. Do not start a duplicate IDE.'
+                }
+                if (-not [MWW]::IsWindowEnabled($w)) {
+                    throw 'The IDE frame remains disabled after startup observation. Inspect mw_ide_state for the owning modal; no COM project operation or duplicate launch was attempted.'
                 }
                 # Force a fresh connection: the previous one pointed at the old process.
                 $script:App = $null

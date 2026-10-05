@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Launch the interactive MotionWorks IDE with a normal visible window instead of
+  hiding a frame that native readiness requires to be visible. Preserve the
+  existing-process recovery path after timeout; refuse disabled frames before
+  COM. Synthetic startup and trial tests passed; fresh live startup is pending.
+
 - Preserve prior stage edits and provenance during reviewed replacement: prepare
   the incoming copy first, retain a hashed backup, and refuse open targets,
   unknown IDE state, concurrent requests or intervening file changes.
