@@ -15,7 +15,7 @@ let mod;
 try {
   for (const p of [virtual, physical]) {
     mkdirSync(p, { recursive: true });
-    for (const f of (p === virtual ? ['index.js', 'package.json'] : ['index.js', 'verification.js', 'edit-session.js', 'native-variables.js', 'native-groups.js', 'native-structure.js', 'native-code.js', 'graphical-listing.js', 'pou-package.js', 'pou-conversion.js', 'fb-insertion.js', 'stage-copy.js', 'package.json'])) copyFileSync(join(repo, f), join(p, f));
+    for (const f of (p === virtual ? ['index.js', 'package.json'] : ['index.js', 'verification.js', 'edit-session.js', 'native-variables.js', 'native-groups.js', 'native-structure.js', 'native-code.js', 'graphical-listing.js', 'pou-package.js', 'pou-conversion.js', 'fb-insertion.js', 'compiler-interface.js', 'stage-copy.js', 'package.json'])) copyFileSync(join(repo, f), join(p, f));
   }
   cpSync(join(repo, 'code'), join(physical, 'code'), { recursive: true });
   cpSync(join(repo, 'bridge'), join(physical, 'bridge'), { recursive: true });

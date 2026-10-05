@@ -31,6 +31,8 @@
     "pou-package.js",
     "pou-conversion.js",
     "fb-insertion.js",
+    "compiler-interface.js",
+    "test/compiler_interface.mjs",
     "preflight.mjs",
     "tool-contract.mjs",
     "SKILL.md",

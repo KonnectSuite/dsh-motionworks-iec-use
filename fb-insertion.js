@@ -29,7 +29,9 @@ function insertionPoint(body,offset){
 }
 export function fbInsertionPlan(args,block,read){
   if(args.baseline_saved!==true||!identifier(args.instance))throw new Error('Saved baseline and valid new instance name required');
-  if(block.kind!=='FUNCTION_BLOCK'||block.hidden||!identifier(block.name)||block.evidence_kind!=='installed-declared-block-interface')throw new Error('Requires a visible, declared function-block interface');
+  const compiled=block.evidence_kind==='fresh-bound-compiled-block-interface';
+  if(block.kind!=='FUNCTION_BLOCK'||block.hidden||!identifier(block.name)||!['installed-declared-block-interface','fresh-bound-compiled-block-interface'].includes(block.evidence_kind))throw new Error('Requires a visible, declared function-block interface or verified current compiled contract');
+  if(compiled&&(block.insertion_eligible!==true||block.project_compiler_freshness_verified!==true||block.compiler_library_binding_verified!==true||block.compiler_pin_types_verified!==true||block.compile_acceptance_only!==true||!Number.isFinite(block.verified_at_ms)||block.verified_at_ms>Date.now()||Date.now()-block.verified_at_ms>300000||! /^[a-f0-9]{64}$/.test(block.library_manifest_digest??'')||! /^[a-f0-9]{64}$/.test(block.source_baseline_digest??'')))throw new Error('Current compiled contract is incomplete or expired');
   if(block.insertion_eligible===false)throw new Error('Diagnostic compiled interface is not insertion eligible; freshness/source binding remains unverified');
   const hashMode=args.expected_body_sha256!==undefined;
   if(hashMode&&(args.expected_body!==undefined||! /^[a-f0-9]{64}$/.test(args.expected_body_sha256)))throw new Error('Supply either exact expected_body or readable expected_body_sha256');

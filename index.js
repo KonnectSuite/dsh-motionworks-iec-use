@@ -74,11 +74,13 @@ const [
   { fbInsertionPlan },
   { nativeGroupChange },
   { assertStageClosed },
+  { compilerInterface, compilerArtifacts, compiledLibraryManifest },
 ] = await Promise.all([
   'verification.js', 'edit-session.js', 'native-variables.js',
   'native-structure.js', 'native-code.js', 'graphical-listing.js',
   'pou-package.js', 'pou-conversion.js', 'fb-insertion.js',
   'native-groups.js', 'stage-copy.js',
+  'compiler-interface.js',
 ].map(file => import(pathToFileURL(join(HERE, file)).href)));
 
 export const name = 'motionworks-iec-use';
@@ -1493,12 +1495,12 @@ function defineTools() {
     },
     {
       name:'mw_ide_fb_insert',
-      description:'Insert ONE new FB instance and ST call using its installed declared interface. Prefer expected_body_sha256 set to readable text_body_sha256 from mw_code_pous; alternatively supply exact expected_body. Requires saved baseline and explicit pin bindings. Use before for a unique exact line-boundary insertion anchor, or offset; omit both to append. No need to re-emit a long body. Resolves block/library through live-bound parameter/declaration tables; rejects hidden/non-FB blocks, unknown/duplicate pins, missing in-out pins, instance collisions and direct-variable type mismatches. Outputs/in-outs currently require existing direct local/external variables. Inputs allow single expressions; compiler validation remains required. Adds the instance via guarded native variable API, then imports/verifies the code via native DDE. Retains plan/phase evidence; a partial failure reports completed phases and never retries or silently rolls back. No graphical insertion or controller action. Require verification.accepted then fresh Build/Make.',
-      parameters:{type:'object',additionalProperties:false,required:['project','pou','block','instance','baseline_saved','bindings'],properties:{project:{type:'string'},pou:{type:'string'},block:{type:'string'},library:{type:'string'},instance:{type:'string'},expected_body:{type:'string'},expected_body_sha256:{type:'string',description:'Exact readable text_body_sha256 from mw_code_pous, not its raw body_sha256.'},baseline_saved:{type:'boolean'},group:{type:'string'},before:{type:'string',description:'Unique exact text to insert before; must start at a line boundary outside comments/strings. Mutually exclusive with offset.'},offset:{type:'integer',description:'Zero-based character offset at a line boundary; defaults to append.'},bindings:{type:'object',additionalProperties:true,description:'Pin name to the exact value or symbol to bind.'}}},
+      description:'Insert ONE new FB instance and ST call using installed declarations or an explicitly verified current native compiled contract. Prefer expected_body_sha256 set to readable text_body_sha256 from mw_code_pous; alternatively supply exact expected_body. Requires saved baseline and explicit pin bindings. Use before for a unique exact line-boundary insertion anchor, or offset; omit both to append. No need to re-emit a long body. Resolves block/library through live-bound parameter/declaration tables; rejects hidden/non-FB blocks, unknown/duplicate pins, missing in-out pins, instance collisions and direct-variable type mismatches. Outputs/in-outs currently require existing direct local/external variables. Inputs allow single expressions; compiler validation remains required. For a protected library already resolved by the current compiler, compiler_verified:true runs fresh Build/Make and complete native/source/library checks; unique block binding is required and stale diagnostic caches alone remain refused. Adds the instance via guarded native variable API, then imports/verifies the code via native DDE. Retains plan/phase evidence; a partial failure reports completed phases and never retries or silently rolls back. No graphical insertion or controller action. Require verification.accepted then fresh Build/Make.',
+      parameters:{type:'object',additionalProperties:false,required:['project','pou','block','instance','baseline_saved','bindings'],properties:{project:{type:'string'},pou:{type:'string'},block:{type:'string'},library:{type:'string'},instance:{type:'string'},expected_body:{type:'string'},expected_body_sha256:{type:'string',description:'Exact readable text_body_sha256 from mw_code_pous, not its raw body_sha256.'},baseline_saved:{type:'boolean'},compiler_verified:{type:'boolean',description:'Explicitly verify a protected block against the unique current native compiled contract before insertion. Runs fresh Build/Make with complete source/native/library checks; does not decode protected source.'},group:{type:'string'},before:{type:'string',description:'Unique exact text to insert before; must start at a line boundary outside comments/strings. Mutually exclusive with offset.'},offset:{type:'integer',description:'Zero-based character offset at a line boundary; defaults to append.'},bindings:{type:'object',additionalProperties:true,description:'Pin name to the exact value or symbol to bind.'}}},
       output:{schema:openOutput(['verification','completed_phases','evidence_path']),render:(_a,v)=>text(JSON.stringify(v,null,2))},
       execute:async args=>{
         const project=projectOf(args),definitions=defineTools(),tool=name=>definitions.find(t=>t.name===name);
-        const block=await tool('mw_code_block_interface').execute({project,name:args.block,library:args.library});
+        const block=await tool('mw_code_block_interface').execute({project,name:args.block,library:args.library,refresh_compiler:args.compiler_verified===true,baseline_saved:args.baseline_saved});
         const read=await runCode('read_st',{project,pou:args.pou}),plan=fbInsertionPlan(args,block,read);
         const directory=join(workspaceRoot(),'.motionworks','verification');
         if(!isInsideWorkspace(directory))throw new Error('REFUSED: linked evidence directory');
@@ -1516,6 +1518,9 @@ function defineTools() {
           record.completed_phases.push('instance_declared');record.phase='instance_declared';retain();
           const current=await tool('mw_code_block_interface').execute({project,name:args.block,library:args.library});
           if(current.source_sha256!==block.source_sha256||current.registry_sha256!==block.registry_sha256||current.source_file!==block.source_file)throw new Error('Block interface changed after declaration; inspect retained phase before another action');
+          if(block.evidence_kind==='fresh-bound-compiled-block-interface'){
+            if(Date.now()-block.verified_at_ms>300000||JSON.stringify(current.pins)!==JSON.stringify(block.pins)||current.compiler_dependency_sha256!==block.compiler_dependency_sha256||current.compiler_type_table_sha256!==block.compiler_type_table_sha256||compiledLibraryManifest(current,[block.bound_library]).digest!==block.library_manifest_digest)throw new Error('Compiled contract changed/expired after declaration; inspect retained phase before further input');
+          }
           record.phase='inserting_call';retain();
           const code=await tool('mw_ide_code_change').execute({project,pou:args.pou,baseline_saved:true,expected_body:read.body,code:plan.code});
           record.code_result=code;
@@ -1527,12 +1532,34 @@ function defineTools() {
     },
     {
       name:'mw_code_block_interface',
-      description:'List bound project/toolbox/firmware blocks, or read one exact block interface with pin names, declared types and input/output/in-out directions. Matches saved references against the live IDE library paths. Reads native firmware .PT tables or project/library declarations, with source/registry hashes; does not infer directions from compiled identifier names. Protected user-library worksheets may return diagnostic explicit compiled declarations matched to a saved dependency, with insertion_eligible:false and freshness unverified; these cannot be used for FB insertion. Omit name for catalog, specify library to resolve duplicates. IEC/eCLR implicit references are separately identified; controller firmware profile still requires verification. Read-only: no IDE input, library edits or controller action.',
-      parameters:{type:'object',additionalProperties:false,required:['project'],properties:{project:{type:'string'},name:{type:'string'},library:{type:'string'}}},
+      description:'List bound project/toolbox/firmware blocks, or read one exact block interface with pin names, declared types and input/output/in-out directions. Matches saved references against the live IDE library paths. Reads native firmware .PT tables or project/library declarations, with source/registry hashes; does not infer directions from compiled identifier names. Protected user-library worksheets default to diagnostic explicit cache declarations with insertion_eligible:false. refresh_compiler:true and baseline_saved:true verify the uniquely bound current compiled contract through fresh Build/Make, regenerated dependency/type tables and complete preservation checks. This mode may authorize insertion against that contract; it does not decode protected worksheets or prove freshness of the library cache against its source. Omit name for catalog, specify library to resolve duplicates. IEC/eCLR implicit references are separately identified; controller firmware profile still requires verification. Default is read-only. Explicit compiler refresh performs native Build/Make; no desktop input, library edits or controller action.',
+      parameters:{type:'object',additionalProperties:false,required:['project'],properties:{project:{type:'string'},name:{type:'string'},library:{type:'string'},refresh_compiler:{type:'boolean',description:'For a protected user-library diagnostic interface, verify the current unique bound compiled contract through fresh native Build/Make and complete source/native/library preservation. Does not decode protected source or regenerate the installed library cache.'},baseline_saved:{type:'boolean',description:'Required true for refresh_compiler.'}}},
       output:{schema:openOutput(['evidence_kind','action_performed']),render:(_a,v)=>text(JSON.stringify(v,null,2))},
+      presentCall:a=>({card:'generic',title:a.refresh_compiler?'Verify current compiled block interface':'Read installed block interface',kind:a.refresh_compiler?'execute':'read'}),
       execute:async args=>{
         const project=projectOf(args),identity=await assertIdeProjectProven();
         if(resolve(identity.active_project).replace(/\.mwt$/i,'').toLowerCase()!==project.toLowerCase())throw new Error('REFUSED: wrong open project');
+        if(args.refresh_compiler===true){
+          if(args.baseline_saved!==true||!args.name||!args.library)throw Error('Exact block/library and saved baseline required');
+          const directory=join(workspaceRoot(),'.motionworks','verification');
+          if(!isInsideWorkspace(directory))throw Error('REFUSED: linked compiler evidence directory');
+          mkdirSync(directory,{recursive:true});
+          const evidence_path=join(directory,'compiled-interface-'+randomUUID()+'.json');
+          const record={args,phase:'requested',events:[]};
+          const retain=()=>{if(!isInsideWorkspace(evidence_path))throw Error('REFUSED: linked compiler evidence');writeFileSync(evidence_path,JSON.stringify(record,null,2),'utf8');};
+          const observe=async(name,fn)=>{const result=await fn();record.events.push({name,result});retain();return result;};retain();
+          try{
+            const result=await compilerInterface(args,{
+              status:()=>observe('state',()=>verb('compile_state',{},30000)),native:()=>observe('native',()=>verb('pou_package_snapshot',{},180000)),
+              saved:()=>observe('saved',()=>runCode('structure_snapshot',{project})),
+              interface:libs=>observe('interface',()=>runCode('block_interface',{project,name:args.name,library:args.library,native_libraries:libs})),
+              catalog:libs=>observe('catalog',()=>runCode('block_interface',{project,native_libraries:libs})),
+              library:(block,libs)=>observe('library',async()=>compiledLibraryManifest(block,libs)),artifacts:block=>observe('artifacts',async()=>compilerArtifacts(block,project)),
+              build:()=>observe('build',()=>defineTools().find(t=>t.name==='mw_ide_build').execute({project})),make:()=>observe('make',()=>defineTools().find(t=>t.name==='mw_ide_make').execute({project})),
+            });
+            record.phase='verified_current_compiler';record.result=result;retain();return {...result,evidence_path};
+          }catch(error){record.phase='stopped';record.error=error.message;retain();throw Error(error.message+'; retained evidence: '+evidence_path);}
+        }
         const snapshot=await verb('library_snapshot',{},30000);
         return runCode('block_interface',{project,name:args.name,library:args.library,native_libraries:snapshot.libraries});
       },

@@ -1,4 +1,4 @@
-// Reviewed native source/compile acceptance; does not bypass mw_ide_fb_insert.
+// Reviewed native source/compile acceptance; auto mode uses public mw_ide_fb_insert.
 // Exact disposable fixture only. No desktop input, controller or runtime action.
 import assert from 'node:assert/strict';
 import {readFileSync,writeFileSync,readdirSync,lstatSync} from 'node:fs';
@@ -8,7 +8,7 @@ import {__internals as i} from '../index.js';
 const workspace=process.env.MOTIONWORKS_MCP_WORKSPACE;
 assert.match(workspace??'',/motionworks-ide-smoke-58d23aaa-bb28-4c44-aad8-5ad9d9cbd266$/);
 const project=join(workspace,'.motionworks/stage/TopCutterS5'),pou='CodexCamProof',instance='CodexCamProofInstance';
-const mode=process.argv[2]??'run';assert.ok(['run','graph','cleanup'].includes(mode));
+const mode=process.argv[2]??'run';assert.ok(['run','graph','auto','cleanup'].includes(mode));
 const resume=process.env.MW_CAM_NATIVE_EVIDENCE;
 if(mode==='cleanup')assert.match(resume??'',/^cam-native-[a-f0-9-]+\.json$/);
 else assert.equal(resume,undefined);
@@ -70,7 +70,10 @@ try{
  else{
   assert.equal((await act('mw_ide_compile_state')).is_modified,false);
   record.baseline=await i.runCode('structure_snapshot',{project});
-  same(record.baseline,JSON.parse(readFileSync(join(workspace,'.motionworks/verification/arya-engineering-lifecycle.json'),'utf8')).saved);
+  if(mode==='auto'){
+   const checkpoint=JSON.parse(readFileSync(join(workspace,'.motionworks/verification/startup-trial-7b8164f8-3209-4733-b042-0d69e677a2ae.json'),'utf8'));
+   assert.equal(checkpoint.accepted,true);same(record.baseline,checkpoint.after);record.auto_insertion=true;
+  }else same(record.baseline,JSON.parse(readFileSync(join(workspace,'.motionworks/verification/arya-engineering-lifecycle.json'),'utf8')).saved);
   record.native_baseline=await i.verb('structure_snapshot',{},180000);
   assert.ok(!record.baseline.pous.some(p=>p.name===pou));
   record.interface=await act('mw_code_block_interface',{name:'CamGenerator',library:'Cam_Toolbox_v375'});
@@ -79,11 +82,20 @@ try{
   record.library_root=dirname(dirname(dirname(record.interface.worksheet_file)));record.library_before=manifest(record.library_root);retain();
   await act('mw_ide_pou_change',{operation:'create',name:pou,pou_type:'PROGRAM',language:'ST'});
   record.phase='created';retain();
-  for(const [name,type] of [['CamDataLocal','CamSegmentStruct'],['CamTableLocal','Y_MS_CAM_STRUCT'],['DoneOut','BOOL'],['BusyOut','BOOL'],['ErrorOut','BOOL'],['ErrorIDOut','UINT'],['ProbeCam','CamGenerator']])
+  for(const [name,type] of [['CamDataLocal','CamSegmentStruct'],['CamTableLocal','Y_MS_CAM_STRUCT'],['DoneOut','BOOL'],['BusyOut','BOOL'],['ErrorOut','BOOL'],['ErrorIDOut','UINT'],['ProbeCam','CamGenerator']]){
+   if(mode==='auto'&&name==='ProbeCam')continue;
    await act('mw_ide_variable_change',{pou,operation:'add',declaration:{name,type,section:'VAR',group:'Default',address:null,initial_value:null,description:null}});
+  }
   const code='ProbeCam(CamData := CamDataLocal, CamTable := CamTableLocal, Execute := FALSE, TableSize := UDINT#2880);\r\nCamDataLocal := ProbeCam.CamData;\r\nCamTableLocal := ProbeCam.CamTable;\r\nDoneOut := ProbeCam.Done;\r\nBusyOut := ProbeCam.Busy;\r\nErrorOut := ProbeCam.Error;\r\nErrorIDOut := ProbeCam.ErrorID;\r\n';
   record.reviewed_code=code;retain();
-  await act('mw_ide_code_change',{pou,expected_body:'',code});
+  if(mode==='auto'){
+   record.insertion=await act('mw_ide_fb_insert',{pou,block:'CamGenerator',library:'Cam_Toolbox_v375',instance:'ProbeCam',expected_body:'',compiler_verified:true,bindings:{CamData:'CamDataLocal',CamTable:'CamTableLocal',Execute:'FALSE',TableSize:'UDINT#2880',Done:'DoneOut',Busy:'BusyOut',Error:'ErrorOut',ErrorID:'ErrorIDOut'}});
+   assert.deepEqual(record.insertion.completed_phases,['instance_declared','call_inserted']);
+   record.auto_interface=JSON.parse(readFileSync(record.insertion.evidence_path,'utf8')).plan.interface;
+   assert.equal(record.auto_interface.evidence_kind,'fresh-bound-compiled-block-interface');
+   assert.equal(record.auto_interface.compiler_source_binding_verified,false);
+   assert.equal(record.auto_interface.insertion_eligible,true);retain();
+  }else await act('mw_ide_code_change',{pou,expected_body:'',code});
   await act('mw_ide_task_change',{operation:'assign',name:'BG',pou,instance});
   record.phase='assigned';record.call_compile_started_ms=Date.now();retain();await compile();
   record.compiler_source=await i.runCode('compiled_source_evidence',{project,pou});

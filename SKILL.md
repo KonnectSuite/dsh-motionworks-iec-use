@@ -78,6 +78,16 @@ matched to a saved dependency, with `insertion_eligible:false`. It can help insp
 pin names, types and directions when the worksheet cannot be decoded, but its
 freshness against current source is unverified. Do not treat it as an accepted
 insertion signature or substitute it for `installed-declared-block-interface`.
+For a protected block already compiled by this project, explicitly request
+`mw_code_block_interface` with `refresh_compiler:true`, exact name/library and
+`baseline_saved:true`, or set `compiler_verified:true` on `mw_ide_fb_insert`.
+This runs fresh native Build/Make and requires a unique bound block, complete
+public pin types, regenerated compiler tables, and unchanged full project/native
+and installed-library baselines. Only `fresh-bound-compiled-block-interface`
+with `insertion_eligible:true` permits this alternative, valid for five minutes.
+Protected source decoding and installed-cache freshness remain unverified.
+Do not retry a stopped request; inspect its retained evidence and native state.
+Every inserted call still needs fresh Build/Make and read-back.
 `mw_ide_screenshot` captures without activating or restoring the main frame and
 checks foreground/active/focused window identity before accepting the image.
 It refuses minimized windows or an unsafe screen fallback. Own-window rendering

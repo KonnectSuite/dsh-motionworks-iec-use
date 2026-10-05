@@ -2,6 +2,29 @@
 
 This is work in progress. Version 0.5.5 did not establish complete IDE control.
 
+## Automatic protected-block insertion accepted
+
+Receipt `cam-native-c549bfbc-0bc5-4f32-b32d-ce8210319561.json` is accepted=true,
+cleanup_verified=true. The public `mw_ide_fb_insert` with compiler_verified:true
+created ProbeCam and its complete eight-pin CamGenerator ST call, assigned a
+scratch BG instance, passed fresh Build/Make and exact source read-back, then
+removed the scratch task instance/POU and restored the reconciled saved/native
+baseline. All installed library files were preserved.
+
+The explicit verifier accepts only a globally unique already-compiled block
+whose complete typed public cached declarations agree with newly regenerated
+project compiler tables. Full saved sources, native declarations/tasks/libraries
+and the installed library manifest must remain unchanged. Evidence is
+fresh-bound-compiled-block-interface, compile_acceptance_only=true, expiring in
+five minutes. Source decoding and installed-library cache freshness remain false.
+Default installed-compiled-block-interface remains insertion_eligible:false.
+No generated SDK binary is shipped. Tool count remains 62; version remains 0.5.5.
+
+The typed read-only SDK resolution probe confirmed project POU and native
+library identities, but neither slash convention resolved the protected library
+POU. It is not a protected-source decoding proof. Current facade registration
+and packaging are checked independently of the already-running live test import.
+
 ## Fresh visible startup and real trial dismissal accepted
 
 `startup-trial-7b8164f8-3209-4733-b042-0d69e677a2ae.json` is accepted=true,

@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Add explicit compiler-verified protected-block insertion with unique native
+  library binding, fresh Build/Make, complete source/native/library preservation
+  and expiring evidence. Keep diagnostic cache interfaces ineligible by default.
+  Public automatic eight-pin CamGenerator insertion, compilation, read-back and
+  complete fixture cleanup passed; protected-source and runtime proof remain open.
+
 - Verify fresh visible fixture startup and real Use Trial dismissal through the
   native posted button fallback, including scoped input-thread cleanup, fresh
   Build/Make and complete baseline preservation. Report the verified trial method

@@ -16,6 +16,11 @@ Use `mw_code_block_interface` to inspect installed block pins and directions,
 then `mw_ide_fb_insert` to declare a new instance and insert its ST call with
 explicit bindings. Check the retained phase evidence on partial failure and
 compile after successful insertion.
+For protected blocks already used by the project, `compiler_verified:true`
+requests a fresh, uniquely bound compiled contract with complete project/library
+preservation. CamGenerator insertion, build, read-back and scratch cleanup passed
+on the disposable fixture. This does not decode protected source or establish
+runtime behavior; default cached interfaces remain diagnostic only.
 Use `mw_ide_graphical_listing` to diagnose saved LD/FBD compiler networks without
 desktop input. It runs a fresh Build, checks unchanged sources and regenerated
 matching artifacts, and annotates known declaration symbols. Raw compiler tokens
