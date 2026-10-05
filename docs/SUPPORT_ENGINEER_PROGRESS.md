@@ -30,6 +30,25 @@ DINT#1000 to DINT#2000. Require exact generated instructions, fresh Build/Make,
 unchanged collateral sources and full cleanup. Compressed CamGenerator interfaces
 and broader graphical autonomy remain open. Customer projects are outside this test.
 
+The next opt-in harness is `test/comm_watchdog_graph_live.mjs`, with `prepare`,
+`verify_canvas` and `cleanup` phases. Use only the exact authorized smoke workspace
+in `MOTIONWORKS_MCP_WORKSPACE`; resume using the printed receipt basename in
+`MW_COMM_GRAPH_EVIDENCE`. It prepares a dedicated CodexCommGraph PROGRAM with all
+seven declared CommWatchdog pins, requires the connected WatchDog input's generated
+load to change from 1000 to 2000 with every other instruction unchanged, and checks
+saved/native collateral and complete cleanup. It performs no canvas input itself.
+The harness has passed syntax validation and replay of the retained accepted
+native CommWatchdog listing (seven resolved pin directions and its exact typed
+DINT load). The compiler represents 1000 as `@TYP:4# 00#000003e8`; the expected
+2000 replacement is `@TYP:4# 00#000007d0`. Its new live phases have not run.
+Keep the prior failed graphical result separate from any future accepted receipt.
+
+The updated computer-use capture still timed out twice on the live IDE
+(`FrameArrived timed out`, then `window capture timed out`). The same returned
+IDE window remained available. The connected companion captured the desktop,
+which had FactoryTalk in front; no desktop input or fixture mutation was performed
+while preparing this harness. Run the live phases when desktop use is available.
+
 ## Preserve existing stages during fresh-copy preparation
 
 Staging previously deleted an existing target before preparing/binding the new

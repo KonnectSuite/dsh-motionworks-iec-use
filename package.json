@@ -54,6 +54,7 @@
     "test/stage_copy.mjs",
     "test/focus_screenshot.ps1",
     "test/focus_screenshot_live.mjs",
+    "test/comm_watchdog_graph_live.mjs",
     "test/stage_open_guard_live.mjs",
     "test/packaged_runtime.mjs",
     "test/close_consent.mjs",
