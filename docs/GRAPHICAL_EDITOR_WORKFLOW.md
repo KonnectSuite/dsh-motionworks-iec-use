@@ -90,6 +90,33 @@ Those alternate connection routes were not covered by this FBD probe. The
 separate LD proof below covers basic contacts, a coil and a single-contact
 parallel branch. Do not reuse example coordinates across layouts.
 
+### Inline editor window identity
+
+Tab can open a temporary `#32770` window at the selected operand. Its foreground
+handle differs from the main IDE handle. A keyboard refusal against the main
+handle does not mean the editor is broken, and omitting `window_handle` also
+refuses input. Keep the guard intact.
+
+After observing the inline box, use the companion's element metadata on the
+exact IDE window to identify that visible, enabled inline window. Match its
+process and rectangle to the observed operand; refuse multiple or unrelated
+dialogs. Use its freshly returned handle for Ctrl+A, literal replacement text
+and Enter, observing each result. In the CommWatchdog fixture, element info for
+`class_name: "#32770"` returned the inline window; Ctrl+A, `DINT#2000` and Enter
+succeeded at sending input against that handle. This did not establish a correct
+operand replacement: after focus recovery the probe inserted an extra unconnected
+operand, leaving the original input unchanged, and fresh Build failed with
+`Object not connected or invalid connection!`. Confirm only the intended operand
+is selected after any focus recovery; Ctrl+A on the canvas selects graph objects.
+If selection or connection changes, stop before typing. Compare the committed
+canvas to its baseline before Save/Build. A previous handle became invalid after changing
+focus. Never reuse it after closing/reopening the editor or focus recovery.
+
+Do not focus the main frame between opening the inline box and typing, since
+that can close the box. The companion's `get_active` operation failed in this
+installed runtime; element metadata supplied the observed handle instead.
+Close/commit the box before native Save, Build or other native workflows.
+
 If a recent scratch insertion is wrong, inspect the actual Undo command and
 its result. One observed Ctrl+Z removed the mistaken operand here. Do not use
 Undo when the history or affected customer content is unknown.

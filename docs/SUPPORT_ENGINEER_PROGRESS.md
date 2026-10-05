@@ -2,6 +2,36 @@
 
 This is work in progress. Version 0.5.5 did not establish complete IDE control.
 
+## Arya toolbox graphical test: partial, stopped
+
+The authorized fixture chat's next test ended at sequence 1657. Arya read both
+named toolbox interfaces, created AryaToolboxProbe, added and verified five local
+declarations, inserted CommWatchdog with all four status outputs, assigned BG,
+and passed fresh ST Build and native FBD conversion. Compiler listing resolved
+the installed toolbox pins. Those operations used native tools.
+
+The keyboard edit failed. Main-frame keyboard attempts were refused while the
+inline editor owned a temporary foreground handle; a missing-handle attempt and
+the companion's get_active operation also failed. Arya found the inline handle
+and sent Ctrl+A, text and Enter, but focus recovery had changed selection: an
+extra unconnected DINT#2000 operand appeared while DINT#1000 remained connected.
+Fresh graphical Build completion was unverified and Errors reported
+`Object not connected or invalid connection!`. Failed evidence is retained in
+`graphical-listing-9fc96407-f271-4b11-917f-edbf85d7f717.json`; successful native
+conversion in `pou-conversion-92be4e8f-440f-4fa7-8491-b8cde60450ee.json`.
+This does not pass the requested graphical editing lifecycle. The guide now
+explains temporary inline handles and requires selection/connection rechecking
+after focus recovery. Further testing is paused at the user's request.
+
+Cleanup was requested before pausing, but its initial native Save was refused:
+the bridge found no running MotionWorks IDE window. No cleanup mutation ran and
+the IDE was not relaunched. The disposable staged fixture still contains the
+scratch POU/assignment pending observed-state cleanup on resume. This does not
+affect a customer source project. Receipt: `arya-toolbox-pause-cleanup.json`.
+Next: reopen only the disposable fixture when authorized to resume, inspect and
+clean that exact scratch state, then verify selection-preserving inline edits.
+Compressed CamGenerator interfaces and broader graphical autonomy remain open.
+
 ## Named user-library declaration worksheets
 
 The interface reader now recognizes a single named declaration worksheet such

@@ -461,3 +461,11 @@ branch compiled exactly as `(Run AND Enable) OR Alternate`, with native flags,
 collateral sources and exact cleanup verified. Arbitrary graphs still require
 their own geometry and instruction checks. Keep native workflows and desktop
 input serialized.
+
+Graphical Tab inline editors can own a temporary foreground window handle.
+Observe its visible enabled element metadata and exact operand rectangle, then
+use that freshly returned handle for Ctrl+A, typing and Enter. The main IDE
+handle may be refused while the inline box is active. Do not omit the handle,
+weaken the keyboard guard, or focus the main frame and close the box. See the
+graphical guide's inline window identity procedure; commit the box before native
+Save/Build.
