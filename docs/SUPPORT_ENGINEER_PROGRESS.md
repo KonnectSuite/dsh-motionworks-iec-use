@@ -84,6 +84,18 @@ library identity and fresh compiler/source evidence before permitting insertion.
 
 ## October 5 wrap-up and next acceptance test
 
+The trial native-button fallback had attached the bridge input thread to the
+verifier threads without ever detaching. It now scopes unique successful
+attachments around its single button post and detaches in finally, including
+activation and post failures. Every detach is attempted even if another fails;
+cleanup failure is reported as an ambiguous submitted action, with no retry.
+Production-function tests in 32-bit and 64-bit PowerShell cover shared/self
+threads, failed attachment, activation/post failure, detach failure and exact
+verified/unverified closure. They use synthetic native methods and send no UI
+input. Current read-only trial_state reports no dialog or verifier and the same
+IDE frame 0x505EC. This is a resource-lifecycle fix, not proof of the live popup's
+root cause or live dismissal. Fresh startup/trial acceptance remains required.
+
 Startup inspection found a concrete mismatch: the interactive Mwt launcher used
 `-WindowStyle Hidden`, while `Get-IdeWindow` accepts only visible frames. The IDE
 launcher now requests Normal; background bridge helpers remain hidden. This is

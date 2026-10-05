@@ -384,9 +384,10 @@ function Answer-TrialDialog {
         $pattern.Invoke()
         $method = 'uia_invoke'
     } else {
-        Invoke-TrialClick $button $dialog
-        if (-not [MWW]::PostMessage($button, 0x00F5, [IntPtr]::Zero, [IntPtr]::Zero)) {
-            throw 'Use Trial native button command was refused'
+        Invoke-TrialClick $button $dialog {
+            if (-not [MWW]::PostMessage($button, 0x00F5, [IntPtr]::Zero, [IntPtr]::Zero)) {
+                throw 'Use Trial native button command was refused'
+            }
         }
         $method = 'posted_bm_click'
     }
@@ -395,23 +396,43 @@ function Answer-TrialDialog {
     return [ordered]@{ dialog_present = $true; dismissed = $gone; method = $method; seconds = $seconds; strategies_tried = @($method) }
 }
 
-function Invoke-TrialClick([IntPtr]$target, [IntPtr]$dialog) {
+function Invoke-TrialClick([IntPtr]$target, [IntPtr]$dialog, [scriptblock]$action) {
     # Attach our input thread to the dialog's threads and foreground it first.
     # Without this the synthetic click is ignored: measured, BM_CLICK and the
     # mouse messages are accepted and do nothing while the dialog is not active.
     $pidT = [uint32]0; $tid = [MWW]::GetWindowThreadProcessId($target, [ref]$pidT)
     $pidD = [uint32]0; $tidD = [MWW]::GetWindowThreadProcessId($dialog, [ref]$pidD)
     $me = [MWW]::GetCurrentThreadId()
+    if (-not $action) { throw 'Trial fallback requires one explicit button action' }
+    $attached = @()
     try {
-        [void][MWW]::AttachThreadInput($me, $tid, $true)
-        [void][MWW]::AttachThreadInput($me, $tidD, $true)
-    } catch { }
-    [void][MWW]::ShowWindow($dialog, 5)
-    [void][MWW]::BringWindowToTop($dialog)
-    [void][MWW]::SetForegroundWindow($dialog)
-    [void][MWW]::SetActiveWindow($dialog)
-    [void][MWW]::SetFocus($target)
-    Start-Sleep -Milliseconds 700
+        # Button and dialog normally share one thread. Attach it only once and
+        # detach only successful attachments, even if activation or posting fails.
+        foreach ($thread in @($tid, $tidD) | Select-Object -Unique) {
+            if ($thread -and $thread -ne $me) {
+                try {
+                    if ([MWW]::AttachThreadInput($me, $thread, $true)) { $attached += $thread }
+                } catch { }
+            }
+        }
+        [void][MWW]::ShowWindow($dialog, 5)
+        [void][MWW]::BringWindowToTop($dialog)
+        [void][MWW]::SetForegroundWindow($dialog)
+        [void][MWW]::SetActiveWindow($dialog)
+        [void][MWW]::SetFocus($target)
+        Start-Sleep -Milliseconds 700
+        & $action
+    } finally {
+        $detachFailures = @()
+        for ($index = $attached.Count - 1; $index -ge 0; $index--) {
+            try {
+                if (-not [MWW]::AttachThreadInput($me, $attached[$index], $false)) { $detachFailures += $attached[$index] }
+            } catch { $detachFailures += $attached[$index] }
+        }
+        if ($detachFailures.Count) {
+            throw "Trial fallback input-thread cleanup failed for $($detachFailures -join ','). The button action may already have been submitted; inspect trial state before further input. No automatic retry was sent."
+        }
+    }
 }
 
 function Test-TrialGone([IntPtr]$dialog, [int]$seconds = 20) {

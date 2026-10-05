@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Scope trial fallback input-thread attachments to one native button action,
+  detach successful unique attachments on success/failure, and report cleanup
+  failures without retrying an ambiguous action. Production-function regressions
+  pass in 32-bit and 64-bit PowerShell; live popup acceptance remains pending.
+
 - Cross-check diagnostic compiled-interface pin types against the explicit saved
   compiler type table, retaining its hash and refusing conflicting IDs, missing
   counts and type-token mismatches. Native-bound CamGenerator reading passed;
