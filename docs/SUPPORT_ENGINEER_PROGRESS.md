@@ -4,6 +4,31 @@ This is work in progress. Version 0.5.5 did not establish complete IDE control.
 
 ## CamGenerator saved compiler metadata
 
+The reviewed CamGenerator call also passed guarded native ST-to-FBD conversion.
+Its fresh graphical compiler listing has one network and ten pin annotations:
+all eight public pins resolve to ProbeCam/CamGenerator with the expected
+directions, including both sides of the two in-out structures. Declarations
+were unchanged by conversion. Subsequent fresh Build/Make and zero compiler
+errors passed. Exact scratch unassign/delete, final Build/Make, full original
+saved/native baseline and all 357 installed library hashes passed cleanup.
+Receipt: `cam-native-7e8a3317-43c9-47b0-835f-2af2dbc4a60c.json`, cleaned,
+accepted=true. Run the opt-in harness with `graph` for this phase. This is native
+conversion/compiler acceptance; canvas placement, layout, inline editing and
+runtime behavior remain unverified. No desktop input was sent.
+
+Graphical listing range validation now precedes workspace/native inspection and
+Build. Invalid start/limit values refuse without calling a native dependency;
+the same validation protects the orchestration helper. CommWatchdog's pending
+live harness now requests the supported maximum of 50 networks instead of 100.
+Its saved-listing replay and the range/freshness/source-preservation tests pass.
+
+The complete native package trace measured about 77 seconds per snapshot on
+this fixture. Declaration-property reads are the main measured cost. Offline
+Ade.tlb inspection shows _Variables offers Item/ItemById/Create and collection
+properties, but no bulk declaration export. Investigate efficient typed/cached
+COM property dispatch with exact old/new row equivalence before changing these
+checks; do not skip full native flag/group verification to improve speed.
+
 A newly created CamGenerator call has now passed an offline native lifecycle.
 `CodexCamProof` was created as ST; native declarations added CamSegmentStruct,
 Y_MS_CAM_STRUCT, four output variables and a CamGenerator instance. Reviewed

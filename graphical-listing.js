@@ -1,7 +1,15 @@
 import {isDeepStrictEqual} from 'node:util';
 
+export function validateListingRange(args) {
+  if(args.start!==undefined&&(!Number.isInteger(args.start)||args.start<1))
+    throw Error('Graphical listing start must be a positive integer');
+  if(args.limit!==undefined&&(!Number.isInteger(args.limit)||args.limit<1||args.limit>50))
+    throw Error('Graphical listing limit must be an integer from 1 to 50');
+}
+
 // Compiler text is diagnostic evidence, never a replacement graphical body.
 export async function graphicalListing(args, deps) {
+  validateListingRange(args);
   if(args.baseline_saved!==true)throw Error('Reconcile/save edits before graphical listing');
   const before=await deps.saved();
   const pou=before.pous.find(p=>p.name===args.pou);

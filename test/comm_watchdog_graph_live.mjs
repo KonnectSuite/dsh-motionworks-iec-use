@@ -77,7 +77,7 @@ try{
   await act('mw_ide_pou_convert',{pou,language:'FBD',expected_body_sha256:discovery.pous.find(p=>p.name===pou).body_sha256,conversion_reviewed:true});
   record.graph=await i.runCode('structure_snapshot',{project});collateral(record.before_conversion,record.graph);
   record.native=await i.verb('variable_snapshot',{pou},30000);
-  record.listing=await act('mw_ide_graphical_listing',{pou,limit:100});
+  record.listing=await act('mw_ide_graphical_listing',{pou,limit:50});
   record.instructions=graph(record.listing);
   const pin=record.listing.networks[0].lines.findIndex(l=>l.symbols.some(s=>s.instance?.name==='ProbeWatchdog'&&s.declaration?.name==='WatchDog'));
   assert.ok(pin>0);assert.match(record.instructions[pin],/^ST /);
@@ -94,7 +94,7 @@ try{
   assert.notEqual(record.edited.pous.find(p=>p.name===pou).body_sha256,record.graph.pous.find(p=>p.name===pou).body_sha256);
   assert.deepEqual(await i.verb('variable_snapshot',{pou},30000),record.native);
   const expected=[...record.instructions];assert.equal(expected[record.operand_index],originalLoad);expected[record.operand_index]=replacementLoad;
-  record.edited_listing=await act('mw_ide_graphical_listing',{pou,limit:100});
+  record.edited_listing=await act('mw_ide_graphical_listing',{pou,limit:50});
   assert.deepEqual(graph(record.edited_listing),expected,'Only the connected WatchDog constant may change');
   const make=await act('mw_ide_make');assert.equal(make.is_compiled,true);assert.equal(make.is_modified,false);
   assert.equal((await act('mw_ide_errors',{pane:'Errors'})).count,0);

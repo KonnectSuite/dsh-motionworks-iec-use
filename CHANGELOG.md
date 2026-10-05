@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Refuse invalid graphical listing ranges before native inspection or Build,
+  and correct the pending CommWatchdog harness to the supported 50-network limit.
+  Native CamGenerator ST-to-FBD conversion now passed complete pin-direction
+  resolution, source/declaration preservation, compilation and full cleanup.
+  Canvas geometry and inline editing are still unverified.
+
 - Verify a newly created native ST CamGenerator call on the exact disposable
   fixture, including all eight pins, task assignment, fresh Build/Make and full
   cleanup. Complete source/native baselines and all 357 installed library files

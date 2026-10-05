@@ -21,4 +21,11 @@ await assert.rejects(()=>graphicalListing(args,dependencies({saved:async()=>++ca
 calls=0;
 await assert.rejects(()=>graphicalListing(args,dependencies({status:async()=>({is_modified:++calls>2,is_compiled:true})})),/state changed/);
 const tool=i.defineTools().find(t=>t.name==='mw_ide_graphical_listing');assert.ok(tool);assert.ok(tool.parameters.required.includes('baseline_saved'));
+for(const invalid of [{limit:0},{limit:51},{limit:100},{limit:1.5},{limit:null},{start:0},{start:1.5},{start:null}]){
+ const untouched=new Proxy({}, {get(){throw Error('Invalid range reached a native dependency');}});
+ await assert.rejects(()=>graphicalListing({...args,...invalid},untouched),/listing (start|limit) must/);
+ // No project/workspace supplied: refusal must precede even native identity checks.
+ await assert.rejects(()=>tool.execute({...args,...invalid}),/listing (start|limit) must/);
+}
+for(const valid of [{start:1,limit:1},{start:2,limit:50}])assert.equal((await graphicalListing({...args,...valid},dependencies())).accepted,true);
 console.log('Graphical listing fresh-build and source/native-state guards passed');

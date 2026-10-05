@@ -8,12 +8,12 @@ import {__internals as i} from '../index.js';
 const workspace=process.env.MOTIONWORKS_MCP_WORKSPACE;
 assert.match(workspace??'',/motionworks-ide-smoke-58d23aaa-bb28-4c44-aad8-5ad9d9cbd266$/);
 const project=join(workspace,'.motionworks/stage/TopCutterS5'),pou='CodexCamProof',instance='CodexCamProofInstance';
-const mode=process.argv[2]??'run';assert.ok(['run','cleanup'].includes(mode));
+const mode=process.argv[2]??'run';assert.ok(['run','graph','cleanup'].includes(mode));
 const resume=process.env.MW_CAM_NATIVE_EVIDENCE;
 if(mode==='cleanup')assert.match(resume??'',/^cam-native-[a-f0-9-]+\.json$/);
 else assert.equal(resume,undefined);
 const file=join(workspace,'.motionworks/verification',resume??('cam-native-'+randomUUID()+'.json'));
-const record=mode==='cleanup'?JSON.parse(readFileSync(file,'utf8')):{project,pou,instance,phase:'requested',events:[],accepted:false,controller_downloaded:false};
+const record=mode==='cleanup'?JSON.parse(readFileSync(file,'utf8')):{project,pou,instance,requested_graph:mode==='graph',phase:'requested',events:[],accepted:false,controller_downloaded:false};
 assert.equal(record.project,project);assert.equal(record.pou,pou);assert.equal(record.instance,instance);
 const retain=()=>writeFileSync(file,JSON.stringify(record,null,2));
 const tools=new Map(i.defineTools().map(t=>[t.name,t]));
@@ -62,7 +62,7 @@ async function cleanup(){
  await compile();record.after=await i.runCode('structure_snapshot',{project});same(record.after,record.baseline);
  assert.deepEqual(await i.verb('structure_snapshot',{},180000),record.native_baseline);
  assert.deepEqual(manifest(record.library_root),record.library_before);
- record.cleanup_verified=true;record.accepted=record.call_compile_verified===true;
+ record.cleanup_verified=true;record.accepted=record.call_compile_verified===true&&(!record.requested_graph||record.compiled_graph_verified===true);
  record.phase='cleaned';retain();
 }
 try{
@@ -94,6 +94,27 @@ try{
   collateral(await i.runCode('structure_snapshot',{project}));
   assert.deepEqual(manifest(record.library_root),record.library_before);
   record.call_compile_verified=true;record.phase='compiled_call';retain();
+  if(record.requested_graph){
+   const saved=await i.runCode('structure_snapshot',{project});
+   const target=saved.pous.find(p=>p.name===pou);
+   await act('mw_ide_pou_convert',{pou,language:'FBD',expected_body_sha256:target.body_sha256,conversion_reviewed:true});
+   record.phase='converted';retain();
+   record.graphical_listing=await act('mw_ide_graphical_listing',{pou,limit:50});
+   assert.equal(record.graphical_listing.has_more,false);
+   assert.equal(record.graphical_listing.compiler_dependency_freshness_verified,true);
+   const symbols=record.graphical_listing.networks.flatMap(n=>n.lines.flatMap(l=>l.symbols));
+   for(const pin of record.interface.pins){
+    const resolved=symbols.filter(s=>s.instance?.name==='ProbeCam'&&s.declaration?.name===pin.name);
+    assert.ok(resolved.length>0,'Missing compiled pin '+pin.name);
+    for(const symbol of resolved){assert.equal(symbol.resolved,true);assert.equal(symbol.block_type,'CamGenerator');assert.equal(symbol.pin_direction,pin.direction);}
+   }
+   const graph=await i.runCode('structure_snapshot',{project});
+   assert.equal(graph.pous.find(p=>p.name===pou).language,'FBD');
+   assert.deepEqual(graph.pous.find(p=>p.name===pou).variables,target.variables);
+   collateral(graph);await compile();
+   assert.deepEqual(manifest(record.library_root),record.library_before);
+   record.compiled_graph_verified=true;record.phase='compiled_graph';retain();
+  }
   await cleanup();
  }
  console.log(JSON.stringify({accepted:record.accepted,cleanup_verified:record.cleanup_verified,evidence:file}));

@@ -68,7 +68,7 @@ const [
   { nativeVariableChange },
   { nativeStructureChange },
   { nativeCodeChange },
-  { graphicalListing },
+  { graphicalListing, validateListingRange },
   { exportPouPackage, importPouPackage },
   { convertPou },
   { fbInsertionPlan },
@@ -1462,6 +1462,7 @@ function defineTools() {
       parameters:{type:'object',additionalProperties:false,required:['project','pou','baseline_saved'],properties:{project:{type:'string'},pou:{type:'string'},baseline_saved:{type:'boolean'},start:{type:'integer',description:'First row to list, 1-based.'},limit:{type:'integer',description:'Maximum rows to list (1-50).'}}},
       output:{schema:openOutput(['accepted','evidence_path']),render:(_a,v)=>text(JSON.stringify(v,null,2))},
       execute:async args=>{
+        validateListingRange(args);
         const project=projectOf(args),identity=await assertIdeProjectProven();
         if(resolve(identity.active_project).replace(/\.mwt$/i,'').toLowerCase()!==project.toLowerCase())throw Error('REFUSED: wrong open project');
         const directory=join(workspaceRoot(),'.motionworks','verification');
