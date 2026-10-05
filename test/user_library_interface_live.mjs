@@ -27,10 +27,11 @@ try{
  record.cam=await tool.execute({project,name:'CamGenerator',library:'Cam_Toolbox_v375'});
  assert.equal(record.cam.evidence_kind,'installed-compiled-block-interface');
  assert.equal(record.cam.insertion_eligible,false);assert.equal(record.cam.compiler_cache_freshness_verified,false);
+ assert.equal(record.cam.compiler_pin_types_verified,true);
  assert.equal(record.cam.source_declaration_count,140);assert.equal(record.cam.compiler_declaration_count,141);
  assert.deepEqual(record.cam.pins.map(p=>[p.name,p.type,p.direction]),[['CamData','CamSegmentStruct','in_out'],['CamTable','Y_MS_CAM_STRUCT','in_out'],['Execute','BOOL','input'],['TableSize','UDINT','input'],['Done','BOOL','output'],['Busy','BOOL','output'],['Error','BOOL','output'],['ErrorID','UINT','output']]);
  assert.equal(record.cam.source_file,record.cam.cache_file);
- for(const [path,sha] of [[record.cam.source_file,record.cam.source_sha256],[record.cam.cache_file,record.cam.cache_sha256],[record.cam.worksheet_file,record.cam.worksheet_sha256],[record.cam.compiler_dependency,record.cam.compiler_dependency_sha256]])assert.equal(hash(readFileSync(path)),sha);
+ for(const [path,sha] of [[record.cam.source_file,record.cam.source_sha256],[record.cam.cache_file,record.cam.cache_sha256],[record.cam.worksheet_file,record.cam.worksheet_sha256],[record.cam.compiler_dependency,record.cam.compiler_dependency_sha256],[record.cam.compiler_type_table,record.cam.compiler_type_table_sha256]])assert.equal(hash(readFileSync(path)),sha);
  record.after=digest(await i.runCode('structure_snapshot',{project}));assert.equal(record.after,record.before);
  record.state=await i.verb('compile_state',{},30000);assert.equal(record.state.is_modified,false);assert.equal(record.state.is_compiled,true);
  record.accepted=true;console.log(JSON.stringify({accepted:true,evidence:file,interfaces:record.interfaces.map(r=>({name:r.name,pins:r.pins.length})),diagnostic_cam_pins:record.cam.pins.length,cam_insertion_eligible:false,compressed_interface_supported:false}));

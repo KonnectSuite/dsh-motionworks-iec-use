@@ -3,7 +3,7 @@ from types import SimpleNamespace
 from pathlib import Path
 from unittest.mock import patch
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]/'code'/'engine'))
-from motionworks_iec_mcp.block_interfaces import parse_parameter_table,sources,inspect,_user_library_declarations,parse_compiled_interface
+from motionworks_iec_mcp.block_interfaces import parse_parameter_table,sources,inspect,_user_library_declarations,parse_compiled_interface,compiler_type_names
 from motionworks_iec_mcp.variables import CompressedStreamError
 
 PT=b'pouKind:\tFUNCTION_BLOCK\r\npouName:\tTimer\r\nparNum:\t2\r\nparameters:\r\n\tVAR_INPUT\tIN\tBOOL\tYES\tNO\r\n\tVAR_OUTPUT\tQ\tBOOL\tYES\tNO\r\n'
@@ -13,6 +13,10 @@ class Interfaces(unittest.TestCase):
         dependency='(*\nT: FUNCTION_BLOCK Probe\nCI#: 1\nQVE: 3\nQPar: 2\n*)\nRun\t1\tVAR_INPUT\t@TYP:1\n\n;\nReady\t2\tVAR_OUTPUT\t@TYP:1\n\n;\n@T_Code_00\t3\tVAR\t@TYP:3\n\n;\n'
         parsed=parse_compiled_interface(listing,dependency,'Probe','Variables.VB')
         self.assertEqual([(p['name'],p['type'],p['direction']) for p in parsed['pins']],[('Run','BOOL','input'),('Ready','BOOL','output')])
+        self.assertTrue(parse_compiled_interface(listing,dependency,'Probe','Variables.VB',{1:'BOOL'})['compiler_pin_types_verified'])
+        for mapping in [{},{1:'INT'}]:
+            with self.assertRaises(ValueError):parse_compiled_interface(listing,dependency,'Probe','Variables.VB',mapping)
+        with self.assertRaises(ValueError):parse_compiled_interface(listing.replace('Ready : BOOL','Ready : INT'),dependency,'Probe','Variables.VB',{1:'BOOL'})
         for bad in [dependency.replace('FUNCTION_BLOCK Probe','FUNCTION_BLOCK Other'),
                     dependency.replace('QVE: 3','QVE: 4'),dependency.replace('QPar: 2','QPar: 1'),
                     dependency.replace('Ready\t2','Ready\t1'),dependency.replace('Ready\t2','Run\t2'),
@@ -24,6 +28,15 @@ class Interfaces(unittest.TestCase):
                     listing.replace('@V 8 0','@V 6 0'),listing.replace('Ready : BOOL;','Run : BOOL;'),
                     listing.replace('Ready : BOOL;','bad row'),listing+'\0']:
             with self.assertRaises(ValueError):parse_compiled_interface(bad,dependency,'Probe','Variables.VB')
+
+    def test_explicit_compiler_types_require_complete_counts_and_consistent_ids(self):
+        text='(*\nNDTE: 2\nNCPE: 1\nNDME: 1\n*)\n1 0\tTypes\\Vars\tStructure\t1024\t1\tUSER\tSTRUCT\t\t\t\t\n2 0\t\tRun\tBOOL\t1\t0\t\n3 0\tTypes\\Vars\tPair\t1025\t1\tUSER\tARRAY\tBOOL\t1\t\t\t\n3 0\t\t\t0\t1\t\n'
+        self.assertEqual(compiler_type_names(text),{1024:'Structure',1:'BOOL',1025:'Pair'})
+        for bad in [text.replace('NDTE: 2','NDTE: 3'),text.replace('NCPE: 1','NCPE: 2'),text.replace('NDME: 1','NDME: 0'),
+                    text.replace('Pair\t1025','Structure\t1025'),text.replace('Pair\t1025','Pair\t1024'),
+                    text.replace('ARRAY\tBOOL\t1','ARRAY\tINT\t1'),text.replace('STRUCT','UNKNOWN'),
+                    text.replace('\tRun\tBOOL\t1\t0\t\n','\tRun\tBOOL\t1\t0\t\n2 0\t\tReady\tBOOL\t1\t0\t\n')]:
+            with self.assertRaises(ValueError):compiler_type_names(bad)
 
     def test_named_user_library_worksheet_identity_and_refusals(self):
         declarations=b'VAR_INPUT\nRun : BOOL;\nEND_VAR\nVAR_OUTPUT\nReady : BOOL;\nEND_VAR\n'

@@ -19,7 +19,48 @@ SECTIONS={'VAR_INPUT':'input','VAR_OUTPUT':'output','VAR_IN_OUT':'in_out'}
 KINDS={'FUNCTION':'FUNCTION','FUNCTION_BLOCK':'FUNCTION_BLOCK','FUNCTIONBLOCK':'FUNCTION_BLOCK','PROGRAM':'PROGRAM'}
 IDENTIFIER=re.compile(r'^[A-Za-z_][A-Za-z_0-9]*$')
 
-def parse_compiled_interface(listing,dependency,name,worksheet):
+def compiler_type_names(text):
+    """Read explicit names/type IDs from the observed complete TYLLIST table."""
+    header=re.match(r'\A\(\*\r?\nNDTE: (\d+)\r?\nNCPE: (\d+)\r?\nNDME: (\d+)\r?\n\*\)\r?\n',text)
+    if not header or '\0' in text:raise ValueError('Unsupported compiler type-table header/encoding')
+    roots=[];properties=0;dimensions=0;current=None;children=0;types={};root_ids=set();root_names=set()
+    def bind(name,number):
+        if not IDENTIFIER.fullmatch(name) or not number.isdigit() or int(number)<1:raise ValueError('Invalid compiler type identity')
+        key=int(number)
+        if key in types and types[key].casefold()!=name.casefold():raise ValueError('Conflicting compiler type names')
+        types[key]=name
+    def finish():
+        if current and current[6]!='STRING' and children!=int(current[4]):raise ValueError('Compiler type member count mismatch')
+    for line in text[header.end():].splitlines():
+        if not line:continue
+        fields=line.split('\t')
+        if len(fields)<2:raise ValueError('Unsupported compiler type row')
+        if not re.fullmatch(r'\d+ \d+',fields[0]):raise ValueError('Invalid compiler type source identity')
+        if len(fields)>6 and fields[1]:
+            finish()
+            if len(fields) not in (11,12) or fields[5]!='USER' or fields[6] not in ('STRUCT','ARRAY','ENUM','STRING') or not fields[4].isdigit():raise ValueError('Unsupported compiler type root')
+            if fields[3] in root_ids or fields[2].casefold() in root_names:raise ValueError('Duplicate compiler type root')
+            root_ids.add(fields[3]);root_names.add(fields[2].casefold());bind(fields[2],fields[3])
+            if fields[6]=='ARRAY':bind(fields[7],fields[8])
+            roots.append(fields);current=fields;children=0
+        else:
+            if current is None or fields[1] or len(fields) not in (6,7):raise ValueError('Unsupported compiler type member')
+            children+=1
+            if current[6]=='STRUCT':
+                if not IDENTIFIER.fullmatch(fields[2]):raise ValueError('Invalid compiler structure member')
+                bind(fields[3],fields[4]);properties+=1
+            elif current[6]=='ARRAY':
+                if fields[2] or not re.fullmatch(r'-?\d+',fields[3]) or not re.fullmatch(r'-?\d+',fields[4]):raise ValueError('Invalid compiler array dimension')
+                dimensions+=1
+            elif current[6]=='ENUM':
+                if not IDENTIFIER.fullmatch(fields[2]):raise ValueError('Invalid compiler enum member')
+                properties+=1
+            else:raise ValueError('Unexpected compiler string member')
+    finish()
+    if (len(roots),properties,dimensions)!=tuple(int(x) for x in header.groups()):raise ValueError('Compiler type table is incomplete')
+    return types
+
+def parse_compiled_interface(listing,dependency,name,worksheet,type_names=None):
     """Diagnostic pins from explicit cache declarations, independently counted.
 
     This does not establish freshness against a protected source worksheet and
@@ -59,7 +100,12 @@ def parse_compiled_interface(listing,dependency,name,worksheet):
     pins=[dict(name=v.name,type=v.type_name,section=v.section,direction=SECTIONS[v.section],initial_value=v.initial_value,description=v.description)
           for v in table.variables if v.section in SECTIONS]
     if par_counts!=[str(len(pins))] or not pins:raise ValueError('Compiler public parameter count mismatch')
-    return dict(pins=pins,source_declaration_count=len(table.variables),compiler_declaration_count=len(rows))
+    if type_names is not None:
+        by_name={r[1]:r for r in rows}
+        for pin in pins:
+            token=re.fullmatch(r'@TYP:(\d+)\s*',by_name[pin['name']][4])
+            if not token or type_names.get(int(token[1]),'').casefold()!=pin['type'].casefold():raise ValueError('Compiled public pin type differs from explicit declaration')
+    return dict(pins=pins,source_declaration_count=len(table.variables),compiler_declaration_count=len(rows),compiler_pin_types_verified=type_names is not None)
 
 def _cached_library_interface(project_root,library_root,pou):
     cache=pou.source_path.parent/'tmp.sto'
@@ -82,13 +128,17 @@ def _cached_library_interface(project_root,library_root,pou):
         if kind=='FUNCTION_BLOCK' and name==pou.name:dependencies.append((path,raw))
     if len(dependencies)!=1:raise ValueError('Matching saved compiler dependency absent or ambiguous')
     dependency,raw=dependencies[0]
+    type_table=dependency.with_name('TYLLIST.TYP')
+    if not type_table.resolve().is_relative_to(Path(project_root).resolve()) or type_table.stat().st_size>2_000_000:raise ValueError('Compiler type table outside project or oversized')
+    type_bytes=type_table.read_bytes();type_names=compiler_type_names(type_bytes.decode('latin1'))
     identifiers=re.findall(r'^CI#:\s*(\d+)\s*$',raw.decode('latin1').split('*)',1)[0],re.M)
     if len(identifiers)!=1 or int(identifiers[0])!=int(dependency.stem[3:]):raise ValueError('Compiler dependency file/type identity mismatch')
-    result=parse_compiled_interface(listing.decode('latin1'),raw.decode('latin1'),pou.name,worksheets[0])
-    if before!=hashlib.sha256(cache.read_bytes()).hexdigest() or raw!=dependency.read_bytes() or source_hash!=hashlib.sha256(pou.source_path.read_bytes()).hexdigest():raise ValueError('Compiled interface changed during read')
+    result=parse_compiled_interface(listing.decode('latin1'),raw.decode('latin1'),pou.name,worksheets[0],type_names)
+    if before!=hashlib.sha256(cache.read_bytes()).hexdigest() or raw!=dependency.read_bytes() or type_bytes!=type_table.read_bytes() or source_hash!=hashlib.sha256(pou.source_path.read_bytes()).hexdigest():raise ValueError('Compiled interface changed during read')
     result.update(source_stream=matches[0],cache_file=str(cache),cache_sha256=before,
                   worksheet_file=str(pou.source_path),worksheet_sha256=source_hash,
                   compiler_dependency=str(dependency),compiler_dependency_sha256=hashlib.sha256(raw).hexdigest(),
+                  compiler_type_table=str(type_table),compiler_type_table_sha256=hashlib.sha256(type_bytes).hexdigest(),
                   origin='user_library_compiled_declarations',compiler_cache_freshness_verified=False,compiler_source_binding_verified=False,
                   insertion_eligible=False,evidence_kind='installed-compiled-block-interface')
     return result

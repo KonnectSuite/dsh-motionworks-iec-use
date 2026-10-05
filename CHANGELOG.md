@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Cross-check diagnostic compiled-interface pin types against the explicit saved
+  compiler type table, retaining its hash and refusing conflicting IDs, missing
+  counts and type-token mismatches. Native-bound CamGenerator reading passed;
+  source/cache freshness and insertion eligibility remain unverified.
+
 - Expose explicit library compiler declarations as diagnostic interfaces when a
   worksheet is unsupported, after independent dependency identity/count checks.
   The live-bound CamGenerator query returns eight public pins with hashes and

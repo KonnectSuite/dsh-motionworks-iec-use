@@ -4,6 +4,29 @@ This is work in progress. Version 0.5.5 did not establish complete IDE control.
 
 ## CamGenerator saved compiler metadata
 
+The diagnostic reader now also validates each public pin's numeric compiler type
+against explicit names in the sibling TYLLIST.TYP table, including the named
+CamSegmentStruct and Y_MS_CAM_STRUCT structures. The whole table's 41 type roots,
+166 component entries and 16 array dimensions match its header counts; duplicate
+or conflicting IDs, unknown names, incomplete counts and declaration/type-token
+mismatches are refused. It returns compiler_pin_types_verified=true and the type
+table's hash while freshness/source binding and insertion eligibility remain false.
+The native-bound read-only query passed with all eight pins and unchanged source
+baseline: `user-library-interfaces-1e130939-6f09-4c84-b375-ce138a38f3d7.json`.
+
+Read-only native API probes did not establish an alternative live pin reader.
+The installed `_Library` interface has identity/path properties but no POU/pin
+collection. The two library-relative GetObjectByLogicalName paths did not resolve
+CamGenerator using adeOtFunctionBlock=6. The existing POU variable's FbInstance
+getter returned null. Its BG program instance had a null Variables getter and an
+empty FbInstances collection. This is evidence about this offline fixture, not a
+claim that every native/online interface is unavailable. Retained evidence:
+`library-readonly-probe-48a34ac9-c32f-408f-b904-789ff9e77013.json` and
+`library-readonly-probe-10cad9b7-d492-4ef5-a794-62b0ca1dba11.json`.
+Earlier failed ROT attachment and probes remain retained. No OpenDocument,
+Compile, Save, Create or desktop input ran; the subsequent full saved/native
+fixture comparison passed with seven POUs, 164 globals and compiled/unmodified state.
+
 The public interface reader now exposes this cache path as diagnostic evidence
 after live library/reference matching, exact block and worksheet identity checks,
 complete source/dependency declaration membership, count/ordinal validation and
