@@ -4,6 +4,19 @@ This is work in progress. Version 0.5.5 did not establish complete IDE control.
 
 ## CamGenerator saved compiler metadata
 
+An authorized fresh native Build now passed on the exact disposable fixture:
+Compile(2) showed an observed pending-to-compiled transition and rewrote both
+ICI00036.DIT and TYLLIST.TYP during the request window. All eight diagnostic
+CamGenerator pins remained identical. Full saved/native project comparisons and
+the complete installed Cam Toolbox file manifest stayed unchanged; the fixture
+remained compiled and unmodified. The library's tmp.sto itself was not rewritten.
+Evidence: `cam-compiler-refresh-9798b91d-75ae-462c-8ee5-55f588afe3e6.json`.
+The opt-in `test/cam_compiler_refresh_live.mjs` retains source/library digests,
+compiler timestamps/hashes, native snapshots and the Build verdict. This proves
+fresh project compiler evidence against current native references, not fresh
+library-cache generation or protected-worksheet/source binding. Source binding
+and insertion eligibility therefore remain false. No desktop input was sent.
+
 The diagnostic reader now also validates each public pin's numeric compiler type
 against explicit names in the sibling TYLLIST.TYP table, including the named
 CamSegmentStruct and Y_MS_CAM_STRUCT structures. The whole table's 41 type roots,
