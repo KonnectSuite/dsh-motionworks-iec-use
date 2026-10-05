@@ -37,6 +37,12 @@ Optional `flags` on add/edit changes explicit boolean retain/pdd/opc/disabled/
 not_on_plc/redundant properties through native setters. Omitted flags stay
 unchanged; verify all flags and review their effect before compilation.
 Delete requires explicit user approval and reference review; renames require review.
+For declaration group create/rename/empty delete use
+`mw_ide_variable_group_change` with the exact group name, saved baseline and
+optional POU (omit for globals). Rename uses `new_name`; delete requires approval,
+an empty group and another remaining group. Require `accepted:true` and inspect
+retained evidence on failure before further actions. This changes group labels;
+moving an existing variable between groups still follows the worksheet workflow.
 Run fresh Build/Make after the intended edits. This API does not require opening
 a worksheet. To inspect or edit a named worksheet, use `mw_ide_open_worksheet`
 with kind `variables` or `code`, the staged project, and exact POU (omit only for

@@ -2,6 +2,26 @@
 
 This is work in progress. Version 0.5.5 did not establish complete IDE control.
 
+## Native declaration groups and crash recovery
+
+The new `mw_ide_variable_group_change` registers as tool 62. Automated planning,
+reader, corruption, package-path and full suite checks pass. Live local/global
+create, populated rename, approved empty delete and populated-delete refusal
+passed through the public tool. Retain and OPC flags were preserved. Scratch
+members and the scratch POU were removed; fresh Build/Make and zero errors passed.
+
+The overall lifecycle receipt `native-groups-live-6a819978-4402-414e-9dfb-f9dc335ab909.json`
+remains stopped and accepted=false: exact final cleanup differs only in the global
+`Global_Variables.VGR` stream (before c7694fc7…, after 3415dc73…). Full saved
+declarations, POUs, tasks, translations and all other program streams match.
+Do not call this exact binary restoration or ignore the grid stream globally.
+Next investigate the grid difference with a retained raw before/after stream,
+complete native global flags/membership and an explicitly scoped fresh fixture.
+No failed mutation should be repeated; all scratch mutations already completed.
+
+Running Arya chat catalog exposure remains unverified; installed host registration
+alone does not prove a chat has reloaded the plugin.
+
 ## Assigned two-block FBD and observed constant editing
 
 Fresh acceptance `toolbox-graph-299eeadd-536c-4b46-9905-20b3bd1c93d0.json`

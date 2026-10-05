@@ -13,6 +13,7 @@ const commands = [
   [process.execPath, ['test/variable_audit.mjs']],
   [process.execPath, ['test/edit_session.mjs']],
   [process.execPath, ['test/native_variables.mjs']],
+  [process.execPath, ['test/native_groups.mjs']],
   [process.execPath, ['test/native_structure.mjs']],
   [process.execPath, ['test/native_code.mjs']],
   [process.execPath, ['test/graphical_listing.mjs']],
@@ -44,6 +45,8 @@ const commands = [
     ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', 'test/trial_dialog.ps1']],
   [join(process.env.SystemRoot ?? 'C:\\Windows', 'System32/WindowsPowerShell/v1.0/powershell.exe'),
     ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', 'test/native_snapshot.ps1']],
+  [join(process.env.SystemRoot ?? 'C:\\Windows', 'System32/WindowsPowerShell/v1.0/powershell.exe'),
+    ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', 'test/native_group_reader.ps1']],
   [join(process.env.SystemRoot ?? 'C:\\Windows', 'System32/WindowsPowerShell/v1.0/powershell.exe'),
     ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', 'test/output_pane.ps1']],
 ];

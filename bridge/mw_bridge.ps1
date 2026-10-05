@@ -666,6 +666,35 @@ function Get-VariableRows($vars) {
     if([int]$vars.Count -ne $count){throw 'Native declaration count changed during inspection'}
     return ,$rows
 }
+function Get-GroupMemberRows($vars) {
+    $groups=@();$collection=$vars.Groups;$count=[int]$collection.Count
+    for($i=1;$i -le $count;$i++){
+        $g=$collection.Item($i);$members=@();$variables=$g.Variables;$memberCount=[int]$variables.Count
+        for($j=1;$j -le $memberCount;$j++){$members+=,[string]$variables.Item($j).Name}
+        if([int]$variables.Count -ne $memberCount){throw 'Native group members changed during inspection'}
+        $groups+=,[ordered]@{name=[string]$g.Name;read_only=[bool]$g.ReadOnly;members=$members}
+    }
+    if([int]$collection.Count -ne $count){throw 'Native group count changed during inspection'}
+    return ,$groups
+}
+function Get-VariableGroupSnapshot($app,[string]$pou) {
+    $vars=Get-VariableSheet $app $pou;$structure=Get-NativeStructure $app
+    $membership=[ordered]@{globals=(Get-GroupMemberRows (Get-VariableSheet $app ''))}
+    $pous=$app.ActiveProject.Pous;$pouCount=[int]$pous.Count
+    if($pouCount -ne $structure.pous.Count){throw 'Native POU count changed during group inspection'}
+    for($i=1;$i -le $pouCount;$i++){
+        $p=$pous.Item($i);$name=[string]$p.Name
+        if($name -cne $structure.pous[$i-1].name){throw 'Native POU identity changed during group inspection'}
+        $membership['pou:'+$name]=Get-GroupMemberRows $p.Variables
+    }
+    $key=if($pou){'pou:'+$pou}else{'globals'}
+    $groups=@($membership[$key] | ForEach-Object {[ordered]@{name=$_.name;read_only=$_.read_only}})
+    $libraries=@();$collection=$app.ActiveProject.Libraries;$count=[int]$collection.Count
+    for($i=1;$i -le $count;$i++){$lib=$collection.Item($i);$libraries+=,[ordered]@{name=[string]$lib.Name;path=[string]$lib.FullName;logical_name=[string]$lib.LogicalName}}
+    if([int]$collection.Count -ne $count){throw 'Native library count changed during inspection'}
+    if(($structure | ConvertTo-Json -Depth 20 -Compress) -cne ((Get-NativeStructure $app) | ConvertTo-Json -Depth 20 -Compress)){throw 'Native structure changed during group inspection'}
+    return [ordered]@{variables=(Get-VariableRows $vars);groups=$groups;structure=$structure;libraries=$libraries;group_membership=$membership}
+}
 function Assert-VariableBaseline($expected,$actual) {
     if($null -eq $expected -or $expected.Count -ne $actual.Count){throw 'REFUSED: native declaration baseline changed'}
     foreach($row in $expected) {
@@ -1732,6 +1761,43 @@ while ($true) {
                 }while(-not $matches -and [DateTime]::UtcNow -lt $deadline)
                 $data=[ordered]@{operation=$op;saved=$true;snapshot=$after;is_modified=[bool]$app.ActiveProject.IsModified;method='native_com';native_matches_plan=$matches}
                 $ok=$true
+            }
+            'variable_group_snapshot' {
+                $app=Connect-App;[void](Assert-StagedOpen $app $verb)
+                if($app.ActiveProject.IsModified -ne $false){throw 'REFUSED: unsaved native group baseline'}
+                $data=Get-VariableGroupSnapshot $app ([string]$req.pou)
+                if($app.ActiveProject.IsModified -ne $false){throw 'REFUSED: group inspection changed modified state'};$ok=$true
+            }
+            'variable_group_mutate' {
+                $app=Connect-App;[void](Assert-StagedOpen $app $verb)
+                $project=[IO.Path]::GetFullPath([string]$req.project)
+                if($req.baseline_saved -ne $true -or [IO.Path]::GetFullPath($app.ActiveProject.FullName) -ine ($project+'.mwt') -or $app.ActiveProject.IsModified -ne $false){throw 'REFUSED: wrong or unsaved project'}
+                $pou=[string]$req.pou;$op=[string]$req.operation;$name=[string]$req.name;$destination=if($op -eq 'rename'){[string]$req.new_name}else{$name}
+                if($op -notin @('create','rename','delete') -or [string]::IsNullOrWhiteSpace($name) -or $name.Length -gt 255 -or $name -match '[\x00-\x1f]'){throw 'REFUSED: invalid group operation/name'}
+                if($op -ne 'delete' -and ([string]::IsNullOrWhiteSpace($destination) -or $destination -cne $destination.Trim() -or $destination.Length -gt 255 -or $destination -match '[\x00-\x1f]')){throw 'REFUSED: invalid new group name'}
+                $now=Get-VariableGroupSnapshot $app $pou
+                if($app.ActiveProject.IsModified -ne $false){throw 'REFUSED: native state became unsaved during inspection'}
+                if(($now | ConvertTo-Json -Depth 30 -Compress) -cne ($req.before_state | ConvertTo-Json -Depth 30 -Compress)){throw 'REFUSED: native group baseline changed'}
+                if($pou -and @($now.structure.pous | Where-Object {$_.name -ceq $pou -and $_.read_only -eq $false}).Count -ne 1){throw 'REFUSED: exact writable POU required'}
+                foreach($property in $req.before_files.PSObject.Properties){
+                    $file=[IO.Path]::GetFullPath((Join-Path $project $property.Name))
+                    if(-not $file.StartsWith($project.TrimEnd('\')+'\',[StringComparison]::OrdinalIgnoreCase)){throw 'REFUSED: group baseline outside project'}
+                    Assert-NoLinkedPath $file
+                    if((Get-MwSha256 $file) -ine [string]$property.Value){throw 'REFUSED: saved group baseline changed'}
+                }
+                $vars=Get-VariableSheet $app $pou;$target=$null;$matches=0;$collision=$false;$count=[int]$vars.Groups.Count
+                for($i=1;$i -le $count;$i++){$g=$vars.Groups.Item($i);if([string]$g.Name -ceq $name){$target=$g;$matches++};if([string]$g.Name -ieq $destination -and ($op -eq 'create' -or [string]$g.Name -cne $name)){$collision=$true}}
+                if($collision){throw 'REFUSED: group destination collision'}
+                if($op -eq 'create'){
+                    if($matches){throw 'REFUSED: group already exists'}
+                    [void]$vars.Groups.Create($destination)
+                }else{
+                    if($matches -ne 1 -or $target.ReadOnly -ne $false){throw 'REFUSED: exact writable group required'}
+                    if($op -eq 'rename'){if($name -ceq $destination){throw 'REFUSED: group already named'};$target.Name=$destination}
+                    else{if($req.user_approved -ne $true -or $target.Variables.Count -ne 0 -or $count -le 1){throw 'REFUSED: approved empty group with another remaining group required'};$target.Delete()}
+                }
+                $app.ActiveProject.Save()
+                $data=[ordered]@{saved=($app.ActiveProject.IsModified -eq $false);is_modified=[bool]$app.ActiveProject.IsModified;operation=$op;method='native_com_group'};$ok=$true
             }
             'variable_mutate' {
                 $app=Connect-App

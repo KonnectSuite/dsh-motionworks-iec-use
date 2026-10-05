@@ -23,6 +23,7 @@
     "verification.js",
     "edit-session.js",
     "native-variables.js",
+    "native-groups.js",
     "native-structure.js",
     "native-code.js",
     "graphical-listing.js",
@@ -94,6 +95,9 @@
     "test/restore_fixture_group.ps1",
     "test/trial_dialog.ps1",
     "test/native_snapshot.ps1",
+    "test/native_groups.mjs",
+    "test/native_groups_live.mjs",
+    "test/native_group_reader.ps1",
     "test/output_pane.ps1",
     "test/ide_ui_session.mjs",
     "!bridge/*.lock"

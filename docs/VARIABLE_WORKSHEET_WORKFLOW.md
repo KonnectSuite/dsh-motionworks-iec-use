@@ -36,6 +36,20 @@ authorize typing, even when the native view matches. An unsettled request return
 `accepted=false`, `action_performed=true`; inspect it without repeating the request.
 The dialog workflow below is a fallback for operations the API cannot perform.
 
+## Manage declaration groups through the native API
+
+`mw_ide_variable_group_change` supports create, rename and empty-group deletion.
+Supply `project`, `baseline_saved:true`, `operation` and the exact `name`; supply
+`pou` for local declarations or omit it for globals. Rename requires `new_name`.
+Deletion requires `user_approved:true`, no members and another remaining group.
+The tool checks all project group memberships against saved declarations and
+retains complete evidence while returning a compact verdict. Require
+`accepted:true`; after a failure inspect the receipt and current state before
+another action. Finish intended edits with fresh Build/Make.
+
+Native `VariableGroup.Name` is writable. This API preserves member identities,
+values and six native flags. It does not move a declaration between groups.
+
 ## Move an existing declaration between groups
 
 Native `Variable.Group` is read-only in the declared installed interface;

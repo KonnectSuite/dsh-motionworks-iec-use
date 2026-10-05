@@ -71,10 +71,12 @@ const [
   { exportPouPackage, importPouPackage },
   { convertPou },
   { fbInsertionPlan },
+  { nativeGroupChange },
 ] = await Promise.all([
   'verification.js', 'edit-session.js', 'native-variables.js',
   'native-structure.js', 'native-code.js', 'graphical-listing.js',
   'pou-package.js', 'pou-conversion.js', 'fb-insertion.js',
+  'native-groups.js',
 ].map(file => import(pathToFileURL(join(HERE, file)).href)));
 
 export const name = 'motionworks-iec-use';
@@ -1582,6 +1584,34 @@ function defineTools() {
         if(!isInsideWorkspace(evidence_path))throw new Error('REFUSED: linked evidence file');
         writeFileSync(evidence_path,JSON.stringify({args,...result},null,2),{encoding:'utf8',flag:'wx'});
         return {...result,evidence_path};
+      },
+    },
+    {
+      name:'mw_ide_variable_group_change',
+      description:'Create, rename, or delete an empty local/global declaration group through the native IDE API. Omit pou for resource globals. Requires exact saved/native declaration alignment; preserves every target declaration/flag, POU code, tasks, libraries and unrelated saved streams. Rename changes group labels/member metadata; it does not rename or move variables. Delete requires user_approved:true, no members, and another remaining group. Refuses read-only or ambiguous groups, name collisions, stale source/native baselines and unsaved state. Retains full before/after evidence, renders a compact result; finish intended changes with fresh Build/Make. On unverified action inspect evidence and current state without automatic retry.',
+      parameters:{type:'object',additionalProperties:false,required:['project','operation','name','baseline_saved'],properties:{project:{type:'string'},pou:{type:'string',description:'Exact POU identifier; omit only for resource globals.'},operation:{type:'string',enum:['create','rename','delete']},name:{type:'string',description:'Exact existing group name, or new trimmed group name for create; 1-255 characters.'},new_name:{type:'string',description:'New trimmed group name for rename only; 1-255 characters.'},baseline_saved:{type:'boolean'},user_approved:{type:'boolean'}}},
+      output:{schema:openOutput(['accepted','action_performed','operation','evidence_path']),render:(_a,v)=>text(JSON.stringify(v))},
+      execute:async args=>{
+        const project=projectOf(args),identity=await assertIdeProjectProven();
+        if(resolve(identity.active_project).replace(/\.mwt$/i,'').toLowerCase()!==project.toLowerCase())throw Error('REFUSED: wrong open project');
+        const directory=join(workspaceRoot(),'.motionworks','verification');
+        if(!isInsideWorkspace(directory))throw Error('REFUSED: linked evidence directory');
+        mkdirSync(directory,{recursive:true});
+        const evidence_path=join(directory,'native-group-'+randomUUID()+'.json');
+        const record={phase:'requested',args,project,events:[]};let attempted=false;
+        const retain=()=>writeFileSync(evidence_path,JSON.stringify(record,null,2),'utf8');retain();
+        const observe=async(name,fn)=>{const value=await fn();record.events.push({name,value});retain();return value;};
+        try{
+          const result=await nativeGroupChange(args,{
+            status:()=>observe('status',()=>verb('compile_state',{},30000)),
+            saved:()=>observe('saved',()=>runCode('structure_snapshot',{project})),
+            snapshot:()=>observe('native',()=>verb('variable_group_snapshot',{pou:args.pou},NATIVE_PACKAGE_TIMEOUT_MS)),
+            retain:async plan=>{record.plan=plan;record.phase='plan_retained';retain();},
+            mutate:request=>{attempted=true;record.phase='mutation_requested';retain();return observe('mutation',()=>verb('variable_group_mutate',{...request,project},NATIVE_PACKAGE_TIMEOUT_MS));},
+          });
+          record.phase=result.accepted?'verified':'unverified';record.result=result;retain();
+          return {accepted:result.accepted,action_performed:true,operation:args.operation,member_count:result.member_count,errors:result.errors,evidence_path,next_step:result.accepted?'Run fresh Build/Make after intended edits.':'STOP: inspect retained/current state; no automatic retry or repair.'};
+        }catch(error){record.phase='stopped';record.error=error.message;retain();return {accepted:false,action_performed:attempted,operation:args.operation,mutation_attempted:attempted,error:error.message,evidence_path,next_step:'Inspect retained/current state before another action; no automatic retry.'};}
       },
     },
     {

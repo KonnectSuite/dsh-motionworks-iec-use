@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Add `mw_ide_variable_group_change` for native local/global group creation,
+  rename and approved empty deletion. Guard complete project memberships,
+  declaration flags, source streams and saved/native structural baselines;
+  return compact results with retained evidence instead of manual group editing.
+
 - Guide native preparation of new supported FBD logic through ST FB insertion
   and reviewed native conversion. Assigned TON/TON_Retentive conversion and a
   single observed Retentive Preset inline edit passed exact compiler-instruction,
