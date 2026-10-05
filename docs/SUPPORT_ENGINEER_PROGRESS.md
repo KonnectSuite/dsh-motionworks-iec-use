@@ -2,7 +2,34 @@
 
 This is work in progress. Version 0.5.5 did not establish complete IDE control.
 
-## CamGenerator saved compiler metadata
+## Native declaration reader performance investigation
+
+Read-only benchmarks now compared all 429 declarations across globals and seven
+POU sheets, retaining every current reader field and flag. Handwritten cached
+IDispatch definitions matched but improved total time only about 4% in the
+reversed full-project run, so that candidate was not enabled. Interop generated
+from the installed Ade.tlb matched every row in both orders: total times were
+29.491s versus 35.023s (generated first) and 23.841s versus 38.041s (legacy first).
+These are fixture observations, not general timing guarantees; some small sheets
+were slower. The fixture's complete saved/native baseline audit passed afterward.
+
+The reproducible, SDK/assembly-hash-bound probe in
+test/probes/sdk-variable-reader passed all 429 rows with generated-first total
+30.835s versus legacy 36.568s. Receipt:
+`variable-reader-generated-verified-local-cache.json`. SDK SHA256:
+`7ccec37b8fcff5d1a55198f51a7f97ded0429b2eb0ab740b5cede8cfd9950c6e`.
+An earlier attempt to load its generated DLL inside the fixture verification
+folder refused with .NET network-location error 0x80131515; that failed receipt
+is retained as `variable-reader-generated-verified.json`. A separate ordinary
+workspace cache loaded normally; no loader/security setting was changed.
+
+No production reader is switched yet. Next validate version/identity and load
+failure handling, full native package snapshots, and declaration mutation/flag
+read-back before integration. Generated SDK interop also identifies
+_Variable.FbInstance as a Boolean getter, not a pin-object getter; this corrects
+the interpretation of the earlier failed object probe below.
+
+## CamGenerator native and compiler acceptance
 
 The reviewed CamGenerator call also passed guarded native ST-to-FBD conversion.
 Its fresh graphical compiler listing has one network and ten pin annotations:
@@ -74,8 +101,10 @@ baseline: `user-library-interfaces-1e130939-6f09-4c84-b375-ce138a38f3d7.json`.
 Read-only native API probes did not establish an alternative live pin reader.
 The installed `_Library` interface has identity/path properties but no POU/pin
 collection. The two library-relative GetObjectByLogicalName paths did not resolve
-CamGenerator using adeOtFunctionBlock=6. The existing POU variable's FbInstance
-getter returned null. Its BG program instance had a null Variables getter and an
+CamGenerator using adeOtFunctionBlock=6. The initial variable probe treated
+FbInstance as an object and failed accessing Type. The later SDK-generated
+interop identifies that getter as Boolean, so this failure does not establish
+anything about a pin-object reader. Its BG program instance had a null Variables getter and an
 empty FbInstances collection. This is evidence about this offline fixture, not a
 claim that every native/online interface is unavailable. Retained evidence:
 `library-readonly-probe-48a34ac9-c32f-408f-b904-789ff9e77013.json` and
