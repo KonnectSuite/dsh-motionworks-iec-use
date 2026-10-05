@@ -3,11 +3,28 @@ from types import SimpleNamespace
 from pathlib import Path
 from unittest.mock import patch
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]/'code'/'engine'))
-from motionworks_iec_mcp.block_interfaces import parse_parameter_table,sources,inspect,_user_library_declarations
+from motionworks_iec_mcp.block_interfaces import parse_parameter_table,sources,inspect,_user_library_declarations,parse_compiled_interface
 from motionworks_iec_mcp.variables import CompressedStreamError
 
 PT=b'pouKind:\tFUNCTION_BLOCK\r\npouName:\tTimer\r\nparNum:\t2\r\nparameters:\r\n\tVAR_INPUT\tIN\tBOOL\tYES\tNO\r\n\tVAR_OUTPUT\tQ\tBOOL\tYES\tNO\r\n'
 class Interfaces(unittest.TestCase):
+    def test_compiled_interface_requires_exact_independent_identity_and_counts(self):
+        listing='(*\nT: FUNCTION_BLOCK\nNVD: 00003\n*)\nFUNCTION_BLOCK Probe\n@WS POE\\Probe\\Variables.vb\nVAR_INPUT\n@V 6 0 Run : BOOL;\nEND_VAR\nVAR_OUTPUT\n@V 8 0 Ready : BOOL;\nEND_VAR\n@WS POE\\Probe\\Code.stb\n'
+        dependency='(*\nT: FUNCTION_BLOCK Probe\nCI#: 1\nQVE: 3\nQPar: 2\n*)\nRun\t1\tVAR_INPUT\t@TYP:1\n\n;\nReady\t2\tVAR_OUTPUT\t@TYP:1\n\n;\n@T_Code_00\t3\tVAR\t@TYP:3\n\n;\n'
+        parsed=parse_compiled_interface(listing,dependency,'Probe','Variables.VB')
+        self.assertEqual([(p['name'],p['type'],p['direction']) for p in parsed['pins']],[('Run','BOOL','input'),('Ready','BOOL','output')])
+        for bad in [dependency.replace('FUNCTION_BLOCK Probe','FUNCTION_BLOCK Other'),
+                    dependency.replace('QVE: 3','QVE: 4'),dependency.replace('QPar: 2','QPar: 1'),
+                    dependency.replace('Ready\t2','Ready\t1'),dependency.replace('Ready\t2','Run\t2'),
+                    dependency.replace('Ready\t2\tVAR_OUTPUT','Ready\t2\tVAR_INPUT'),
+                    dependency.replace('@T_Code_00\t3\tVAR','@T_Code_00\t3\tVAR_OUTPUT')]:
+            with self.assertRaises(ValueError):parse_compiled_interface(listing,bad,'Probe','Variables.VB')
+        for bad in [listing.replace('FUNCTION_BLOCK Probe','FUNCTION_BLOCK Other'),
+                    listing.replace('POE\\Probe\\Variables.vb','POE\\Other\\Variables.vb'),
+                    listing.replace('@V 8 0','@V 6 0'),listing.replace('Ready : BOOL;','Run : BOOL;'),
+                    listing.replace('Ready : BOOL;','bad row'),listing+'\0']:
+            with self.assertRaises(ValueError):parse_compiled_interface(bad,dependency,'Probe','Variables.VB')
+
     def test_named_user_library_worksheet_identity_and_refusals(self):
         declarations=b'VAR_INPUT\nRun : BOOL;\nEND_VAR\nVAR_OUTPUT\nReady : BOOL;\nEND_VAR\n'
         streams={'Variables.VB':declarations,'Variables.VGR':struct.pack('<III',0,0,2),'Variables.VB.sn':b'snapshot-not-declarations'}

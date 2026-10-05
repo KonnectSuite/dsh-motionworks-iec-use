@@ -2,6 +2,8 @@
 
 Firmware .PT parameter tables explicitly encode direction/type. User library
 interfaces come from declaration streams, never from compiled identifier heaps.
+Unsupported worksheets can expose independently counted, explicit cache
+declarations as diagnostic evidence only, with insertion eligibility false.
 This module only reads; no library is opened for editing or copied into a POU.
 """
 import hashlib
@@ -10,11 +12,86 @@ from pathlib import Path
 from .cfb import CompoundFile
 from .project import Project
 from .tree import parse_document
-from .variables import decode_declarations,read_grid_variable_count,cross_check
+from .variables import decode_declarations,read_grid_variable_count,cross_check,parse_declarations,CompressedStreamError
+from .graphical_listing import DEPENDENCY_DECLARATION,identity as compiler_identity
 
 SECTIONS={'VAR_INPUT':'input','VAR_OUTPUT':'output','VAR_IN_OUT':'in_out'}
 KINDS={'FUNCTION':'FUNCTION','FUNCTION_BLOCK':'FUNCTION_BLOCK','FUNCTIONBLOCK':'FUNCTION_BLOCK','PROGRAM':'PROGRAM'}
 IDENTIFIER=re.compile(r'^[A-Za-z_][A-Za-z_0-9]*$')
+
+def parse_compiled_interface(listing,dependency,name,worksheet):
+    """Diagnostic pins from explicit cache declarations, independently counted.
+
+    This does not establish freshness against a protected source worksheet and
+    intentionally has a different evidence kind from insertion-eligible tables.
+    """
+    if '\0' in listing or '\0' in dependency:raise ValueError('Unsupported compiled interface encoding')
+    listing=listing.replace('\r','')
+    header=re.match(r'\A\(\*\n(.*?)\n\*\)\nFUNCTION_BLOCK ([A-Za-z_][A-Za-z_0-9]*)\n',listing,re.S)
+    if not header or header[2]!=name:raise ValueError('Compiled library interface identity mismatch')
+    counts=re.findall(r'^NVD:\s*(\d+)\s*$',header[1],re.M)
+    kinds=re.findall(r'^T:\s*(\w+)\s*$',header[1],re.M)
+    if kinds!=['FUNCTION_BLOCK'] or len(counts)!=1:raise ValueError('Compiled library header absent or ambiguous')
+    markers=list(re.finditer(r'^@WS (.+)$',listing,re.M))
+    expected='POE/'+name+'/'+worksheet
+    if len(markers)<2 or markers[0][1].replace('\\','/').casefold()!=expected.casefold():
+        raise ValueError('Compiled declaration worksheet identity mismatch')
+    declaration=listing[markers[0].end():markers[1].start()]
+    handles=re.findall(r'^@V (\d+) (\d+)\s+',declaration,re.M)
+    if not handles or len(set(handles))!=len(handles):raise ValueError('Compiled source declaration handles absent or duplicate')
+    cleaned=re.sub(r'^@V \d+ \d+\s*','',declaration,flags=re.M)
+    table=parse_declarations(cleaned)
+    if table.warnings or len(table.variables)!=len(handles):raise ValueError('Compiled source declarations incomplete')
+    names=[v.name.casefold() for v in table.variables]
+    if len(set(names))!=len(names):raise ValueError('Duplicate compiled source declaration name')
+    if compiler_identity(dependency)!=('FUNCTION_BLOCK',name):raise ValueError('Compiler dependency block identity mismatch')
+    dep_header=dependency.split('*)',1)[0]
+    dep_counts=re.findall(r'^QVE:\s*(\d+)\s*$',dep_header,re.M)
+    par_counts=re.findall(r'^QPar:\s*(\d+)\s*$',dep_header,re.M)
+    rows=list(DEPENDENCY_DECLARATION.finditer(dependency))
+    if len(dep_counts)!=1 or int(dep_counts[0])!=int(counts[0]) or len(rows)!=int(counts[0]):raise ValueError('Compiler declaration count mismatch')
+    if {int(r[2]) for r in rows}!=set(range(1,len(rows)+1)) or len({r[1].casefold() for r in rows})!=len(rows):
+        raise ValueError('Compiler declaration ordinals/names incomplete or duplicate')
+    source={(v.name,v.section) for v in table.variables}
+    ordinary={(r[1],r[3]) for r in rows if not re.fullmatch(r'@T_Code_\d+',r[1])}
+    if source!=ordinary or any(r[3]!='VAR' for r in rows if r[1].startswith('@')):
+        raise ValueError('Library/dependency declaration identities differ')
+    pins=[dict(name=v.name,type=v.type_name,section=v.section,direction=SECTIONS[v.section],initial_value=v.initial_value,description=v.description)
+          for v in table.variables if v.section in SECTIONS]
+    if par_counts!=[str(len(pins))] or not pins:raise ValueError('Compiler public parameter count mismatch')
+    return dict(pins=pins,source_declaration_count=len(table.variables),compiler_declaration_count=len(rows))
+
+def _cached_library_interface(project_root,library_root,pou):
+    cache=pou.source_path.parent/'tmp.sto'
+    if not cache.resolve().is_relative_to(Path(library_root).resolve()):raise ValueError('Linked library cache escapes its bound root')
+    before=hashlib.sha256(cache.read_bytes()).hexdigest()
+    source_hash=hashlib.sha256(pou.source_path.read_bytes()).hexdigest()
+    container=CompoundFile(cache);stream='@$@$@$@$.clu'
+    matches=[n for n in container.stream_names() if n.casefold()==stream.casefold()]
+    worksheets=[n for n in pou.source().stream_names() if n.upper().endswith('.VB')]
+    if len(matches)!=1 or len(worksheets)!=1:raise ValueError('Compiled library declaration stream absent or ambiguous')
+    listing=container.read_stream(matches[0])
+    if len(listing)>2_000_000:raise ValueError('Compiled declaration cache exceeds bound')
+    dependencies=[]
+    for path in (Path(project_root)/'C').rglob('ICI*.DIT'):
+        if not path.resolve().is_relative_to(Path(project_root).resolve()):raise ValueError('Linked compiler dependency escapes project')
+        if path.stat().st_size>2_000_000:raise ValueError('Compiler dependency exceeds bound')
+        raw=path.read_bytes()
+        try:kind,name=compiler_identity(raw.decode('latin1'))
+        except ValueError:continue
+        if kind=='FUNCTION_BLOCK' and name==pou.name:dependencies.append((path,raw))
+    if len(dependencies)!=1:raise ValueError('Matching saved compiler dependency absent or ambiguous')
+    dependency,raw=dependencies[0]
+    identifiers=re.findall(r'^CI#:\s*(\d+)\s*$',raw.decode('latin1').split('*)',1)[0],re.M)
+    if len(identifiers)!=1 or int(identifiers[0])!=int(dependency.stem[3:]):raise ValueError('Compiler dependency file/type identity mismatch')
+    result=parse_compiled_interface(listing.decode('latin1'),raw.decode('latin1'),pou.name,worksheets[0])
+    if before!=hashlib.sha256(cache.read_bytes()).hexdigest() or raw!=dependency.read_bytes() or source_hash!=hashlib.sha256(pou.source_path.read_bytes()).hexdigest():raise ValueError('Compiled interface changed during read')
+    result.update(source_stream=matches[0],cache_file=str(cache),cache_sha256=before,
+                  worksheet_file=str(pou.source_path),worksheet_sha256=source_hash,
+                  compiler_dependency=str(dependency),compiler_dependency_sha256=hashlib.sha256(raw).hexdigest(),
+                  origin='user_library_compiled_declarations',compiler_cache_freshness_verified=False,compiler_source_binding_verified=False,
+                  insertion_eligible=False,evidence_kind='installed-compiled-block-interface')
+    return result
 
 def parse_parameter_table(data):
     headers={}; pins=[]; started=False
@@ -127,7 +204,16 @@ def inspect(root,native_libraries,name=None,library=None):
         row.update(interface);row.update(source_stream=matches[0],source_sha256=hashlib.sha256(data).hexdigest(),origin='firmware_parameter_table')
     else:
         pou=Project(source['root']).pou(row['name'])
-        table=_user_library_declarations(source['root'],pou) if source['kind']=='USER' else pou.declarations()
+        try:
+            table=_user_library_declarations(source['root'],pou) if source['kind']=='USER' else pou.declarations()
+        except CompressedStreamError:
+            if source['kind']!='USER':raise
+            row.update(_cached_library_interface(root,source['root'],pou))
+            file=Path(row['cache_file'])
+            row.update(source_sha256=hashlib.sha256(file.read_bytes()).hexdigest(),source_file=str(file),
+                       reference_registry=str(source['registry']),registry_sha256=hashlib.sha256(source['registry'].read_bytes()).hexdigest(),
+                       action_performed=False,note='Diagnostic cache declarations matched a saved compiler dependency. Freshness against the protected worksheet is unverified; do not use this interface for insertion. Native Build and complete source/library validation are still required.')
+            return row
         if table.warnings:raise ValueError('Declaration interface parse warnings: '+str(table.warnings))
         file=pou.source_path
         row['pins']=[dict(name=v.name,type=v.type_name,section=v.section,direction=SECTIONS[v.section],initial_value=v.initial_value,description=v.description)

@@ -218,7 +218,7 @@ def task_review(programs, assignments, *, exact_bindings=False):
 
 def interface_signature(interface):
     """Keep the exact bound interface and source hashes in review citations."""
-    if interface.get('kind') != 'FUNCTION_BLOCK' or interface.get('hidden') or interface.get('evidence_kind') != 'installed-declared-block-interface':
+    if interface.get('kind') != 'FUNCTION_BLOCK' or interface.get('hidden') or interface.get('evidence_kind') != 'installed-declared-block-interface' or interface.get('insertion_eligible') is False:
         raise ValueError('Requires a visible declared function-block interface')
     spec = {key: {} for key in ('inputs', 'outputs', 'inouts')}
     directions = {'input': 'inputs', 'output': 'outputs', 'in_out': 'inouts'}

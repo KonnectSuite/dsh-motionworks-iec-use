@@ -25,6 +25,8 @@ assert.throws(()=>fbInsertionPlan({...args,expected_body:'stale'},block,read));
 for(const bindings of [{IN:'FALSE',Q:'Wrong',State:'Accum'},{IN:'FALSE',Q:'Done'}, {Unknown:'0',State:'Accum'},{IN:'FALSE); RETURN;',State:'Accum'},{IN:'FALSE, Q => Done',State:'Accum'},{IN:'FALSE',in:'TRUE',State:'Accum'},{State:'Missing'}])assert.throws(()=>fbInsertionPlan({...args,bindings},block,read));
 assert.throws(()=>fbInsertionPlan({...args,instance:'Done'},block,read));
 assert.throws(()=>fbInsertionPlan(args,{...block,hidden:true},read));
+assert.throws(()=>fbInsertionPlan(args,{...block,insertion_eligible:false},read),/not insertion eligible/);
+assert.throws(()=>fbInsertionPlan(args,{...block,evidence_kind:'installed-compiled-block-interface',insertion_eligible:false},read),/declared function-block interface/);
 assert.throws(()=>fbInsertionPlan({...args,offset:1},block,read));
 const commentRead={...read,body:'(* open\ncomment *)\n'};
 assert.throws(()=>fbInsertionPlan({...args,expected_body:commentRead.body,offset:8},block,commentRead));

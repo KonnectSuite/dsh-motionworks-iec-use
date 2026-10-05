@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Expose explicit library compiler declarations as diagnostic interfaces when a
+  worksheet is unsupported, after independent dependency identity/count checks.
+  The live-bound CamGenerator query returns eight public pins with hashes and
+  insertion_eligible=false. Cache-only metadata cannot authorize FB insertion or
+  authoritative static signatures; freshness/source binding remains unverified.
+
 - Count the observed private `@T_Code_00` compiler temporary when validating FB
   dependency completeness, while excluding it from public pins. CamGenerator's
   saved 141-row dependency and eight public pins passed read-only comparison;

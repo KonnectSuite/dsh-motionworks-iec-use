@@ -71,6 +71,13 @@ readiness check: it verifies the current editor without OpenDocument or input.
 An exact task-instance view is supported only when its native instance type
 matches the requested POU and the full worksheet/task-context caption matches.
 Inspection cannot establish keyboard focus; native edit APIs do not require it.
+
+For toolbox interfaces, inspect `evidence_kind` before acting. An
+`installed-compiled-block-interface` exposes explicit diagnostic cache declarations
+matched to a saved dependency, with `insertion_eligible:false`. It can help inspect
+pin names, types and directions when the worksheet cannot be decoded, but its
+freshness against current source is unverified. Do not treat it as an accepted
+insertion signature or substitute it for `installed-declared-block-interface`.
 `mw_ide_screenshot` captures without activating or restoring the main frame and
 checks foreground/active/focused window identity before accepting the image.
 It refuses minimized windows or an unsafe screen fallback. Own-window rendering

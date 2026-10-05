@@ -148,6 +148,8 @@ class Programming(unittest.TestCase):
         any_spec={**spec,'inputs':{'Value':'ANY'}}
         self.assertNotIn('fb-parameter-type',self.codes('fb(Value:=run);',declarations,signatures={'TIMER':any_spec}))
         with self.assertRaises(ValueError): C.interface_signature({**interface,'hidden':True})
+        with self.assertRaises(ValueError): C.interface_signature({**interface,'evidence_kind':'installed-compiled-block-interface','insertion_eligible':False})
+        with self.assertRaises(ValueError): C.interface_signature({**interface,'insertion_eligible':False})
         with self.assertRaises(ValueError): C.interface_signature({**interface,'pins':interface['pins']+[interface['pins'][0]]})
 
     def test_native_pdd_attribute_is_not_initializer_text(self):

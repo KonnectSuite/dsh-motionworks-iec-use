@@ -4,6 +4,27 @@ This is work in progress. Version 0.5.5 did not establish complete IDE control.
 
 ## CamGenerator saved compiler metadata
 
+The public interface reader now exposes this cache path as diagnostic evidence
+after live library/reference matching, exact block and worksheet identity checks,
+complete source/dependency declaration membership, count/ordinal validation and
+stable file hashes. It returns `installed-compiled-block-interface`,
+`insertion_eligible:false`, compiler_cache_freshness_verified=false and
+compiler_source_binding_verified=false. Insertion planning and authoritative
+static review continue to refuse that evidence kind. This does not bypass the
+unsupported worksheet decoder.
+
+The actual public tool passed a read-only, native-bound fixture check with all
+eight CamGenerator pins, both cache/source hashes, unchanged complete project
+sources, compiled=true and modified=false. Existing ReadMotorSpeed and
+CommWatchdog declaration interfaces still passed. Evidence:
+`user-library-interfaces-ea167452-e514-49fe-bf88-9fcc9fbca7f8.json`.
+The provenance fields identify the readable tmp.sto as source_file/source_stream
+and separately retain worksheet_file/worksheet_sha256 for the unsupported
+src.st1 container; these hashes are not interchangeable.
+Pure regressions cover identity, membership, direction/count/ordinal and duplicate
+refusals; insertion tests refuse diagnostic-only metadata. Fresh native source
+binding and an actual CamGenerator insertion remain open.
+
 The installed CamGenerator `tmp.sto` contains a readable `@$@$@$@$.clu`
 declaration listing even though its Variables.VB worksheet is unsupported.
 The fixture's ICI00036.DIT names the same 140 source declarations plus a generated
@@ -21,7 +42,7 @@ remained unchanged. Evidence:
 `cam-dependency-saved-f925415c-231c-4769-8872-29fde7da1e11.json`.
 This is saved metadata evidence, with freshness_verified=false; it does not prove
 a fresh native Build, a newly inserted CamGenerator, runtime cam behavior or
-decompression of Variables.VB. The public block-interface tool still refuses that
+decompression of Variables.VB. The public block-interface tool still cannot decode that
 worksheet. Next bind this alternative declaration source to verified native
 library identity and fresh compiler/source evidence before permitting insertion.
 

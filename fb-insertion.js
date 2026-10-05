@@ -30,6 +30,7 @@ function insertionPoint(body,offset){
 export function fbInsertionPlan(args,block,read){
   if(args.baseline_saved!==true||!identifier(args.instance))throw new Error('Saved baseline and valid new instance name required');
   if(block.kind!=='FUNCTION_BLOCK'||block.hidden||!identifier(block.name)||block.evidence_kind!=='installed-declared-block-interface')throw new Error('Requires a visible, declared function-block interface');
+  if(block.insertion_eligible===false)throw new Error('Diagnostic compiled interface is not insertion eligible; freshness/source binding remains unverified');
   const hashMode=args.expected_body_sha256!==undefined;
   if(hashMode&&(args.expected_body!==undefined||! /^[a-f0-9]{64}$/.test(args.expected_body_sha256)))throw new Error('Supply either exact expected_body or readable expected_body_sha256');
   if(read.language!=='ST'||read.body_error||typeof read.body!=='string'||(hashMode?
