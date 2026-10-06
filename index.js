@@ -3067,14 +3067,19 @@ function defineTools() {
     },
     {
       name: 'mw_code_check_program',
-      description: 'Read-only source-linked programming review: external/global scope and types, integer bounds, named function-block pin direction/types, and task-binding candidates. Pass pou and body to check proposed ST before writing; omit them to review existing ST POUs. Set installed_interfaces:true for the verified clean open project: resolves vendor FBs from its native-bound installed libraries with exact source hashes; unresolved/ambiguous interfaces stay unresolved instead of falling back to historical signatures. Project-defined interfaces take precedence. Without this option vendor signatures are historical advisories. Reports library and graphical coverage; does not replace the compiler or modify source.',
+      description: 'Source-linked programming review: external/global scope and types, integer bounds, named function-block pin direction/types, and task-binding candidates. Pass pou and body to check proposed ST before writing; omit them to review existing ST POUs. installed_interfaces:true resolves exact native-bound installed declarations; unresolved/ambiguous interfaces do not fall back to historical signatures. Default is read-only. For ONE protected block selected in interface_libraries, refresh_compiler:true with baseline_saved:true runs fresh native Build/Make and complete source/native/library checks, then reviews against that current compiled contract. It does not decode protected source or prove installed-cache freshness. Project-defined interfaces take precedence. Reports coverage and provenance; no source editing or controller action.',
       parameters: { type: 'object', additionalProperties: false, properties: {
         project: { type: 'string' }, pou: { type: 'string' }, body: { type: 'string' }, installed_interfaces: { type: 'boolean' },
+        refresh_compiler: {type:'boolean',description:'Explicit fresh native Build/Make for one exact protected block/library selected in interface_libraries. Requires installed_interfaces:true and baseline_saved:true. Default review never builds.'},
+        baseline_saved: {type:'boolean'},
         interface_libraries: {type:'object',description:'Explicit type-to-library selection for duplicate installed FB names, e.g. {TON: "IEC"}. Requires installed_interfaces:true; project-defined interfaces still take precedence.',additionalProperties:true},
       } },
       output: { schema: WRITE_SCHEMA, render: renderProgrammingReview },
       execute: async (args) => {
+        if(args?.refresh_compiler===true && (args.installed_interfaces!==true||args.baseline_saved!==true||!args.interface_libraries||Object.keys(args.interface_libraries).length!==1))throw Error('Compiled review requires installed_interfaces, saved baseline, and one exact block/library selector');
         const project=projectOf(args),request={...(args??{}),project};
+        delete request.native_compiled_interfaces;
+        let verifiedSource,verifiedNative,verifiedBlock;
         if(args?.installed_interfaces===true){
           const identity=await assertIdeProjectProven();
           if(resolve(identity.active_project).replace(/\.mwt$/i,'').toLowerCase()!==project.toLowerCase())throw Error('REFUSED: wrong open project');
@@ -3082,8 +3087,27 @@ function defineTools() {
           const snapshot=await verb('library_snapshot',{},30000);
           if(!Array.isArray(snapshot.libraries))throw Error('REFUSED: native library inventory unavailable');
           request.native_libraries=snapshot.libraries;
+          if(args.refresh_compiler===true){
+            const [[name,library]]=Object.entries(args.interface_libraries);
+            if(!/^[A-Za-z_][A-Za-z_0-9]*$/.test(name)||typeof library!=='string'||!/^[A-Za-z_][A-Za-z_0-9]*$/.test(library))throw Error('Exact block/library identifiers required');
+            const block=await defineTools().find(t=>t.name==='mw_code_block_interface').execute({project,name,library,refresh_compiler:true,baseline_saved:true});
+            const sourceDigest=source=>createHash('sha256').update(JSON.stringify(Object.fromEntries(['pous','tasks','globals','program_sources','translation_files'].map(k=>[k,source[k]])))).digest('hex');
+            verifiedSource=sourceDigest(await runCode('structure_snapshot',{project}));
+            if(block.evidence_kind!=='fresh-bound-compiled-block-interface'||block.source_baseline_digest!==verifiedSource)throw Error('Compiled review source baseline changed');
+            verifiedNative=await verb('pou_package_snapshot',{},180000);verifiedBlock=block;
+            request.native_compiled_interfaces=[block];
+          }
         }
-        return runCode('check_program',request);
+        const result=await runCode('check_program',request);
+        if(verifiedSource){
+          const saved=await runCode('structure_snapshot',{project});
+          const after=createHash('sha256').update(JSON.stringify(Object.fromEntries(['pous','tasks','globals','program_sources','translation_files'].map(k=>[k,saved[k]])))).digest('hex');
+          const state=await verb('compile_state',{},30000);
+          if(after!==verifiedSource||state.is_modified!==false||state.is_compiled!==true)throw Error('Native/source state changed during compiled review');
+          const native=await verb('pou_package_snapshot',{},180000);
+          if(JSON.stringify(native)!==JSON.stringify(verifiedNative)||compiledLibraryManifest(verifiedBlock,native.libraries).digest!==verifiedBlock.library_manifest_digest||JSON.stringify(compilerArtifacts(verifiedBlock,project))!==JSON.stringify(verifiedBlock.compiler_artifacts))throw Error('Native/library/compiler evidence changed during compiled review');
+        }
+        return result;
       },
     },
     {

@@ -497,6 +497,13 @@ On the verified clean open project, set `installed_interfaces: true` to resolve
 vendor FBs from its bound installed libraries. For duplicate names select the
 intended library explicitly, e.g. `interface_libraries: { "TON": "IEC" }`.
 Installed ambiguity stays unresolved instead of falling back to an older manual.
+For a protected block already uniquely resolved by the current compiler, review
+may explicitly use `refresh_compiler:true`, `baseline_saved:true`,
+`installed_interfaces:true`, and one exact `interface_libraries` entry. This
+runs fresh native Build/Make with full source/native/library checks. Findings
+cite `fresh_bound_compiled_contract`; this does not decode protected worksheets
+or prove installed-library cache freshness. Default review stays read-only.
+Read the interface coverage: unused or shadowed protected blocks remain unresolved.
 Read coverage and unresolved interfaces as well as error counts. A missing instance
 name match does not prove a program never runs. `mw_code_tasks` resolves the exact
 saved instance-to-PROGRAM-type ownership and exposes task settings and native

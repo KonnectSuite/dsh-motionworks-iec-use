@@ -1,6 +1,10 @@
 import assert from 'node:assert/strict';
 import {__internals as i} from '../index.js';
 const tool=i.defineTools().find(t=>t.name==='mw_code_check_program');
+for(const request of [{refresh_compiler:true},{refresh_compiler:true,installed_interfaces:true,baseline_saved:true},
+ {refresh_compiler:true,installed_interfaces:true,baseline_saved:true,interface_libraries:{One:'Vendor',Two:'Vendor'}}]){
+ await assert.rejects(()=>tool.execute(request),/Compiled review requires/);
+}
 const report={findings:[
  {pou:'Example',severity:'warning',code:'scope-review',line:1,message:'Review global scope.',reference:{path:'scope-reference',sha256:'a'.repeat(64)}},
  {pou:'Example',severity:'error',code:'last-error',line:500,message:'LAST FINDING MUST BE VISIBLE',reference:{path:'last-reference',sha256:'b'.repeat(64)}}

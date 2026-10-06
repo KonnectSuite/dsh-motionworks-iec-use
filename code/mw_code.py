@@ -1070,7 +1070,7 @@ def verb_check_program(req):
     from motionworks_iec_mcp.program_checks import check_project
     if 'body' in req and not req.get('pou'):
         raise ValueError('A proposed body requires a target POU')
-    return _ok(result=check_project(req['project'], pou=req.get('pou'), body=req.get('body'), native_libraries=req.get('native_libraries'), interface_libraries=req.get('interface_libraries')))
+    return _ok(result=check_project(req['project'], pou=req.get('pou'), body=req.get('body'), native_libraries=req.get('native_libraries'), interface_libraries=req.get('interface_libraries'), native_compiled_interfaces=req.get('native_compiled_interfaces')))
 
 
 VERBS = {

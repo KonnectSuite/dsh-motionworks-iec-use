@@ -3,6 +3,7 @@ import json
 import os
 import sys
 import tempfile
+import time
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
@@ -13,6 +14,35 @@ from motionworks_iec_mcp import knowledge as K, program_checks as C
 
 
 class References(unittest.TestCase):
+    def test_fresh_compiled_review_contract_and_refusals(self):
+        current = dict(name='ProtectedFB', library='Vendor', kind='FUNCTION_BLOCK', hidden=False,
+            evidence_kind='installed-compiled-block-interface', insertion_eligible=False,
+            pins=[dict(name='Enable', type='BOOL', direction='input'), dict(name='Done', type='BOOL', direction='output')],
+            binding='native', origin='user_library_compiled_declarations', source_stream='Cached.VB',
+            source_file='source', source_sha256='a'*64, reference_registry='registry', registry_sha256='b'*64,
+            worksheet_file='worksheet', worksheet_sha256='c'*64, cache_file='cache', cache_sha256='d'*64,
+            compiler_dependency='dependency', compiler_dependency_sha256='e'*64,
+            compiler_type_table='types', compiler_type_table_sha256='f'*64,
+            source_declaration_count=2, compiler_declaration_count=2)
+        verified = dict(current, evidence_kind='fresh-bound-compiled-block-interface', insertion_eligible=True,
+            project_compiler_freshness_verified=True, compiler_library_binding_verified=True,
+            compiler_pin_types_verified=True, compile_acceptance_only=True,
+            compiler_source_binding_verified=False, compiler_cache_freshness_verified=False,
+            verified_at_ms=time.time()*1000, source_baseline_digest='1'*64, library_manifest_digest='2'*64)
+        spec = C.compiled_interface_signature(verified, current)
+        self.assertEqual(spec['authority'], 'fresh_bound_compiled_contract')
+        self.assertFalse(spec['citation']['protected_source_decoded'])
+        report = C.review('fb(Enable:=FALSE, Wrong:=TRUE);', 'VAR\nfb:ProtectedFB;\nEND_VAR', signatures={'PROTECTEDFB': spec})
+        self.assertTrue(any(f['code']=='unknown-fb-parameter' and f['severity']=='error' for f in report['findings']))
+        for patch in [dict(evidence_kind='installed-compiled-block-interface'), dict(project_compiler_freshness_verified=False),
+                      dict(compiler_library_binding_verified=False), dict(compiler_pin_types_verified=False),
+                      dict(compile_acceptance_only=False), dict(compiler_source_binding_verified=True),
+                      dict(compiler_cache_freshness_verified=True), dict(verified_at_ms=0),
+                      dict(verified_at_ms=time.time()*1000+10000), dict(source_baseline_digest='bad')]:
+            with self.assertRaises(ValueError): C.compiled_interface_signature({**verified, **patch}, current)
+        for patch in [dict(pins=[]), dict(compiler_dependency_sha256='0'*64), dict(library='Other')]:
+            with self.assertRaises(ValueError): C.compiled_interface_signature(verified, {**current, **patch})
+
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.env = patch.dict(os.environ, {'MOTIONWORKS_MCP_WORKSPACE': self.temp.name})

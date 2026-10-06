@@ -6,6 +6,12 @@ existing native edit-guide tool instead of guessed ASAR filesystem paths.
 
 ## Unreleased
 
+- Add explicit compiled-contract program review for one uniquely bound protected
+  block. Opt-in refresh runs guarded native Build/Make and checks source/native/
+  library/compiler preservation; pin findings cite the current compiled contract
+  without claiming protected-source decoding or installed-cache freshness.
+  Default program review remains read-only.
+
 - Add opt-in cursor observation to native IDE screenshots, preserving focus.
   Return physical coordinates, hotspot and a light/dark native glyph sheet;
   refuse cursor drift and report blank glyph pixels explicitly. Capturing a

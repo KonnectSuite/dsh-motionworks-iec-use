@@ -9,14 +9,22 @@ assert.match(workspace??'',/motionworks-ide-smoke-58d23aaa-bb28-4c44-aad8-5ad9d9
 const project=join(workspace,'.motionworks/stage/TopCutterS5');
 const file=join(workspace,'.motionworks/verification','program-review-render-'+randomUUID()+'.json');
 const record={project,accepted:false,controller_downloaded:false};
+const compiled=process.env.MOTIONWORKS_REVIEW_COMPILED==='1';
 const digest=s=>createHash('sha256').update(JSON.stringify(Object.fromEntries(['pous','tasks','globals','program_sources','translation_files'].map(k=>[k,s[k]])))).digest('hex');
 try{
  record.before=digest(await i.runCode('structure_snapshot',{project}));
  const tool=i.defineTools().find(t=>t.name==='mw_code_check_program');
- const response=await tool.execute({project,installed_interfaces:true});
+ const response=await tool.execute({project,installed_interfaces:true,...(compiled?{refresh_compiler:true,baseline_saved:true,interface_libraries:{CamGenerator:'Cam_Toolbox_v375'}}:{})});
  record.response=response;
  assert.notEqual(response.ok,false);assert.equal(response.result.verification,'static_review_only');
- assert.equal(response.result.interface_resolution,'bound_installed_requested');
+ assert.equal(response.result.interface_resolution,compiled?'bound_compiled_requested':'bound_installed_requested');
+ if(compiled){
+  const entry=response.result.installed_interfaces.find(c=>c.type==='CamGenerator');
+  assert.equal(entry?.status,'fresh_bound_compiled_contract');
+  assert.equal(entry.citation.protected_source_decoded,false);
+  assert.equal(entry.citation.compiler_cache_freshness_verified,false);
+  record.compiled_contract=entry;
+ }
  assert.ok(response.result.coverage.some(c=>c.status==='graphical_body_not_analyzed'));
  const blocks=tool.output.render({},response);
  record.report=response.result;record.rendered=blocks.map(c=>c.text??'').join('\n');

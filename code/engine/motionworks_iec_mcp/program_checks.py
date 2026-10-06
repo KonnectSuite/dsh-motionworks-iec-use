@@ -1,6 +1,7 @@
 """Conservative, source-linked programming review; never mutates a project."""
 from __future__ import annotations
 import re
+import time
 from collections import Counter
 from pathlib import Path
 from .variables import parse_declarations
@@ -161,7 +162,7 @@ def review(body, declarations, globals_text=None, *, signatures=None):
         if spec is None:
             unresolved.add(type_name); continue
         call_counts[instance.upper()] += 1
-        local = spec.get('authority') in ('project_declaration', 'bound_installed_declaration')
+        local = spec.get('authority') in ('project_declaration', 'bound_installed_declaration', 'fresh_bound_compiled_contract')
         severity = 'error' if local else 'warning'
         evidence = spec.get('citation') or reference('execute')
         pins = {n.upper(): (direction, norm(t)) for direction in ('inputs', 'outputs', 'inouts') for n, t in spec[direction].items()}
@@ -234,7 +235,46 @@ def interface_signature(interface):
     return spec
 
 
-def check_project(root, *, pou=None, body=None, native_libraries=None, interface_libraries=None):
+def compiled_interface_signature(interface, current):
+    """Accept only the freshly verified native contract matching current files."""
+    if interface.get('evidence_kind') != 'fresh-bound-compiled-block-interface':
+        raise ValueError('Fresh native compiled contract required')
+    for key in ('project_compiler_freshness_verified', 'compiler_library_binding_verified',
+                'compiler_pin_types_verified', 'compile_acceptance_only', 'insertion_eligible'):
+        if interface.get(key) is not True:
+            raise ValueError('Incomplete compiled contract: ' + key)
+    if interface.get('compiler_source_binding_verified') is not False or interface.get('compiler_cache_freshness_verified') is not False:
+        raise ValueError('Protected-source/cache freshness is not proved')
+    age = time.time() * 1000 - interface.get('verified_at_ms', 0)
+    if age < -2000 or age > 300000:
+        raise ValueError('Expired native compiled contract')
+    for key in ('source_baseline_digest', 'library_manifest_digest'):
+        if not re.fullmatch(r'[a-f0-9]{64}', str(interface.get(key, ''))):
+            raise ValueError('Missing compiled provenance: ' + key)
+    if current.get('evidence_kind') != 'installed-compiled-block-interface':
+        raise ValueError('Current diagnostic interface required')
+    for key in ('name', 'library', 'kind', 'hidden', 'pins', 'source_file', 'source_sha256',
+                'reference_registry', 'registry_sha256', 'worksheet_file', 'worksheet_sha256',
+                'cache_file', 'cache_sha256', 'compiler_dependency', 'compiler_dependency_sha256',
+                'compiler_type_table', 'compiler_type_table_sha256', 'source_declaration_count',
+                'compiler_declaration_count'):
+        if key not in current or interface.get(key) != current[key]:
+            raise ValueError('Compiled contract changed: ' + key)
+    # Reuse pin direction/type validation without claiming source declarations.
+    spec = interface_signature({**current, 'evidence_kind': 'installed-declared-block-interface',
+                                'insertion_eligible': True})
+    spec['authority'] = 'fresh_bound_compiled_contract'
+    spec['citation'] = {key: interface[key] for key in (
+        'library', 'compiler_dependency', 'compiler_dependency_sha256',
+        'compiler_type_table', 'compiler_type_table_sha256', 'verified_at_ms',
+        'source_baseline_digest', 'library_manifest_digest')}
+    spec['citation'].update(compile_acceptance_only=True, protected_source_decoded=False,
+                            compiler_cache_freshness_verified=False)
+    return spec
+
+
+def check_project(root, *, pou=None, body=None, native_libraries=None, interface_libraries=None,
+                  native_compiled_interfaces=None):
     from .project import Project
     root = Path(root)
     if root.suffix.lower() == '.mwt': root = root.with_suffix('')
@@ -246,6 +286,12 @@ def check_project(root, *, pou=None, body=None, native_libraries=None, interface
         selected[name.upper()] = library
     if selected and native_libraries is None:
         raise ValueError('Interface library selection requires bound installed review')
+    compiled = {}
+    for interface in native_compiled_interfaces or []:
+        name = interface.get('name', '')
+        if not re.fullmatch(IDENT, name) or name.upper() in compiled or selected.get(name.upper()) != interface.get('library') or native_libraries is None:
+            raise ValueError('Exact unique bound compiled interface selection required')
+        compiled[name.upper()] = interface
     findings, coverage = [], []
     globals_text = None
     try:
@@ -286,9 +332,11 @@ def check_project(root, *, pou=None, body=None, native_libraries=None, interface
                     if not variable or variable.type_name.upper() in signatures: continue
                     type_name = variable.type_name
                     try:
-                        spec = interface_signature(inspect(root, native_libraries, type_name, selected.get(type_name.upper())))
+                        current = inspect(root, native_libraries, type_name, selected.get(type_name.upper()))
+                        evidence = compiled.get(type_name.upper())
+                        spec = compiled_interface_signature(evidence, current) if evidence else interface_signature(current)
                         signatures[type_name.upper()] = spec
-                        interface_coverage[type_name.upper()] = {'type': type_name, 'status': 'bound_installed_interface', 'citation': spec['citation']}
+                        interface_coverage[type_name.upper()] = {'type': type_name, 'status': 'fresh_bound_compiled_contract' if evidence else 'bound_installed_interface', 'citation': spec['citation']}
                     except Exception as exc:
                         signatures[type_name.upper()] = None
                         interface_coverage[type_name.upper()] = {'type': type_name, 'status': 'unresolved', 'error': str(exc)}
@@ -304,7 +352,7 @@ def check_project(root, *, pou=None, body=None, native_libraries=None, interface
         coverage.append({'tasks': 'exact_saved_tree', 'bindings': task_bindings['bindings'], 'source_hashes': task_bindings['source_hashes']})
     except Exception as exc: coverage.append({'tasks': 'unresolved', 'error': str(exc)})
     return {'project': str(root), 'findings': findings, 'coverage': coverage,
-            'interface_resolution': 'bound_installed_requested' if native_libraries is not None else 'project_and_historical',
+            'interface_resolution': 'bound_compiled_requested' if compiled else 'bound_installed_requested' if native_libraries is not None else 'project_and_historical',
             'installed_interfaces': list(interface_coverage.values()),
             'errors': sum(f['severity'] == 'error' for f in findings),
             'warnings': sum(f['severity'] == 'warning' for f in findings),
