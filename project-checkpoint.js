@@ -7,6 +7,11 @@ import {alignSavedNative} from './pou-package.js';
 const sourceKeys=['pous','tasks','globals','program_sources','translation_files'];
 const flags=['retain','pdd','opc','disabled','not_on_plc','redundant'];
 export const checkpointDigest=value=>createHash('sha256').update(JSON.stringify(value)).digest('hex');
+export function checkpointContextMatches(before,current,canonicalize){
+ if(typeof canonicalize!=='function')throw Error('Canonical workspace resolver required');
+ return ['workspace','project'].every(key=>typeof before?.[key]==='string'&&typeof current?.[key]==='string'
+  &&canonicalize(before[key]).toLowerCase()===canonicalize(current[key]).toLowerCase());
+}
 const source=s=>Object.fromEntries(sourceKeys.map(k=>[k,s[k]]));
 
 // Read only paths returned by the exact native project library model.

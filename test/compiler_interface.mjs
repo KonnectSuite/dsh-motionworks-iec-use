@@ -14,6 +14,24 @@ async function run(change={}){
  const result=await compilerInterface({name:'Example',library:'Vendor',baseline_saved:true},deps);assert.equal(count,1);assert.deepEqual(events,['build','make']);assert.equal(reads,2);return result;
 }
 const good=await run();assert.equal(good.project_compiler_freshness_verified,true);assert.equal(good.compiler_library_binding_verified,true);assert.equal(good.compiler_source_binding_verified,false);assert.equal(good.insertion_eligible,true);
+// A compiler can finish writing the type table while Make settles the pipeline.
+const realNow=Date.now;let clock=10000,artifactReads=0;
+try{
+ Date.now=()=>clock;
+ const delayed={build:async()=>{clock=20000;return {fresh_compile:true,settled:true,is_compiled:true};},
+  make:async()=>{clock=25000;return {is_compiled:true,is_modified:false};},
+  artifacts:async()=>[0,1].map(n=>({path:'artifact'+n,sha256:h,modified_ms:++artifactReads<=2?1000:24000}))};
+ // Custom build does not increment run's call counter, so invoke the helper
+ // using a small explicit dependency set instead of run's orchestration asserts.
+ const deps={status:async()=>({is_modified:false,is_compiled:true}),native:async()=>native,saved:async()=>saved,
+  interface:async()=>block,catalog:async()=>({blocks:[{name:'Example',library:'Vendor',kind:'FUNCTION_BLOCK'}],unavailable_libraries:[]}),
+  library:async()=>({files:['source'],digest:h}),...delayed};
+ const late=await compilerInterface({name:'Example',library:'Vendor',baseline_saved:true},deps);
+ assert.equal(late.compiler_started_at_ms,10000);assert.equal(late.compiler_completed_at_ms,25000);
+ clock=10000;artifactReads=0;
+ await assert.rejects(()=>compilerInterface({name:'Example',library:'Vendor',baseline_saved:true},{...deps,
+  artifacts:async()=>[0,1].map(n=>({path:'artifact'+n,sha256:h,modified_ms:++artifactReads<=2?1000:28000}))}),/not regenerated/);
+}finally{Date.now=realNow;}
 for(const bad of [
  {status:async()=>({is_modified:true})},
  {catalog:async()=>({blocks:[{name:'Example',library:'Vendor',kind:'FUNCTION_BLOCK'},{name:'Example',library:'project',kind:'FUNCTION_BLOCK'}]})},

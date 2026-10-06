@@ -129,6 +129,7 @@
     "test/diagnostic_render.mjs",
     "test/program_review_render.mjs",
     "test/program_review_render_live.mjs",
+    "test/compiled_review_live.mjs",
     "test/ide_ui_session.mjs",
     "!bridge/*.lock"
   ],

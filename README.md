@@ -27,6 +27,12 @@ requests a fresh, uniquely bound compiled contract with complete project/library
 preservation. CamGenerator insertion, build, read-back and scratch cleanup passed
 on the disposable fixture. This does not decode protected source or establish
 runtime behavior; default cached interfaces remain diagnostic only.
+`mw_code_check_program` can review existing or proposed ST against the same
+current compiled contract: explicitly request `installed_interfaces:true`,
+`refresh_compiler:true`, `baseline_saved:true`, and one exact type-to-library
+entry in `interface_libraries`. This runs guarded native Build/Make without
+writing the proposed body. Findings retain compiler provenance and coverage
+limits; default review remains read-only.
 Use `mw_ide_graphical_listing` to diagnose saved LD/FBD compiler networks without
 desktop input. It runs a fresh Build, checks unchanged sources and regenerated
 matching artifacts, and annotates known declaration symbols. Raw compiler tokens

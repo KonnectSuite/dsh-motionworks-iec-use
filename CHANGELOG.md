@@ -6,6 +6,14 @@ existing native edit-guide tool instead of guessed ASAR filesystem paths.
 
 ## Unreleased
 
+- Bound compiled-interface artifact freshness to the completed native Build/Make
+  sequence, including type tables written while Make settles. Keep old, unchanged
+  and later artifacts refused; retain per-operation start/completion timestamps.
+
+- Compare checkpoint workspace/project bindings through canonical paths while
+  retaining the original receipt and token digest. Equivalent Windows slash/case
+  spelling no longer causes false refusals; different physical roots remain refused.
+
 - Add explicit compiled-contract program review for one uniquely bound protected
   block. Opt-in refresh runs guarded native Build/Make and checks source/native/
   library/compiler preservation; pin findings cite the current compiled contract

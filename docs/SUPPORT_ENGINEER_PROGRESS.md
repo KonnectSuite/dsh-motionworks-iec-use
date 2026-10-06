@@ -7,7 +7,31 @@ protected CamGenerator ST insertion, and two-block TON/TON_Retentive FBD creatio
 conversion, complete compiler pin evidence and full cleanup preservation. See
 the live checkpoint/navigation and live toolbox/FBD sections below. Historical
 pending skill/state delivery notes were superseded by turn 11's successful reload
-check. Arbitrary canvas wiring/layout and remaining startup/group cases are open.
+check. Arbitrary canvas wiring/layout is deferred by the user; remaining
+startup/group cases are open.
+
+## Current requirement evidence and remaining work
+
+This ledger supersedes historical tool counts, pending reloads, and next-step
+lists farther below. Current package: 0.5.5, 62 tools. See the latest handoff for installed commits.
+Physical installed schema is verified; that patch's running Arya chat delivery
+still needs an idle App and Host reload. Computer Use capture currently times
+out even after reselecting/activating and reopening the existing Arya app.
+
+| Goal requirement | Current evidence | Remaining boundary |
+|---|---|---|
+| IDE startup/trial | startup-trial-7b8164f8-3209-4733-b042-0d69e677a2ae.json accepted native fresh launch; arya-start-reuse-chat.json accepted live ready-IDE reuse; arya-start-modal-chat.json accepted live modal refusal | Fresh trial-popup startup through Arya still pending explicit MotionWorks close/restart approval |
+| Worksheet navigation and local variables | arya-navigation-variable-chat.json accepted live creation, declaration/code read-back, navigation, fresh build and complete cleanup | Broader global/protected group moves remain unverified |
+| POU and task CRUD | Registered native PROGRAM/FUNCTION/FUNCTION_BLOCK and task lifecycle proofs below; live scratch create/assign/unassign/delete in arya-navigation-variable-chat.json | Populated/indirect reference review remains necessary; fixture proofs are not arbitrary customer-project acceptance |
+| Global/external variables | Registered native add/edit/delete and six-flag matrix proofs below; current complete original checkpoint comparison accepted | No live global/protected grid move proof; native group-property changes remain refused |
+| POU code | Live native ST insertion/read-back/compile/cleanup in arya-live-compiler-chat.json; registered IL, patch and comment-preservation proofs below | Active-inline native screenshot acceptance remains unverified |
+| Toolbox/FBs | arya-graph-chat.json accepted TON/TON_Retentive native insertion, conversion, complete compiler pin resolution and cleanup; live CamGenerator ST lifecycle accepted | Arbitrary wiring/layout deferred by user, not accepted |
+| Support diagnosis/review | Protected CamGenerator compiled-contract review accepted in program-review-render-199b60a7-27f9-4daa-9600-cf188f1a976e.json; default/native review and reference tests pass | New compiled-review live chat delivery pending; protected source/cache freshness and runtime behavior are not proved |
+
+The cited chat/native receipts were re-read for their accepted/cleanup verdicts.
+No original fixture baseline was recaptured. This is evidence of progress, not
+completion of complete support-engineer autonomy. Do not repeat graphical
+wiring experiments while that work is deferred.
 
 ## Minimized-frame diagnostics routing verified
 

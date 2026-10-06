@@ -75,7 +75,7 @@ const [
   { nativeGroupChange },
   { assertStageClosed },
   { compilerInterface, compilerArtifacts, compiledLibraryManifest },
-  { captureCheckpoint, compareCheckpoint, checkpointDigest, libraryBaseline },
+  { captureCheckpoint, compareCheckpoint, checkpointDigest, libraryBaseline, checkpointContextMatches },
 ] = await Promise.all([
   'verification.js', 'edit-session.js', 'native-variables.js',
   'native-structure.js', 'native-code.js', 'graphical-listing.js',
@@ -1398,7 +1398,7 @@ async function projectCheckpoint(args,project){
    if(!match)throw Error('Exact returned baseline_id required');
    const path=join(directory,'checkpoint-'+match[1]+'.json');if(!isInsideWorkspace(path))throw Error('REFUSED: linked baseline receipt');
    baseline=JSON.parse(readFileSync(path,'utf8'));
-   if(checkpointDigest(baseline)!==match[2]||baseline.format!==1||baseline.id!==match[1]||baseline.context.workspace!==context.workspace||baseline.context.project!==context.project)throw Error('Baseline integrity or workspace/project binding differs');
+   if(checkpointDigest(baseline)!==match[2]||baseline.format!==1||baseline.id!==match[1]||!checkpointContextMatches(baseline.context,context,canonical))throw Error('Baseline integrity or workspace/project binding differs');
   }else if(args.baseline_id!==undefined)throw Error('Capture never replaces an existing baseline');
   await identity();retain();
   const snapshot=await captureCheckpoint(args,{
@@ -1590,7 +1590,7 @@ function defineTools() {
           const evidence_path=join(directory,'compiled-interface-'+randomUUID()+'.json');
           const record={args,phase:'requested',events:[]};
           const retain=()=>{if(!isInsideWorkspace(evidence_path))throw Error('REFUSED: linked compiler evidence');writeFileSync(evidence_path,JSON.stringify(record,null,2),'utf8');};
-          const observe=async(name,fn)=>{const result=await fn();record.events.push({name,result});retain();return result;};retain();
+          const observe=async(name,fn)=>{const started_at_ms=Date.now(),result=await fn();record.events.push({name,result,started_at_ms,completed_at_ms:Date.now()});retain();return result;};retain();
           try{
             const result=await compilerInterface(args,{
               status:()=>observe('state',()=>verb('compile_state',{},30000)),native:()=>observe('native',()=>verb('pou_package_snapshot',{},180000)),

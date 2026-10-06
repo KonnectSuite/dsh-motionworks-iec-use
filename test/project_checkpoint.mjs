@@ -1,9 +1,9 @@
 import assert from 'node:assert/strict';
-import {mkdtempSync,mkdirSync,writeFileSync,rmSync} from 'node:fs';
+import {mkdtempSync,mkdirSync,writeFileSync,rmSync,realpathSync} from 'node:fs';
 import {join} from 'node:path';
 import {tmpdir} from 'node:os';
 import {__internals as i} from '../index.js';
-import {captureCheckpoint,compareCheckpoint,checkpointDigest,libraryBaseline} from '../project-checkpoint.js';
+import {captureCheckpoint,compareCheckpoint,checkpointDigest,libraryBaseline,checkpointContextMatches} from '../project-checkpoint.js';
 const variable={name:'Run',type:'BOOL',section:'VAR',group:'Default',address:null,initial_value:null,description:null};
 const flags={retain:false,pdd:false,opc:false,disabled:false,not_on_plc:false,redundant:false};
 const pou={name:'Main',type:'PROGRAM',language:'IL',variables:[variable]};
@@ -36,6 +36,12 @@ const root=mkdtempSync(join(tmpdir(),'mw-checkpoint-'));
 try{
  const wrapper=join(root,'Vendor.mwt'),directory=join(root,'Vendor');mkdirSync(directory);writeFileSync(wrapper,'wrapper');writeFileSync(join(directory,'pins'),'pins');
  const fwlDir=join(root,'Firmware');mkdirSync(fwlDir);const firmware=join(fwlDir,'Firmware.fwl');writeFileSync(firmware,'firmware');writeFileSync(join(fwlDir,'metadata'),'types');
+ const context={workspace:root,project:directory};
+ assert.equal(checkpointContextMatches(context,{workspace:join(root,'.'),project:join(directory,'.')},realpathSync),true);
+ if(process.platform==='win32')assert.equal(checkpointContextMatches(context,{workspace:root.replaceAll('\\','/').toUpperCase(),project:directory.replaceAll('\\','/')},realpathSync),true);
+ assert.equal(checkpointContextMatches(context,{workspace:fwlDir,project:directory},realpathSync),false);
+ assert.equal(checkpointContextMatches(context,{workspace:root,project:fwlDir},realpathSync),false);
+ assert.equal(checkpointContextMatches(context,{workspace:root},realpathSync),false);
  const libraries=[{name:'Vendor',full_name:wrapper,logical_name:'/Libraries/Vendor'},{name:'Firmware',full_name:firmware,logical_name:'/Libraries/Firmware'}];
  const manifest=libraryBaseline(libraries);assert.equal(manifest.length,2);assert.equal(manifest[0].files.length,2);assert.equal(manifest[1].files.length,2);
  writeFileSync(join(fwlDir,'metadata'),'changed');assert.notDeepEqual(libraryBaseline(libraries),manifest);
