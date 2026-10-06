@@ -43,6 +43,10 @@ also covers dialog fallbacks and the retained planning/verification tools.
 blocking. A minimized diagnostic request refuses before pane activation and
 identifies the frame to restore through the connected Windows tool. Restore,
 reobserve, then read; an unchanged failed pane read should not be repeated.
+An existing IDE blocked by an observed ordinary dialog makes `mw_ide_start`
+refuse immediately with the exact frame and dialog identity. Inspect state and
+resolve that dialog deliberately; the refusal sends no input, connects no COM
+and launches no duplicate IDE. The verified native Use Trial path is unchanged.
 
 For the verified MotionWorks IEC 3 Pro SDK, the bridge generates local interop
 to read complete declarations more efficiently. Unknown SDKs or loader failures

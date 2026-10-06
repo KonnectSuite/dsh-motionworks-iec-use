@@ -70,6 +70,11 @@ If only the verifier is visible, inspect again rather than launching another IDE
 `mw_ide_start` answers the exact Use
 Trial control through the native control API and verifies closure. Do not start
 another IDE or begin coordinate clicking while that operation is running.
+An existing disabled IDE frame with an observed enabled ordinary dialog makes
+`mw_ide_start` refuse immediately with the exact frame, dialog title and handle.
+Inspect `mw_ide_state` and resolve that exact dialog deliberately before another
+start request. The refusal does not answer dialogs, connect COM or launch a
+duplicate IDE. Unknown loading states retain the bounded startup observation.
 Offline code/variable/POU editors and the unsupported Rebuild API are retired.
 For declarations use `mw_ide_variable_change` with the staged project, exact POU
 (omit for resource globals), operation, and `baseline_saved:true` only after

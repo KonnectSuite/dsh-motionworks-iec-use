@@ -2065,6 +2065,14 @@ while ($true) {
                     }
                     $readyWindow = Get-IdeWindow
                     if ($readyWindow -and [MWW]::IsWindowEnabled($readyWindow)) { break }
+                    if ($already -and $readyWindow) {
+                        $blockingDialogs = @(Get-IdeDialogs | Where-Object { $_.enabled -and $_.buttons.Count -gt 0 })
+                        if ($blockingDialogs.Count -gt 0 -and (Get-IdeWindow) -eq $readyWindow -and -not [MWW]::IsWindowEnabled($readyWindow)) {
+                            $frameKey = '0x{0:X}' -f ([int64]$readyWindow)
+                            $dialogNames = ($blockingDialogs | ForEach-Object { "$($_.title) [$($_.handle)]" }) -join ', '
+                            throw "Existing IDE frame $frameKey is blocked by an observed modal: $dialogNames. Inspect mw_ide_state and resolve that exact dialog deliberately before another start request. No COM operation, dialog answer or duplicate IDE launch was attempted."
+                        }
+                    }
                     Start-Sleep -Milliseconds 500
                 }
                 $w = Get-IdeWindow

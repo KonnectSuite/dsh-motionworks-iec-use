@@ -29,6 +29,11 @@ function Start-Process {
 }
 function Get-IdeWindow {return $script:window}
 function Get-TrialDialog {if($script:trial){return @([IntPtr]200,[IntPtr]201)};return @($null,$null)}
+function Get-IdeDialogs {
+ $script:dialogReads++
+ if($script:case -eq 'existing_modal'){return @(@{handle='0x456';title='Save As';enabled=$true;buttons=@(@{id=2;label='Cancel'})})}
+ return @()
+}
 function Answer-TrialDialog {
  $script:answers++
  if($script:case -eq 'trial_unverified'){return @{dismissed=$false}}
@@ -47,7 +52,7 @@ function Test-SameProject($a,$b){return $a -ceq $b}
 function Log($message){}
 function Reset-Case($name){
  $script:case=$name;$script:already=$false;$script:trial=$false;$script:window=$null
- $script:launches=0;$script:answers=0;$script:connections=0;$script:clockCalls=0
+ $script:launches=0;$script:answers=0;$script:connections=0;$script:clockCalls=0;$script:dialogReads=0
  [MWW]::Enabled=$true
  $script:req=@{path='C:\fixture\stage\Probe.mwt';wrapper_sha256='verified-hash';exe='C:\fixture\Mwt.exe';include_trial_method=$true}
 }
@@ -60,6 +65,10 @@ if($script:launches -ne 0 -or $script:answers -ne 1 -or -not $data.trial_answere
 if($data.trial_method -cne 'fixture_single_action'){throw 'Verified trial method omitted from startup evidence'}
 Reset-Case 'trial';$script:already=$true;$script:trial=$true;$req.Remove('include_trial_method');. $startup
 if($data.Contains('trial_method') -or -not $data.trial_answered){throw 'Cached caller schema changed or trial result lost'}
+Reset-Case 'existing_modal';$script:already=$true;$script:window=[IntPtr]123;[MWW]::Enabled=$false
+$failed=$false
+try{. $startup}catch{$failed=$true;$message=$_.Exception.Message}
+if(-not $failed -or $message -notmatch 'Save As \[0x456\]' -or $message -notmatch 'No COM operation' -or $script:dialogReads -ne 1 -or $script:clockCalls -ne 2 -or $script:launches -ne 0 -or $script:answers -ne 0 -or $script:connections -ne 0){throw 'Existing known modal did not stop immediately without input, launch or COM'}
 foreach($name in @('trial_unverified','disabled','timeout','bad_hash')){
  Reset-Case $name
  if($name -eq 'trial_unverified'){$script:already=$true;$script:trial=$true}

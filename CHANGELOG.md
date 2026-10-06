@@ -6,6 +6,12 @@ existing native edit-guide tool instead of guessed ASAR filesystem paths.
 
 ## Unreleased
 
+- Refuse an existing disabled IDE frame blocked by an observed ordinary modal
+  immediately, instead of waiting the full startup timeout. Recheck exact frame
+  and disabled state; preserve native Use Trial handling and unknown loading
+  observation. Synthetic production-branch checks and a disposable live
+  Save/Zip dialog refusal exercise the guard without accepting the dialog.
+
 - Add read-only capture_baseline/compare_baseline modes to mw_ide_verify with
   integrity-pinned workspace/project receipts, complete supported saved/native
   state and all bound library files. Retain precise changed categories and full

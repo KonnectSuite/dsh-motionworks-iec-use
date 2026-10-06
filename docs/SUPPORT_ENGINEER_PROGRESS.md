@@ -1683,3 +1683,21 @@ checkpoint-report-c29c4971-ac29-4d0a-8962-36904629321f.json.
 The reproducibility audit is outside the published package at
 `C:\Users\Admin\Desktop\Codex Workspace\arya-graph-chat-audit.mjs`.
 The full support-engineer objective remains active and incomplete.
+
+## Existing-process modal startup refusal
+
+The production startup branch now refuses an existing disabled frame with an
+observed enabled ordinary dialog before COM connection, dialog input or another
+launch. It rechecks the exact frame and disabled state. Exact native Use Trial
+handling remains earlier in the startup loop; unknown loading states retain the
+bounded observation path. Synthetic production-branch regression checks passed.
+
+Registered live fixture test startup-modal-21a598de-a2c8-434b-b0a2-ed7d523dafad.json
+is accepted=true and cleanup_verified=true. A manually observed File > Save
+Project As / Zip Project As command opened the Save/Zip project as dialog.
+mw_ide_start refused in 2006 ms with frame 0x40920 and modal 0x2A047E; subsequent
+state confirmed the same dialog remained open. Deliberate Cancel closed it.
+The same immutable baseline token matched all seven categories after cleanup;
+the active project and compiled/unmodified state stayed unchanged. No Save,
+Build, close, restart or controller action occurred in this test. This proves
+the registered repository path; live Arya blocked-start acceptance is separate.
