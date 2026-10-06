@@ -1585,3 +1585,23 @@ sent into Codex. Cut/paste was observed independently. This is one local INT
 proof, not batch/global/protected-group acceptance. The public mw_ide_variables
 reader now exposes section, group, description, all six flags and group read_only
 state for independent verification, and native read failures refuse partial data.
+
+## Complete retained project checkpoints
+
+The registered `mw_ide_verify` tool now captures and compares read-only complete
+baselines: five saved categories, the full native package, and all bound library
+files. Exact identity, clean saved state, complete native declaration scopes and
+flags, supported library formats and before/after saved-source stability are
+required. Immutable receipts are pinned by a caller-held UUID/SHA256 token.
+Comparison reports each matched/changed category and makes no fresh compilation
+or runtime claim. Root IDE logs/bookkeeping and compiler outputs are excluded.
+
+Live registered-tool capture/comparison and token-integrity refusal passed:
+`checkpoint-live-31344770-cba5-49d2-b70d-2892d137d1ef.json`. All seven bound
+libraries (1685 files) were included. Lifecycle evidence
+`checkpoint-lifecycle-c1244cd3-5ef4-48cb-af9b-4bf6e70bf196.json` detected the
+single scratch POU addition and verified all seven categories after its deletion
+and fresh Build/Make. A harness result-shape failure was reconciled from retained
+acknowledgment without replaying creation. Full regression suite passed.
+Live Arya chat delivery after idle reload is the next acceptance step; it is not
+established by these registered execute-path tests. The overall goal is incomplete.

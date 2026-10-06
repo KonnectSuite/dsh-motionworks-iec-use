@@ -14,6 +14,17 @@ library manifest plus wrapper. Inventory counts, file timestamps, two hashes or
 a comparison to a different source copy cannot prove full preservation. Keep
 compiler outputs and IDE bookkeeping outside source-only claims, and report
 any categories that were not compared.
+For an authorized edit/build/cleanup lifecycle, first capture an immutable
+checkpoint with mw_ide_verify(mode:"capture_baseline", project:<exact stage>,
+baseline_saved:true). Require accepted:true and retain its displayed baseline_id.
+After intended cleanup, call mode:"compare_baseline" with the same project,
+baseline_id and baseline_saved:true. Require preservation_verified and all seven
+comparison categories matched. The tool compares all bound library folders and
+wrappers as well as full supported saved/native state; unsupported library formats,
+missing declaration flags, dirty state, changed identity and tampered receipts
+stop with evidence. These modes are read-only and never Build, Save, navigate,
+close/reopen or repair; fresh Build/Make remains a separate required check.
+Do not overwrite or recapture a baseline to make a failed comparison pass.
 Use exact registered tool names: `mw_code_task_model` reads the live task model;
 there is no `mw_ide_task_model`. An unknown name is a routing error, not proof
 that the installed plugin is missing a capability. Check the available catalog

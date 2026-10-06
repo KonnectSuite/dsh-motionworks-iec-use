@@ -21,6 +21,7 @@ const commands = [
   [process.execPath, ['test/pou_conversion.mjs']],
   [process.execPath, ['test/fb_insertion.mjs']],
   [process.execPath, ['test/compiler_interface.mjs']],
+  [process.execPath, ['test/project_checkpoint.mjs']],
   [process.execPath, ['test/skill_delivery.mjs', root]],
   [process.execPath, ['test/workspace_session.mjs']],
   [process.execPath, ['test/workspace_boundary.mjs']],

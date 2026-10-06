@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Add read-only capture_baseline/compare_baseline modes to mw_ide_verify with
+  integrity-pinned workspace/project receipts, complete supported saved/native
+  state and all bound library files. Retain precise changed categories and full
+  evidence; refuse dirty/incomplete/drifting state and tampered receipts. Keep
+  fresh compilation and runtime acceptance separate. Tool count stays 62.
+
 - Report minimized/visible IDE state to current callers while preserving cached
   schemas. Refuse diagnostic reads before pane activation on minimized frames,
   with exact restore routing. Verified reversible native fixture acceptance;

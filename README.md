@@ -12,6 +12,12 @@ machine behavior, motion performance or functional safety.
 Use `mw_ide_code_change` for native ST body replacement with an exact saved
 body precondition, full code/comment read-back and collateral source checks.
 Follow its accepted verdict with fresh Build/Make.
+Use `mw_ide_verify` with `mode:"capture_baseline"`, the exact staged project and
+`baseline_saved:true` before an authorized lifecycle. Retain its `baseline_id`.
+After cleanup, `mode:"compare_baseline"` compares complete supported saved
+sources, declarations/task settings, translations, native package state and every
+bound library file. These modes never edit, save or compile; fresh Build/Make
+and runtime acceptance are separate. A failed comparison must be inspected.
 Use `mw_code_block_interface` to inspect installed block pins and directions,
 then `mw_ide_fb_insert` to declare a new instance and insert its ST call with
 explicit bindings. Check the retained phase evidence on partial failure and

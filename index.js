@@ -75,12 +75,13 @@ const [
   { nativeGroupChange },
   { assertStageClosed },
   { compilerInterface, compilerArtifacts, compiledLibraryManifest },
+  { captureCheckpoint, compareCheckpoint, checkpointDigest, libraryBaseline },
 ] = await Promise.all([
   'verification.js', 'edit-session.js', 'native-variables.js',
   'native-structure.js', 'native-code.js', 'graphical-listing.js',
   'pou-package.js', 'pou-conversion.js', 'fb-insertion.js',
   'native-groups.js', 'stage-copy.js',
-  'compiler-interface.js',
+  'compiler-interface.js', 'project-checkpoint.js',
 ].map(file => import(pathToFileURL(join(HERE, file)).href)));
 
 export const name = 'motionworks-iec-use';
@@ -1379,6 +1380,48 @@ function renderNativeEdit(args,value){
     variable_count:Array.isArray(value.expected_variables)?value.expected_variables.length:undefined,
     native_result:{saved:native.saved,is_modified:native.is_modified},next_step:value.next_step},null,2));
 }
+async function projectCheckpoint(args,project){
+ if(args.close_reopen!==undefined||args.user_approved!==undefined)throw Error('Baseline modes cannot save/close/reopen');
+ if(args.baseline_saved!==true)throw Error('Reconcile saved edits before baseline capture/comparison');
+ const directory=join(workspaceRoot(),'.motionworks','verification');
+ if(!isInsideWorkspace(directory))throw Error('REFUSED: linked checkpoint evidence directory');
+ mkdirSync(directory,{recursive:true});
+ const uuid=randomUUID(),report_path=join(directory,'checkpoint-report-'+uuid+'.json');
+ const context={workspace:workspaceRoot(),project},report={context,mode:args.mode,steps:[],verdict:'unverified',report_path,controller_downloaded:false,motion_tested:false};
+ const retain=()=>{if(!isInsideWorkspace(report_path))throw Error('REFUSED: linked checkpoint report');writeFileSync(report_path,JSON.stringify(report,null,2),'utf8');};
+ const identity=async()=>{const status=await assertIdeProjectProven();if(resolve(String(status.active_project)).replace(/\.mwt$/i,'').toLowerCase()!==project.toLowerCase())throw Error('REFUSED: wrong open checkpoint project');};
+ const observe=async(name,fn)=>{const value=await fn();report.steps.push({name,value});retain();return value;};
+ try{
+  let baseline;
+  if(args.mode==='compare_baseline'){
+   const match=/^([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})\.([a-f0-9]{64})$/.exec(args.baseline_id??'');
+   if(!match)throw Error('Exact returned baseline_id required');
+   const path=join(directory,'checkpoint-'+match[1]+'.json');if(!isInsideWorkspace(path))throw Error('REFUSED: linked baseline receipt');
+   baseline=JSON.parse(readFileSync(path,'utf8'));
+   if(checkpointDigest(baseline)!==match[2]||baseline.format!==1||baseline.id!==match[1]||baseline.context.workspace!==context.workspace||baseline.context.project!==context.project)throw Error('Baseline integrity or workspace/project binding differs');
+  }else if(args.baseline_id!==undefined)throw Error('Capture never replaces an existing baseline');
+  await identity();retain();
+  const snapshot=await captureCheckpoint(args,{
+   status:()=>observe('state',()=>verb('compile_state',{},30000)),saved:()=>observe('saved',()=>runCode('structure_snapshot',{project})),
+   native:()=>observe('native',()=>verb('pou_package_snapshot',{},NATIVE_PACKAGE_TIMEOUT_MS)),
+   libraries:native=>observe('libraries',async()=>libraryBaseline(native)),identity,
+  });
+  report.snapshot=snapshot;
+  if(args.mode==='capture_baseline'){
+   const record={format:1,id:uuid,context,created_at:new Date().toISOString(),snapshot},baseline_path=join(directory,'checkpoint-'+uuid+'.json');
+   if(!isInsideWorkspace(baseline_path))throw Error('REFUSED: linked checkpoint receipt');
+   writeFileSync(baseline_path,JSON.stringify(record,null,2),{encoding:'utf8',flag:'wx'});
+   report.baseline_id=uuid+'.'+checkpointDigest(record);report.baseline_path=baseline_path;report.verdict='baseline_captured';report.accepted=true;
+   report.next_step='Retain baseline_id. After the authorized lifecycle and cleanup, call compare_baseline with the same project/id and baseline_saved:true; run Build/Make separately.';
+  }else{
+   report.baseline_id=args.baseline_id;report.comparison=compareCheckpoint(baseline.snapshot,snapshot);report.accepted=report.comparison.accepted;
+   report.verdict=report.accepted?'preservation_verified':'preservation_changed';report.next_step=report.accepted?'Complete saved/native/library baseline matches. Fresh compile and runtime acceptance are separate.':'Inspect changed categories and retained evidence; no retry or rollback was performed.';
+  }
+ }catch(error){report.error=error.message;report.next_step='Inspect retained evidence and current native state. No automatic retry, repair or rollback.';}
+ finally{report.finished_at=new Date().toISOString();retain();}
+ return {verdict:report.verdict,accepted:report.accepted??false,report_path,baseline_id:report.baseline_id??null,baseline_path:report.baseline_path??null,comparison:report.comparison??null,error:report.error??null,next_step:report.next_step};
+}
+
 function defineTools() {
   return [
     {
@@ -3500,14 +3543,18 @@ function defineTools() {
 
     {
       name: 'mw_ide_verify',
-      description: 'After native Save All and intended-change read-back, verify the exact open stage: validation, manifests, fresh Build, Make, messages and Save. With consent, close/reopen, compare persistence, then repeat fresh Build/Make and integrity checks. Retains a JSON report on failure. Never force-closes, repairs files, downloads or commands motion. Cached Make is not fresh Build.',
+      description: 'Read-only mode capture_baseline captures complete saved/native/library state after baseline_saved:true; compare_baseline requires the returned baseline_id, compares the same workspace/project and retains full evidence. No Build, Save, navigation or source edits in either baseline mode. Preservation excludes compiler output and root IDE bookkeeping and is not compile/runtime acceptance. Default acceptance mode: after native Save All and intended-change read-back, verify the exact open stage: validation, manifests, fresh Build, Make, messages and Save. With consent, close/reopen, compare persistence, then repeat fresh Build/Make and integrity checks. Retains a JSON report on failure. Never force-closes, repairs files, downloads or commands motion. Cached Make is not fresh Build.',
       parameters: { type: 'object', additionalProperties: false, required: ['project'], properties: {
-        project: { type: 'string' }, close_reopen: { type: 'boolean', default: false },
+        project: { type: 'string' }, mode: {type:'string',enum:['acceptance','capture_baseline','compare_baseline']}, baseline_saved:{type:'boolean',description:'Required true for baseline modes, after reconciling saved edits.'}, baseline_id:{type:'string',description:'Exact integrity-pinned receipt returned by capture_baseline. Required for compare_baseline; not a path.'}, close_reopen: { type: 'boolean', default: false },
         user_approved: { type: 'boolean', description: 'Explicit consent to save/close/reopen this disposable or named project. Required when close_reopen is true.' },
       } },
-      output: { schema: { type: 'object', additionalProperties: true }, render: (_a, v) => text(`Acceptance: ${v.verdict}\nEvidence: ${v.report_path}\n${v.next_step}`) },
+      output: { schema: { type: 'object', additionalProperties: true }, render: (_a, v) => text(`Acceptance: ${v.verdict}\nEvidence: ${v.report_path}\n${v.baseline_id ? 'Baseline ID: '+v.baseline_id+'\n' : ''}${v.error ? 'Stopped: '+v.error+'\n' : ''}${v.comparison ? Object.entries(v.comparison.checks).map(([k,ok])=>k+': '+(ok?'matched':'CHANGED')).join('\n')+'\n' : ''}${v.next_step}`) },
+      presentCall:a=>({card:'generic',title:a?.mode==='capture_baseline'?'Capture complete project baseline':a?.mode==='compare_baseline'?'Compare complete project baseline':'Verify IDE acceptance',kind:a?.mode==='capture_baseline'||a?.mode==='compare_baseline'?'read':'execute'}),
       execute: async (args) => {
         const project = projectOf(args);
+        if (args.mode && !['acceptance','capture_baseline','compare_baseline'].includes(args.mode)) throw Error('Unknown verification mode');
+        if (args.mode==='capture_baseline'||args.mode==='compare_baseline') return projectCheckpoint(args,project);
+        if (args.baseline_id!==undefined||args.baseline_saved!==undefined) throw Error('Baseline fields require an explicit baseline mode');
         if (args.close_reopen && args.user_approved !== true) throw new Error('REFUSED: ask for consent to save/close/reopen this exact project.');
         const reportDir = join(workspaceRoot(), '.motionworks', 'verification');
         if (!isInside(reportDir, workspaceRoot())) throw new Error('REFUSED: verification directory escapes workspace.');

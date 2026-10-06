@@ -12,7 +12,7 @@ export function alignSavedNative(saved,native){
  if(saved.pous.length!==native.structure.pous.length||!same(projectRows(saved.globals),projectRows(native.declarations.globals.variables)))throw Error('Saved/native package inventories or globals disagree');
  for(const pou of saved.pous){
   const meta=exact(native.structure.pous,pou.name),declarations=native.declarations['pou:'+pou.name];
-  if(!meta||meta.type!==pou.type||meta.language!==({ST:2,FBD:3,LD:4}[pou.language])||!declarations||!same(declarationRows(pou.variables),declarationRows(declarations.variables)))throw Error('Saved/native POU declaration identity disagrees: '+pou.name);
+  if(!meta||meta.type!==pou.type||meta.language!==({IL:1,ST:2,FBD:3,LD:4}[pou.language])||!declarations||!same(declarationRows(pou.variables),declarationRows(declarations.variables)))throw Error('Saved/native POU declaration identity disagrees: '+pou.name);
  }
  const tasks=rows=>[...rows].sort((a,b)=>a.name.localeCompare(b.name)).map(({name,kind,instances})=>({name,kind,instances}));
  if(!same(tasks(saved.tasks),tasks(native.structure.tasks)))throw Error('Saved/native task inventories disagree');
