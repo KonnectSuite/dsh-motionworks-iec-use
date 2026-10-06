@@ -1605,3 +1605,32 @@ and fresh Build/Make. A harness result-shape failure was reconciled from retaine
 acknowledgment without replaying creation. Full regression suite passed.
 Live Arya chat delivery after idle reload is the next acceptance step; it is not
 established by these registered execute-path tests. The overall goal is incomplete.
+
+## Live chat checkpoint, navigation and variable insertion
+
+After an idle Arya App and Host restart/reopen, turn 9 in fixture chat
+`d637dc30-4a0d-470d-8c45-f88c710d2be0` loaded the updated skill and executed
+native checkpoint capture and comparison with the same immutable token. All
+seven categories and all seven bound libraries/1685 files matched. Independent
+comparison to the prior complete checkpoint also matched. Evidence:
+`arya-checkpoint-chat.json`. Document lookup and structured Windows observation
+failures were omitted from Arya's final failure disclosure and were corrected
+in the subsequent prompt; they do not invalidate the native comparison result.
+
+Turn 10 created only `AryaNavProof`, inserted `Counter:DINT` and `Done:BOOL` with
+initializers and six explicitly false native flags, imported the exact two-line
+ST body once, and assigned only `AryaNavProofInstance` to BG. Fresh Build passed
+with zero errors/25 baseline warnings before Make. Variables and code navigation
+each passed once, with separate inspect-only readiness checks; no GUI text input
+was needed. Native caption/readiness acceptance does not establish keyboard focus.
+The original token comparison detected the intentional scratch changes while
+all bound libraries matched. Reviewed unassignment/deletion, fresh Build,
+diagnostics and Make restored all seven original categories and clean compiled
+state. A mixed code-input-form call was rejected before import and corrected
+without replaying a mutation; this is a disclosed routing failure.
+
+Follow-up renders known visibility booleans for normal IDE frames, delivers
+bundled workflows through mw_ide_edit_guide, and explicitly separates the two
+mutually exclusive code-input forms. Focused render/skill checks passed.
+The complete chat audit is retained separately; broader graphical/group/startup
+acceptance and the overall support-engineer goal remain incomplete.

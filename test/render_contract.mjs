@@ -84,4 +84,5 @@ assert.match(state.output.render({}, { ide_running: false, verifier_running: tru
 assert.match(state.output.render({}, { ide_running: false, verifier_running: false })[0].text, /No MotionWorks IDE is running/)
 assert.match(state.output.render({}, { ide_running:true, ide_window:'0x2A', blocked:false, dialogs:[], ide_minimized:true, ide_visible:true })[0].text, /minimized.*Restore/s)
 assert.match(state.output.render({}, { ide_running:true, ide_window:'0x2A', blocked:false, dialogs:[], ide_minimized:false, ide_visible:false })[0].text, /hidden/)
+assert.match(state.output.render({}, { ide_running:true, ide_window:'0x2A', blocked:false, dialogs:[], ide_minimized:false, ide_visible:true })[0].text, /ide_minimized=false  ide_visible=true/)
 console.log('trial-aware startup state render checks passed')

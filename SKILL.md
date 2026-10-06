@@ -7,6 +7,11 @@ whenToUse: The user has MotionWorks IEC 3 Pro open or asks for work in it — a 
 # MotionWorks IEC workspace editing
 
 Use the installed tools for discovery, staging, IDE editing and IDE verification.
+Load bundled variable, ST/IL, graphical and engineering workflow documents through
+`mw_ide_edit_guide` with the corresponding operation; its result includes the full
+guide text. Do not search guessed `app.asar` filesystem paths or unrelated
+workspaces for these documents. Report failed document lookups and structured
+computer-tool failures even when the outer tool call completed successfully.
 For a preservation verdict, compare the retained pre-operation baseline against
 complete saved sources/declarations/tasks/globals/translations, full native
 package state (including flags and library bindings), and the complete installed
@@ -71,6 +76,9 @@ For declarations use `mw_ide_variable_change` with the staged project, exact POU
 reconciling saved edits. Add/edit requires all seven declaration fields and an
 existing writable group. Inspect `verification.accepted` before continuing;
 failure means stop and inspect evidence, never retry automatically.
+For `mw_ide_code_change`, choose exactly one input form: `expected_body` plus
+complete `code`, or `expected_body_sha256` plus `changes`. Never combine both
+forms or add a hash to the complete-code form, even for an empty body.
 Optional `flags` on add/edit changes explicit boolean retain/pdd/opc/disabled/
 not_on_plc/redundant properties through native setters. Omitted flags stay
 unchanged; verify all flags and review their effect before compilation.

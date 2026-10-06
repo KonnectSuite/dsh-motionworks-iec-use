@@ -1,5 +1,9 @@
 # Changelog
 
+Live-chat follow-up: render explicit known IDE minimized/visible booleans even
+for a normal visible frame, and route bundled workflow reading through the
+existing native edit-guide tool instead of guessed ASAR filesystem paths.
+
 ## Unreleased
 
 - Add read-only capture_baseline/compare_baseline modes to mw_ide_verify with
