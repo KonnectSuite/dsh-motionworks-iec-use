@@ -302,6 +302,14 @@ The installed help also documents dragging between connection points in
 standard edit mode and branching from an existing connection line. When the
 keyboard route cannot establish selection, use a supported drag only after
 observing current endpoints and confirming the provider exposes that operation.
+Before pressing the mouse button, move over the proposed source and verify the
+installed help's connection-line symbol has been added to the cursor. A Q label,
+BOOL tooltip or approximate block edge is not this proof. Dragging a nearby
+body region can move the entire block; dragging an unrecognized line region can
+create a selection box. Use a supported cursor-aware observation when ordinary
+captures omit the cursor. If the connection cursor cannot be established, do not
+guess another pixel and drag; use a documented route with its own verified
+selection/mode state or report the unresolved input path.
 Preserve existing output bindings when adding a branch. Observe the settled
 wire, Save natively, obtain a fresh complete graphical listing and independently
 prove its resolved dataflow and all collateral preservation. A drawing or input

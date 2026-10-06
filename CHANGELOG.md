@@ -6,6 +6,11 @@ existing native edit-guide tool instead of guessed ASAR filesystem paths.
 
 ## Unreleased
 
+- Require the installed-help connection cursor before graphical dragging.
+  A live block-edge attempt moved the scratch block while leaving compiled
+  instructions unchanged; complete native preservation and original-checkpoint
+  cleanup passed. Keep canvas and compiler acceptance separate.
+
 - Clarify installed-help topic identity: require the full relative .htm/.html
   filename and route partial searches through query. Failed exact-topic reads
   now include recovery guidance without relaxing exact matching. Document
