@@ -61,6 +61,7 @@
     "test/focus_screenshot.ps1",
     "test/startup_visibility.ps1",
     "test/startup_modal_live.mjs",
+    "test/fbd_connection_live.mjs",
     "test/focus_screenshot_live.mjs",
     "test/comm_watchdog_graph_live.mjs",
     "test/stage_open_guard_live.mjs",

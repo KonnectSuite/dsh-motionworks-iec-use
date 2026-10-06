@@ -1532,7 +1532,7 @@ function defineTools() {
     {
       name:'mw_code_installed_help',
       description:'Read/search actual installed English MotionWorks CHM help as inert text. Omit module to list installed archives; then use an exact module to list topics, query words, or read an exact topic. Provides archive/topic hashes and native help links, caches text in this session workspace, and never opens help or edits the IDE. Use for shortcut/editor/toolbox and programming semantics instead of guessing keys or signatures. Images may contain diagrams or key symbols omitted from text. Installed help is source evidence, not proof of live operation or controller/library compatibility. Refuses absent/ambiguous roots, unknown modules and cache integrity changes.',
-      parameters:{type:'object',additionalProperties:false,properties:{module:{type:'string'},query:{type:'string',description:'Search text, at most 256 characters.'},topic:{type:'string',description:'Topic filter, at most 256 characters.'},limit:{type:'integer',description:'Maximum hits to return (1-10).'}}},
+      parameters:{type:'object',additionalProperties:false,properties:{module:{type:'string'},query:{type:'string',description:'Search topic text using words, at most 256 characters. Use this for partial searches.'},topic:{type:'string',description:'Exact relative topic filename from the module topic list, including its .htm/.html extension; not a partial filter. For example GE_ConnectObjects.htm. At most 256 characters.'},limit:{type:'integer',description:'Maximum hits to return (1-10).'}}},
       output:{schema:openOutput(['evidence_kind','action_performed']),render:(_a,v)=>text(JSON.stringify(v,null,2))},
       execute:async args=>runCode('installed_help',args??{}),
     },

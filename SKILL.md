@@ -30,6 +30,10 @@ missing declaration flags, dirty state, changed identity and tampered receipts
 stop with evidence. These modes are read-only and never Build, Save, navigate,
 close/reopen or repair; fresh Build/Make remains a separate required check.
 Do not overwrite or recapture a baseline to make a failed comparison pass.
+An unsupported graphical input does not cancel separately authorized native
+fixture cleanup. Reconcile the current saved/native state and retained receipts
+first, then complete that cleanup and its original checkpoint comparison. Stop
+on an uncertain mutation until its effect is established; do not blindly undo it.
 Use exact registered tool names: `mw_code_task_model` reads the live task model;
 there is no `mw_ide_task_model`. An unknown name is a routing error, not proof
 that the installed plugin is missing a capability. Check the available catalog
@@ -55,8 +59,10 @@ Prefer a verified native IDE operation over mouse/grid input. Use known keyboard
 commands when the native API does not support the operation; inspect the resulting
 state before further input. A retired offline editor is not a native IDE operation.
 Resolve editor shortcuts through `mw_code_installed_help` before sending keys:
-list modules, then search/read the exact installed topic. EditWiz001 covers the
-Edit Wizard; GraphEd001 covers graphical keyboard insertion and connections;
+list modules, then search/read the exact installed topic.
+Use the complete relative topic filename including its .htm/.html extension;
+use query for partial searches. Omitting the extension is not an exact topic.
+EditWiz001 covers the Edit Wizard; GraphEd001 covers graphical keyboard insertion and connections;
 ui_handle001 covers general/default shortcut assignments. Shortcuts may be
 customized, so inspect their actual effect. Do not use generic Windows F10 menu
 assumptions: this MotionWorks installation maps F10 to online mode. Avoid online

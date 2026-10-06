@@ -130,7 +130,7 @@ def search(module=None,query='',topic=None,limit=5):
                     topics=[dict(topic=p['topic'],title=p['title']) for p in pages],**base)
     if topic:
         pages=[p for p in pages if p['topic'].casefold()==topic.casefold()]
-        if len(pages)!=1:raise ValueError('Exact installed help topic absent or ambiguous')
+        if len(pages)!=1:raise ValueError('Exact installed help topic absent or ambiguous; use the complete relative topic filename including .htm/.html from the module topic list, or query for partial text search')
     else:
         terms=re.findall(r'\w+',query.casefold())
         if not terms:raise ValueError('Help query must contain a word')

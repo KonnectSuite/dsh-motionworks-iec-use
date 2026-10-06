@@ -286,3 +286,29 @@ phase cleaned, accepted=true, cleanup_verified=true. This proves a branch spanni
 two serial contacts, not arbitrary branch topologies or controller behavior.
 Observe again when an immediate screenshot is stale; do not repeat keys solely
 because the first capture still shows the old state.
+
+## Connecting a free FBD input
+
+Read installed `GraphEd001/GE_ConnectObjects.htm` and
+`movingthecursorandmarkingobjectsinthegraphiceditorusingthekeyboard.htm`
+using the complete topic filenames. The documented keyboard route selects two
+formal connection points with Space and Shift+Space, then uses Ctrl+Shift+C.
+The gray object cursor alone is not selection. Prove both intended points are
+marked before connecting. A companion's successful key receipt does not prove
+selection, canvas focus, or that a modifier remained held across another call.
+Use only the actual provider's documented input semantics.
+
+The installed help also documents dragging between connection points in
+standard edit mode and branching from an existing connection line. When the
+keyboard route cannot establish selection, use a supported drag only after
+observing current endpoints and confirming the provider exposes that operation.
+Preserve existing output bindings when adding a branch. Observe the settled
+wire, Save natively, obtain a fresh complete graphical listing and independently
+prove its resolved dataflow and all collateral preservation. A drawing or input
+acknowledgment alone does not establish a connection.
+
+If wiring is unsupported, report it and reconcile state before completing
+separately authorized native scratch unassignment/deletion and the original
+checkpoint comparison. Do not leave fixture cleanup to a new permission question
+when it is already authorized. Uncertain mutation outcomes still require receipt
+and state inspection before another mutation.

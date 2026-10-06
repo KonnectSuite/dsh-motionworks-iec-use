@@ -6,6 +6,14 @@ existing native edit-guide tool instead of guessed ASAR filesystem paths.
 
 ## Unreleased
 
+- Clarify installed-help topic identity: require the full relative .htm/.html
+  filename and route partial searches through query. Failed exact-topic reads
+  now include recovery guidance without relaxing exact matching. Document
+  provider-specific graphical selection/drag checks and completion of already
+  authorized native fixture cleanup after unsupported graphical input. Add an
+  opt-in disposable two-TON FBD preparation harness; preparation is not wiring
+  acceptance.
+
 - Deliver ordinary-dialog titles and explicit enabled/frame-enabled/trial state
   in mw_ide_state's model-facing output. Preserve unknown state instead of
   describing an omitted enabled flag as a background dialog. Existing schemas
