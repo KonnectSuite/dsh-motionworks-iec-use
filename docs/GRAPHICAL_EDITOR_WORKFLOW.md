@@ -7,6 +7,16 @@ forward between a screenshot and a click. A submitted input is not acceptance.
 Observe the settled result before the next action; if an immediate screenshot
 still shows the earlier state, observe again instead of repeating the input.
 
+Distinguish the supplied bindings from the complete installed pin interface.
+TON has four pins; this installed TON_Retentive has nine, including optional
+Valid, TT, Error and ErrorID outputs. Nine bindings across these two blocks do
+not mean nine declared pins. Verify every declared pin in the complete fresh
+listing, and both sides of an in-out binding. An unbound optional output is not
+a missing pin. Check whether the screenshot clips a block or network: a partial
+viewport cannot establish complete canvas layout or visible connections. Observe
+the remaining region through the supported companion when that input is in scope;
+otherwise disclose the clipping and retain listing evidence separately.
+
 Native screenshot capture now preserves foreground/active/focused window identity
 and never activates or restores the main frame. Minimized capture and an unsafe
 screen fallback are refused. Own-window rendering may omit a separately owned

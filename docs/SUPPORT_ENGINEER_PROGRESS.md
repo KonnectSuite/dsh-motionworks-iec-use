@@ -2,6 +2,13 @@
 
 This is work in progress. Version 0.5.5 did not establish complete IDE control.
 
+Latest acceptance: live fixture chat now covers native navigation/declarations,
+protected CamGenerator ST insertion, and two-block TON/TON_Retentive FBD creation,
+conversion, complete compiler pin evidence and full cleanup preservation. See
+the live checkpoint/navigation and live toolbox/FBD sections below. Historical
+pending skill/state delivery notes were superseded by turn 11's successful reload
+check. Arbitrary canvas wiring/layout and remaining startup/group cases are open.
+
 ## Minimized-frame diagnostics routing verified
 
 The live chat exposed a minimized frame that looked merely "not blocked" and
@@ -1640,3 +1647,39 @@ read-only skill/discovery/state/compile-state/edit-guide calls; explicit normal
 frame booleans and the complete variable guide reached the model, and it correctly
 described exclusive code input forms. Evidence: arya-guidance-delivery-chat.json,
 accepted=true. No failures in this final turn; fixture remains saved/compiled.
+
+## Live toolbox/FBD chat lifecycle accepted
+
+Turn 12 in the dedicated fixture chat used native APIs to create only
+`AryaGraphProof`, add five locals with six explicitly false flags, insert IEC TON
+and Yaskawa_Toolbox_v375 TON_Retentive once each, assign only its BG instance,
+read back ST, and perform reviewed native FBD conversion. Fresh Build returned
+zero errors and 25 baseline warnings before Make. Complete fresh graphical
+listing resolved both calls and all 13 declared pins across the two blocks.
+There were nine explicit bindings, not nine declared pins: the retentive block
+also has Valid, TT, Error and ErrorID outputs. Both Accum in-out directions
+resolved to the same local variable. No GUI editing was used.
+
+Exact native navigation and screenshot observation showed both blocks and the
+two Accum labels. The lower block was clipped by the viewport; complete canvas
+layout/free wiring is not established. The guide now distinguishes bindings
+from full pin interfaces and requires disclosure/observation of clipped regions.
+Readiness still does not prove keyboard focus; no runtime claim is made.
+
+Reviewed unassignment/deletion, final fresh Build/diagnostics/Make and unchanged
+retained-token comparison restored all seven categories, including every file
+in all seven bound libraries. Final original seven POUs, compiled=true,
+modified=false. Independent audit `arya-graph-chat.json` has accepted=true and
+cleanup_verified=true; `arya-graph-canvas.png` is hash-retained alongside it.
+No MotionWorks tool failed or mutation was replayed. Two context-compression
+requests failed without project impact and are retained as auxiliary failures.
+No corrective follow-up prompt was needed during the lifecycle.
+
+Key receipts: native-fb-5a24e3f5-cea1-4d24-9645-c13214782606.json,
+native-fb-e809d8d6-4913-4ae0-b94a-9ce37ca31a1d.json,
+pou-conversion-3c6009f8-e179-4d68-b499-a911814b3349.json,
+graphical-listing-2043bb92-db33-46b9-8533-31e75f51dfa5.json,
+checkpoint-report-c29c4971-ac29-4d0a-8962-36904629321f.json.
+The reproducibility audit is outside the published package at
+`C:\Users\Admin\Desktop\Codex Workspace\arya-graph-chat-audit.mjs`.
+The full support-engineer objective remains active and incomplete.
