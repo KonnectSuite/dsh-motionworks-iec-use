@@ -116,6 +116,8 @@
     "test/sdk_variable_reader_guards.ps1",
     "test/sdk_variable_reader_live.mjs",
     "test/output_pane.ps1",
+    "test/ide_window_state.ps1",
+    "test/minimized_output_live.ps1",
     "test/hidden_output_pane_live.ps1",
     "test/diagnostic_render.mjs",
     "test/program_review_render.mjs",

@@ -2358,6 +2358,7 @@ function defineTools() {
         + '"No matching global variable found for \'x:y\' in resource \'Resource\'!". Panes: '
         + 'Errors (default), Warnings, Build, Infos, PLC Errors, Print, Statistics, SCC. '
         + 'Activates the exact named pane, exposes a hidden Message Window through its verified native menu command, and requires one visible list with nonzero area. '
+        + 'A minimized frame refuses before pane activation and names the exact frame to restore deliberately through the connected Windows tool; do not repeat the read until state changes. Minimized-frame failure does not disprove hidden-dock recovery. '
         + 'Unknown panes, ambiguous controls and unreadable rows refuse instead of returning another pane or a false empty result. '
         + 'AN EMPTY PANE IS NOT BY ITSELF A CLEAN BUILD: this tool also reads the compile state, and '
         + 'when the pane is empty while the project is NOT compiled it says so, because that pair is '
@@ -2612,7 +2613,7 @@ function defineTools() {
         + 'automation API cannot see. **Call this after every mw_ide_* step.** While a '
         + 'dialog is up, the COM API returns nothing useful: IsProjectOpen reports false '
         + 'or throws, so "no project open" or a bare failure must NOT be read as "the IDE '
-        + 'closed". Returns whether the IDE is blocked, and for each dialog its exact '
+        + 'closed". Reports minimized/visible frame state separately from blocked. A minimized IDE must be deliberately restored through the connected Windows tool before diagnostics; not-blocked does not prove a visible frame. Returns whether the IDE is blocked, and for each dialog its exact '
         + 'message text and button labels Ã¢â‚¬â€ read with WM_GETTEXT from the standard Win32 '
         + 'dialog, so it is exact rather than an OCR guess. Set screenshot:true to also '
         + 'capture the IDE when a dialog is owner-drawn and has no readable text (the .NET '
@@ -2637,6 +2638,8 @@ function defineTools() {
             ide_window: { oneOf: [{ type: 'string' }, { type: 'null' }] },
             window_title: { type: 'string' },
             ide_enabled: { oneOf: [{ type: 'boolean' }, { type: 'null' }] },
+            ide_minimized: { oneOf: [{ type: 'boolean' }, { type: 'null' }] },
+            ide_visible: { oneOf: [{ type: 'boolean' }, { type: 'null' }] },
             blocked: { type: 'boolean' },
             trial_dialog: { type: 'boolean' },
             trial_dialog_hwnd: { oneOf: [{ type: 'string' }, { type: 'null' }] },
@@ -2679,6 +2682,8 @@ function defineTools() {
           const lines = [
             `MotionWorks is running (${v.ide_window}), ${v.blocked ? 'BLOCKED' : 'not blocked'}.`,
           ];
+          if (v.ide_minimized === true) lines.push('IDE frame is minimized. Restore this exact frame deliberately with the connected Windows tool, reobserve, then read diagnostics. Do not repeat a failed pane read while minimized.');
+          else if (v.ide_visible === false) lines.push('IDE frame is hidden; do not assume it is ready for visible diagnostics or input.');
           for (const d of v.dialogs) {
             const btns = d.buttons.map((b) => b.label).join(' / ');
             lines.push(`Dialog ${d.handle}${d.enabled ? '' : ' (behind)'}: ${d.message} [${btns}]`);
@@ -2697,7 +2702,7 @@ function defineTools() {
         kind: 'read',
       }),
       execute: async (args) => {
-        const state = await verb('ide_state', {}, 45000);
+        const state = await verb('ide_state', { include_window_state: true }, 45000);
         if (args?.screenshot) {
           const out = join(IPC_DIR, 'shots', `state-${Date.now()}.png`);
           mkdirSync(dirname(out), { recursive: true });

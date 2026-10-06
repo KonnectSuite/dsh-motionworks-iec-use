@@ -2,6 +2,34 @@
 
 This is work in progress. Version 0.5.5 did not establish complete IDE control.
 
+## Minimized-frame diagnostics routing verified
+
+The live chat exposed a minimized frame that looked merely "not blocked" and
+caused two unchanged Errors reads before restoration. The native reader now
+refuses before accessing/activating any pane, identifies the exact frame and
+routes a deliberate restore through the connected Windows tool. It does not
+restore automatically, replay a Build or confuse minimization with hidden-dock
+recovery. mw_ide_state includes optional ide_minimized/ide_visible fields for
+current callers; native include_window_state opt-in preserves cached callers'
+closed schemas. Synthetic checks cover visible, minimized, hidden, absent and
+changed frame identity, plus zero pane/recovery actions on minimized refusal.
+
+Live production-switch test `minimized-output-1900817d-883b-452c-a6e8-6b081dace140.json`
+is accepted=true, frame_restored=true. The exact clean compiled fixture was
+minimized once, reported minimized=true/blocked=false, refused diagnostics with
+its exact handle, restored once, and read the same Errors contents. Native
+compiled/save state remained unchanged. The whole saved/native/library audit
+was rerun against arya-live-compiler-checkpoint.json after the visibility test.
+No source, project-open, compiler, controller or online action was performed by
+this visibility test. It is a production-switch fixture test; updated guidance
+still needs delivery through Arya's next idle host reload.
+
+The skill also requires complete retained baseline comparison, rather than
+counts, timestamps, selected hashes or a different source copy. Further work
+should expose efficient complete baseline capture/comparison through registered
+tools so the live model can obtain that verdict directly. The broader graphical
+and support-engineer requirements remain open.
+
 ## Live Arya chat acceptance after restart
 
 October 5, 2026, dedicated fixture chat

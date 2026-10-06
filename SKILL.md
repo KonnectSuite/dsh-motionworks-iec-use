@@ -7,6 +7,13 @@ whenToUse: The user has MotionWorks IEC 3 Pro open or asks for work in it — a 
 # MotionWorks IEC workspace editing
 
 Use the installed tools for discovery, staging, IDE editing and IDE verification.
+For a preservation verdict, compare the retained pre-operation baseline against
+complete saved sources/declarations/tasks/globals/translations, full native
+package state (including flags and library bindings), and the complete installed
+library manifest plus wrapper. Inventory counts, file timestamps, two hashes or
+a comparison to a different source copy cannot prove full preservation. Keep
+compiler outputs and IDE bookkeeping outside source-only claims, and report
+any categories that were not compared.
 Use exact registered tool names: `mw_code_task_model` reads the live task model;
 there is no `mw_ide_task_model`. An unknown name is a routing error, not proof
 that the installed plugin is missing a capability. Check the available catalog
@@ -21,6 +28,12 @@ hotkey recovery is needed. If command identity, modal state or resulting pane
 identity cannot be proven, it refuses rather than toggling repeatedly. Retain
 the diagnostics from fresh Build: Make may clear them, so an empty later pane
 does not erase earlier warnings.
+A minimized IDE has no readable diagnostic list. Inspect ide_minimized and
+ide_visible in mw_ide_state; not-blocked does not prove a visible frame. On a
+minimized refusal, restore the exact returned fixture frame deliberately through
+the connected Windows tool, reobserve, then read once. Do not repeat a failed
+read while state is unchanged or mistake minimization for missing hidden-dock
+recovery. Do not replay a Build or mutation just to restore visibility.
 The DEFAULT is IDE-FIRST: the agent actually enters code and declarations in MotionWorks.
 Prefer a verified native IDE operation over mouse/grid input. Use known keyboard
 commands when the native API does not support the operation; inspect the resulting

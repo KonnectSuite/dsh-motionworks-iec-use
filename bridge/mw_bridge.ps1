@@ -2118,6 +2118,14 @@ while ($true) {
             'ide_state' {
                 $ok = $true
                 $data = Get-IdeState
+                # Opt in so a cached caller's closed result schema is unchanged.
+                if ($req.include_window_state -eq $true) {
+                    $frame = Get-IdeWindow
+                    $frameKey = if ($frame) { '0x{0:X}' -f ([int64]$frame) } else { $null }
+                    if ($frameKey -cne $data.ide_window) { throw 'IDE frame changed during window-state observation; reobserve' }
+                    $data.ide_minimized = if ($frame) { [MWW]::IsIconic([IntPtr]$frame) } else { $null }
+                    $data.ide_visible = if ($frame) { [MWW]::IsWindowVisible([IntPtr]$frame) } else { $null }
+                }
             }
 
             # Answer a modal dialog the IDE is waiting on.
@@ -2258,6 +2266,11 @@ while ($true) {
                 if ($null -ne $req.limit -and ($req.limit -isnot [int] -and $req.limit -isnot [long] -or $req.limit -lt 1 -or $req.limit -gt 5000)) { throw 'Output limit must be an integer from 1 to 5000' }
                 $app = Connect-App
                 [void](Assert-StagedOpen $app 'read_output')
+                $ideWin = Get-IdeWindow
+                if (-not $ideWin) { throw 'Exact IDE frame unavailable; diagnostics unverified' }
+                if ([MWW]::IsIconic([IntPtr]$ideWin)) {
+                    throw ('IDE is minimized (0x{0:X}); diagnostics unverified, no pane activation performed. Restore this exact fixture frame deliberately with the connected Windows tool, reobserve, then read diagnostics. Do not repeat this request while minimized or infer missing hidden-dock recovery.' -f ([int64]$ideWin))
+                }
                 # Activate first: a pane that is not showing has no visible list.
                 $activated = $false
                 $ow = $app.OutputWindows

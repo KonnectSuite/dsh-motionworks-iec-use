@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Report minimized/visible IDE state to current callers while preserving cached
+  schemas. Refuse diagnostic reads before pane activation on minimized frames,
+  with exact restore routing. Verified reversible native fixture acceptance;
+  teach unchanged-failure refusal and complete retained baseline comparisons.
+
 - Add explicit compiler-verified protected-block insertion with unique native
   library binding, fresh Build/Make, complete source/native/library preservation
   and expiring evidence. Keep diagnostic cache interfaces ineligible by default.

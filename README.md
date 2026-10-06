@@ -33,6 +33,10 @@ with complete saved/native read-back checks. Use `mw_ide_open_worksheet` to open
 code or variables by exact saved tree identity and verify the active view. These
 operations use COM without mouse input. The [worksheet workflow](docs/VARIABLE_WORKSHEET_WORKFLOW.md)
 also covers dialog fallbacks and the retained planning/verification tools.
+`mw_ide_state` reports `ide_minimized` and `ide_visible` independently of modal
+blocking. A minimized diagnostic request refuses before pane activation and
+identifies the frame to restore through the connected Windows tool. Restore,
+reobserve, then read; an unchanged failed pane read should not be repeated.
 
 For the verified MotionWorks IEC 3 Pro SDK, the bridge generates local interop
 to read complete declarations more efficiently. Unknown SDKs or loader failures

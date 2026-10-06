@@ -17,7 +17,8 @@ public class MWW {
  public delegate bool EnumWindowsProc(IntPtr h,IntPtr l);
  public struct RECT { public int Left,Top,Right,Bottom; }
  public static object Accessible;
- public static bool Ambiguous=false;
+ public static bool Ambiguous=false, Minimized=false;
+ public static bool IsIconic(IntPtr h){return Minimized;}
  public static int ActiveRows=2;
  public static bool ParentVisible=true, CommandVerified=true, Modal=false, PostAccepted=true;
  public static int RecoveryRequests=0;
@@ -54,6 +55,10 @@ $acc=[pscustomobject]@{Rows=@('First error','Last error')}
 $acc|Add-Member ScriptMethod accName {param($n);if($n -lt 1){return 'SELF'};return $this.Rows[$n-1]}
 [MWW]::Accessible=$acc
 $req=@{pane='Errors';limit=200}
+[MWW]::Minimized=$true
+$refused=$false;try{. $read}catch{if($_.Exception.Message -match 'IDE is minimized.*no pane activation performed'){$refused=$true}else{throw}}
+if(-not $refused -or $script:activationCount -ne 0 -or [MWW]::RecoveryRequests -ne 0){throw 'Minimized frame not refused before any pane action'}
+[MWW]::Minimized=$false
 . $read
 if($data.count -ne 2 -or $data.lines[0] -ne 'First error' -or $data.lines[1] -ne 'Last error'){throw 'First/last row lost or inactive pane selected'}
 function Expect-Refusal([scriptblock]$action){$refused=$false;try{& $action}catch{$refused=$true};if(-not $refused){throw 'Expected diagnostic refusal'}}
