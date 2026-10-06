@@ -190,6 +190,51 @@ public class MWW {
   // window to render itself instead.
   [DllImport("user32.dll")] public static extern bool PrintWindow(IntPtr hwnd, IntPtr hdcBlt, uint nFlags);
   [DllImport("user32.dll")] public static extern bool IsIconic(IntPtr h);
+  [StructLayout(LayoutKind.Sequential)] public struct POINT { public int X,Y; }
+  [StructLayout(LayoutKind.Sequential)] public struct CURSORINFO {
+    public uint cbSize, flags; public IntPtr hCursor; public POINT ptScreenPos;
+  }
+  [StructLayout(LayoutKind.Sequential)] public struct ICONINFO {
+    [MarshalAs(UnmanagedType.Bool)] public bool fIcon;
+    public uint xHotspot,yHotspot; public IntPtr hbmMask,hbmColor;
+  }
+  [DllImport("user32.dll")] public static extern bool GetCursorInfo(ref CURSORINFO info);
+  [DllImport("user32.dll")] public static extern IntPtr WindowFromPoint(POINT point);
+  [DllImport("user32.dll")] public static extern IntPtr CopyIcon(IntPtr icon);
+  [DllImport("user32.dll")] public static extern bool GetIconInfo(IntPtr icon,out ICONINFO info);
+  [DllImport("user32.dll")] public static extern bool DestroyIcon(IntPtr icon);
+  [DllImport("gdi32.dll")] public static extern bool DeleteObject(IntPtr obj);
+  [StructLayout(LayoutKind.Sequential)] public struct BITMAP {
+    public int type,width,height,widthBytes; public ushort planes,bitsPixel; public IntPtr bits;
+  }
+  [DllImport("gdi32.dll")] public static extern int GetObject(IntPtr obj,int size,out BITMAP bitmap);
+  [DllImport("user32.dll")] public static extern bool DrawIconEx(IntPtr dc,int x,int y,IntPtr icon,int width,int height,uint step,IntPtr brush,uint flags);
+  [DllImport("user32.dll")] public static extern IntPtr SetThreadDpiAwarenessContext(IntPtr context);
+  public static long[] CaptureCursor() {
+    CURSORINFO info=new CURSORINFO(); info.cbSize=(uint)Marshal.SizeOf(typeof(CURSORINFO));
+    if(!GetCursorInfo(ref info)) throw new InvalidOperationException("Cursor observation unavailable");
+    IntPtr owner=GetAncestor(WindowFromPoint(info.ptScreenPos),3);
+    return new long[]{info.flags,info.hCursor.ToInt64(),info.ptScreenPos.X,info.ptScreenPos.Y,owner.ToInt64()};
+  }
+  public static int[] DrawCapturedCursor(IntPtr dc,long[] cursor,int left,int top) {
+    IntPtr copy=CopyIcon(new IntPtr(cursor[1]));
+    if(copy==IntPtr.Zero) throw new InvalidOperationException("Cursor image copy failed");
+    ICONINFO info=new ICONINFO();
+    try {
+      if(!GetIconInfo(copy,out info)) throw new InvalidOperationException("Cursor hotspot unavailable");
+      BITMAP bitmap; IntPtr image=info.hbmColor!=IntPtr.Zero?info.hbmColor:info.hbmMask;
+      if(GetObject(image,Marshal.SizeOf(typeof(BITMAP)),out bitmap)==0) throw new InvalidOperationException("Cursor dimensions unavailable");
+      int width=bitmap.width,height=info.hbmColor!=IntPtr.Zero?bitmap.height:bitmap.height/2;
+      if(width<=0||height<=0) throw new InvalidOperationException("Cursor dimensions invalid");
+      int x=(int)cursor[2]-left-(int)info.xHotspot,y=(int)cursor[3]-top-(int)info.yHotspot;
+      if(!DrawIconEx(dc,x,y,copy,width,height,0,IntPtr.Zero,3)) throw new InvalidOperationException("Cursor rendering failed");
+      return new int[]{(int)info.xHotspot,(int)info.yHotspot,width,height};
+    } finally {
+      if(info.hbmMask!=IntPtr.Zero) DeleteObject(info.hbmMask);
+      if(info.hbmColor!=IntPtr.Zero) DeleteObject(info.hbmColor);
+      DestroyIcon(copy);
+    }
+  }
 
   // Read the Message Window's lists as TEXT.
   //
@@ -2416,6 +2461,12 @@ while ($true) {
             # it is tried first; a blank bitmap (measured on some builds) falls
             # back to a screen copy taken with the IDE foregrounded.
             'screenshot' {
+                $priorDpi = [IntPtr]::Zero
+                if ($req.capture_cursor -eq $true) {
+                    $priorDpi = [MWW]::SetThreadDpiAwarenessContext([IntPtr](-4))
+                    if ($priorDpi -eq [IntPtr]::Zero) { throw 'Physical-pixel cursor capture context unavailable' }
+                }
+                try {
                 $out = [string]$req.path
                 if ([string]::IsNullOrWhiteSpace($out)) { throw 'screenshot requires "path"' }
                 $ideW = Get-IdeWindow
@@ -2426,6 +2477,9 @@ while ($true) {
                 # graphical inline editor. No activation or implicit restoration.
                 if ([MWW]::IsIconic($ideW)) { throw 'IDE is minimized; capture would require a window-state change. Restore deliberately before observing again' }
                 $focusBefore = @([MWW]::CaptureFocus())
+                $cursorBefore = $null
+                $cursorBytes = $null; $cursorPath = $null
+                if ($req.capture_cursor -eq $true) { $cursorBefore = [MWW]::CaptureCursor() }
 
                 Add-Type -AssemblyName System.Drawing
                 $rc = New-Object MWW+RECT
@@ -2451,7 +2505,12 @@ while ($true) {
                 }
 
                 $method = $null
-                $bmp = New-Object System.Drawing.Bitmap $w, $h
+                # Native GDI cursor drawing does not populate an ARGB bitmap's
+                # alpha channel. RGB keeps a successfully drawn glyph visible
+                # in the saved PNG rather than silently transparent.
+                $bmp = if ($req.capture_cursor -eq $true) {
+                    New-Object System.Drawing.Bitmap $w, $h, ([System.Drawing.Imaging.PixelFormat]::Format24bppRgb)
+                } else { New-Object System.Drawing.Bitmap $w, $h }
                 try {
                 foreach ($flags in @(2, 0)) {          # PW_RENDERFULLCONTENT, then plain
                     if ($method) { break }
@@ -2472,11 +2531,56 @@ while ($true) {
                     $g.Dispose()
                     $method = 'screen-region'
                 }
+                $cursorEvidence = $null
+                if ($null -ne $cursorBefore) {
+                    $visible = ($cursorBefore[0] -band 1) -ne 0
+                    $overIde = $cursorBefore[4] -eq $ideW.ToInt64() -and $cursorBefore[2] -ge $rc.Left -and $cursorBefore[2] -lt $rc.Right -and $cursorBefore[3] -ge $rc.Top -and $cursorBefore[3] -lt $rc.Bottom
+                    $cursorEvidence = [ordered]@{ visible=$visible; over_ide=$overIde; rendered=$false; screen_x=[int]$cursorBefore[2]; screen_y=[int]$cursorBefore[3]; window_x=([int]$cursorBefore[2]-$rc.Left); window_y=([int]$cursorBefore[3]-$rc.Top) }
+                    if ($visible -and $overIde) {
+                        $g = [System.Drawing.Graphics]::FromImage($bmp); $hdc = $g.GetHdc()
+                        try { $hotspot = [MWW]::DrawCapturedCursor($hdc,$cursorBefore,$rc.Left,$rc.Top) }
+                        finally { $g.ReleaseHdc($hdc); $g.Dispose() }
+                        $cursorEvidence.rendered=$true
+                        $cursorEvidence.hotspot_x=$hotspot[0]; $cursorEvidence.hotspot_y=$hotspot[1]
+                        # Also show the same native glyph against light and dark
+                        # backgrounds: XOR/white cursors can vanish on the canvas.
+                        $cursorPath = [IO.Path]::ChangeExtension($out, 'cursor.png')
+                        $tileWidth = $hotspot[2]+16; $tileHeight = $hotspot[3]+16
+                        $cursorBmp = New-Object System.Drawing.Bitmap ($tileWidth*2), $tileHeight, ([System.Drawing.Imaging.PixelFormat]::Format24bppRgb)
+                        $cg = [System.Drawing.Graphics]::FromImage($cursorBmp)
+                        try {
+                            $cg.Clear([System.Drawing.Color]::White)
+                            $cg.FillRectangle([System.Drawing.Brushes]::Black,$tileWidth,0,$tileWidth,$tileHeight)
+                            $chdc=$cg.GetHdc()
+                            try {
+                                [MWW]::DrawCapturedCursor($chdc,$cursorBefore,([int]$cursorBefore[2]-$hotspot[0]-8),([int]$cursorBefore[3]-$hotspot[1]-8)) | Out-Null
+                                [MWW]::DrawCapturedCursor($chdc,$cursorBefore,([int]$cursorBefore[2]-$hotspot[0]-8-$tileWidth),([int]$cursorBefore[3]-$hotspot[1]-8)) | Out-Null
+                            } finally { $cg.ReleaseHdc($chdc) }
+                            $visiblePixels=$false
+                            for ($cy=0;$cy -lt $tileHeight -and -not $visiblePixels;$cy++) {
+                                for ($cx=0;$cx -lt ($tileWidth*2);$cx++) {
+                                    $expectedColor=if($cx -lt $tileWidth){[System.Drawing.Color]::White.ToArgb()}else{[System.Drawing.Color]::Black.ToArgb()}
+                                    if($cursorBmp.GetPixel($cx,$cy).ToArgb() -ne $expectedColor){$visiblePixels=$true;break}
+                                }
+                            }
+                            $cursorEvidence.glyph_visible=$visiblePixels
+                            $stream=New-Object IO.MemoryStream
+                            try { $cursorBmp.Save($stream,[System.Drawing.Imaging.ImageFormat]::Png); $cursorBytes=$stream.ToArray() }
+                            finally { $stream.Dispose() }
+                        } finally { $cg.Dispose(); $cursorBmp.Dispose() }
+                        $cursorEvidence.path=$cursorPath
+                    }
+                    $cursorAfter = [MWW]::CaptureCursor()
+                    if (($cursorBefore -join ':') -ne ($cursorAfter -join ':')) {
+                        throw 'Cursor position, shape, visibility or owning window changed during capture; reobserve before input'
+                    }
+                }
                 $focusAfter = @([MWW]::CaptureFocus())
                 $beforeKey = ($focusBefore | ForEach-Object { $_.ToInt64() }) -join ':'
                 $afterKey = ($focusAfter | ForEach-Object { $_.ToInt64() }) -join ':'
                 if ($beforeKey -ne $afterKey) { throw 'Foreground/active/focused window changed during capture; image acceptance unverified. Reobserve before input' }
                 $bmp.Save($out, [System.Drawing.Imaging.ImageFormat]::Png)
+                if ($null -ne $cursorBytes) { [IO.File]::WriteAllBytes($cursorPath,$cursorBytes) }
                 } finally { $bmp.Dispose() }
 
                 # Which route was taken is a diagnostic, so it goes to the log rather
@@ -2487,6 +2591,10 @@ while ($true) {
 
                 $ok = $true
                 $data = [ordered]@{ path = $out; width = $w; height = $h }
+                if ($null -ne $cursorEvidence) { $data.cursor = $cursorEvidence }
+                } finally {
+                    if ($priorDpi -ne [IntPtr]::Zero) { [MWW]::SetThreadDpiAwarenessContext($priorDpi) | Out-Null }
+                }
             }
 
             default {

@@ -4072,8 +4072,13 @@ function defineTools() {
         + 'the IDE is actually showing Ã¢â‚¬â€ a dialog, the Project Tree, or the Message Window error '
         + 'list. Capture preserves foreground and keyboard focus; minimized windows and '
         + 'unverified screen fallback are refused. Owned inline dialogs may require a '
-        + 'companion screenshot. Read the returned path with the image-reading tool.',
-      parameters: { type: 'object', additionalProperties: false, properties: {} },
+        + 'companion screenshot. Set capture_cursor:true after a deliberate hover to render '
+        + 'the actual cursor glyph only when over the IDE; cursor/focus drift refuses capture. '
+        + 'Rendered glyph and coordinates are observation, not connection acceptance. Read '
+        + 'the returned path with the image-reading tool.',
+      parameters: { type: 'object', additionalProperties: false, properties: {
+        capture_cursor: {type:'boolean',description:'Opt-in cursor glyph and position observation; does not move the pointer or focus.'},
+      } },
       output: {
         schema: {
           type: 'object',
@@ -4083,15 +4088,22 @@ function defineTools() {
             path: { type: 'string' },
             width: { type: 'integer' },
             height: { type: 'integer' },
+            cursor: {type:'object',additionalProperties:false,required:['visible','over_ide','rendered','screen_x','screen_y','window_x','window_y'],properties:{
+              visible:{type:'boolean'},over_ide:{type:'boolean'},rendered:{type:'boolean'},
+              screen_x:{type:'integer'},screen_y:{type:'integer'},window_x:{type:'integer'},window_y:{type:'integer'},
+              hotspot_x:{type:'integer'},hotspot_y:{type:'integer'},
+              path:{type:'string',description:'Same native glyph on light/dark backgrounds; inspect alongside IDE PNG.'},
+              glyph_visible:{type:'boolean',description:'Pixel proof that the captured cursor differs from transparent light/dark backgrounds; false gives no connection-cursor evidence.'},
+            }},
           },
         },
-        render: (_a, v) => text(`IDE screenshot: ${v.path} (${v.width}x${v.height})`),
+        render: (_a, v) => text(`IDE screenshot: ${v.path} (${v.width}x${v.height})${v.cursor?'\nCursor observation: '+JSON.stringify(v.cursor)+'; inspect the actual glyph in this PNG before connection input.':''}`),
       },
       presentCall: () => ({ card: 'generic', title: 'Screenshot MotionWorks IDE', kind: 'read' }),
-      execute: () => {
+      execute: (args={}) => {
         const out = join(IPC_DIR, 'shots', `ide-${Date.now()}.png`);
         mkdirSync(dirname(out), { recursive: true });
-        return verb('screenshot', { path: out }, 30000);
+        return verb('screenshot', { path: out, ...(args.capture_cursor===true?{capture_cursor:true}:{}) }, 30000);
       },
     },
   ];

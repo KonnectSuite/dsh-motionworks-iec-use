@@ -6,6 +6,11 @@ existing native edit-guide tool instead of guessed ASAR filesystem paths.
 
 ## Unreleased
 
+- Add opt-in cursor observation to native IDE screenshots, preserving focus.
+  Return physical coordinates, hotspot and a light/dark native glyph sheet;
+  refuse cursor drift and report blank glyph pixels explicitly. Capturing a
+  cursor does not establish a connection. Ordinary screenshots remain unchanged.
+
 - Require the installed-help connection cursor before graphical dragging.
   A live block-edge attempt moved the scratch block while leaving compiled
   instructions unchanged; complete native preservation and original-checkpoint

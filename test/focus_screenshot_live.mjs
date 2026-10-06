@@ -13,12 +13,21 @@ try{
  const status=await i.verb('status',{},30000);
  assert.equal(resolve(status.active_project).toLowerCase(),resolve(project+'.mwt').toLowerCase());
  record.before=await i.runCode('structure_snapshot',{project});
- record.capture=await i.defineTools().find(t=>t.name==='mw_ide_screenshot').execute({});
+ const capture_cursor=process.env.MW_CAPTURE_CURSOR==='1';
+ record.capture=await i.defineTools().find(t=>t.name==='mw_ide_screenshot').execute({capture_cursor});
+ if(capture_cursor){
+  assert.equal(record.capture.cursor.visible,true);assert.equal(record.capture.cursor.over_ide,true);assert.equal(record.capture.cursor.rendered,true);
+  assert.ok(Number.isInteger(record.capture.cursor.hotspot_x));assert.ok(Number.isInteger(record.capture.cursor.hotspot_y));
+  assert.equal(typeof record.capture.cursor.glyph_visible,'boolean');
+  copyFileSync(record.capture.cursor.path,stem+'.cursor.png');
+  record.cursor_glyph_visible=record.capture.cursor.glyph_visible;
+  if(process.env.MW_REQUIRE_VISIBLE_GLYPH==='1')assert.equal(record.cursor_glyph_visible,true,'Native cursor image is blank; no glyph proof');
+ }
  assert.ok(record.capture.path);copyFileSync(record.capture.path,stem+'.png');
  record.log=readFileSync(join(i.IPC_DIR,'bridge.log'),'utf8').split('\n').filter(line=>line.includes(record.capture.path)&&line.includes('focus preserved')).at(-1);
  assert.ok(record.log,'Native preserved-focus evidence absent');
  record.after=await i.runCode('structure_snapshot',{project});
  for(const key of ['pous','tasks','globals','program_sources','translation_files'])assert.deepEqual(record.after[key],record.before[key],key);
  record.state=await i.verb('compile_state',{},30000);assert.equal(record.state.is_modified,false);assert.equal(record.state.is_compiled,true);
- record.accepted=true;console.log(JSON.stringify({accepted:true,evidence:stem+'.json',image:stem+'.png',log:record.log}));
+ record.accepted=true;console.log(JSON.stringify({accepted:true,cursor_glyph_visible:record.cursor_glyph_visible,evidence:stem+'.json',image:stem+'.png',log:record.log}));
 }catch(e){record.error=e.message;throw e;}finally{writeFileSync(stem+'.json',JSON.stringify(record,null,2));await i.stopBridge();}

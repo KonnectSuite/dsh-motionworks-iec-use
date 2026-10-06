@@ -307,7 +307,19 @@ installed help's connection-line symbol has been added to the cursor. A Q label,
 BOOL tooltip or approximate block edge is not this proof. Dragging a nearby
 body region can move the entire block; dragging an unrecognized line region can
 create a selection box. Use a supported cursor-aware observation when ordinary
-captures omit the cursor. If the connection cursor cannot be established, do not
+captures omit the cursor. After a deliberate hover, use
+`mw_ide_screenshot(capture_cursor:true)` and inspect its PNG: the actual cursor
+glyph is overlaid at its hotspot only when visible over the IDE. The returned
+cursor coordinates use physical screen pixels and window-relative pixels; match
+the companion's coordinate system before input. Hidden/outside cursors are not
+rendered, and cursor position/shape/owner or focus drift refuses the capture.
+The tool does not move the pointer or focus. A rendered arrow alone is not the
+vendor's connection-line symbol, and a symbol alone does not prove final dataflow.
+Inspect both the IDE PNG and `cursor.path` (native glyph on light/dark backgrounds).
+`rendered:true` means the draw API succeeded; require `glyph_visible:true` as
+pixel evidence before treating it as a visible symbol. A blank or transparent
+native cursor supplies no connection-cursor proof, even if `visible:true`.
+If the connection cursor cannot be established, do not
 guess another pixel and drag; use a documented route with its own verified
 selection/mode state or report the unresolved input path.
 Preserve existing output bindings when adding a branch. Observe the settled
