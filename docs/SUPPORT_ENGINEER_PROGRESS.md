@@ -2,6 +2,60 @@
 
 This is work in progress. Version 0.5.5 did not establish complete IDE control.
 
+## Live Arya chat acceptance after restart
+
+October 5, 2026, dedicated fixture chat
+`d637dc30-4a0d-470d-8c45-f88c710d2be0`, turns 7 and 8. Turn 7 loaded the
+updated MotionWorks skill and used native discovery/state/compiler/interface
+reads. The default eight-pin CamGenerator interface remained diagnostic and
+ineligible. Turn 8 actually passed compiler_verified:true through the registered
+mw_ide_fb_insert schema, rather than relying on the model's catalog claim.
+
+Arya created AryaCamProof and six typed locals, inserted ProbeCam once using
+fresh-bound-compiled-block-interface, assigned only AryaCamProofInstance to BG,
+built, read diagnostics before Make, read back the full ST body and seven
+variables with flags, then unassigned/deleted the scratch objects and built and
+made again. Both fresh Builds returned compiled; both pre-Make reads had zero
+errors and the same 25 fixture warnings. No corrective follow-up prompt was
+needed during this lifecycle. These were prescribed fixture steps, not proof of
+unbounded engineering autonomy, graphical wiring, protected-source freshness or
+runtime/machine behavior.
+
+The minimized IDE caused two repeated Errors-pane read failures and one
+screenshot refusal. Arya deliberately restored the exact fixture window through
+its Windows companion and then read diagnostics successfully. No failed mutation
+was retried. This establishes self-recovery while exposing a routing improvement:
+detect minimization before output-pane reads and do not repeat a failed read
+until state has changed. Not-blocked does not prove a visible/restored frame.
+A minimized-frame failure does not disprove the separately verified native
+hidden-Message-Window recovery; Arya's final inference to that effect was wrong.
+
+Independent post-run verification matched all five saved snapshot categories
+(pous, tasks, globals, program_sources, translation_files), the complete native
+POU/declaration/group/task/library package, and every selected installed-library
+file plus its wrapper against the retained pre-test baseline. Seven POUs, five
+tasks and 164 globals remained, compiled=true and modified=false. Root IDE logs,
+compiler outputs and bookkeeping are outside those source/package comparisons;
+no claim of byte-identical entire project directory is made. Arya's own final
+comparison relied partly on timestamps and two library hashes, so the complete
+preservation verdict comes from this independent audit.
+
+Evidence under the exact disposable workspace's .motionworks/verification:
+- `arya-live-compiler-chat.json`: sanitized tool-receipt checks, accepted=true,
+  unassisted_completed=true, cleanup_verified=true, with retained read failures.
+- `arya-live-compiler-checkpoint.json`: full before/after saved/native/library
+  comparison, read_only_chat_accepted=true, cleanup_verified=true.
+- `native-fb-96c34e81-a230-4b91-853c-5cd77321fb99.json`: phase verified,
+  instance_declared and call_inserted, exact accepted body read-back.
+- `compiled-interface-c406f2fb-ded4-402c-a71f-e9d582c82345.json`: verified current
+  compiled contract; protected-source/cache freshness still false.
+
+The local reproducibility script is
+`C:\Users\Admin\Desktop\Codex Workspace\arya-live-compiler-audit.mjs`.
+It reads concatenated Zstd session frames with Node 24, excludes private reasoning
+from reported/retained receipts, and supports progress, receipt and check. It is
+an acceptance aid outside the published package; baseline mode refuses overwrite.
+
 ## Automatic protected-block insertion accepted
 
 Receipt `cam-native-c549bfbc-0bc5-4f32-b32d-ce8210319561.json` is accepted=true,
