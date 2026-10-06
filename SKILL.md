@@ -75,6 +75,9 @@ An existing disabled IDE frame with an observed enabled ordinary dialog makes
 Inspect `mw_ide_state` and resolve that exact dialog deliberately before another
 start request. The refusal does not answer dialogs, connect COM or launch a
 duplicate IDE. Unknown loading states retain the bounded startup observation.
+The state display includes each ordinary dialog's exact title/handle and enabled
+state, plus known frame-enabled/trial booleans. Unknown values remain unknown;
+do not infer dialog identity from the button set alone.
 Offline code/variable/POU editors and the unsupported Rebuild API are retired.
 For declarations use `mw_ide_variable_change` with the staged project, exact POU
 (omit for resource globals), operation, and `baseline_saved:true` only after

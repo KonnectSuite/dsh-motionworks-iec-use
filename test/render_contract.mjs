@@ -85,4 +85,8 @@ assert.match(state.output.render({}, { ide_running: false, verifier_running: fal
 assert.match(state.output.render({}, { ide_running:true, ide_window:'0x2A', blocked:false, dialogs:[], ide_minimized:true, ide_visible:true })[0].text, /minimized.*Restore/s)
 assert.match(state.output.render({}, { ide_running:true, ide_window:'0x2A', blocked:false, dialogs:[], ide_minimized:false, ide_visible:false })[0].text, /hidden/)
 assert.match(state.output.render({}, { ide_running:true, ide_window:'0x2A', blocked:false, dialogs:[], ide_minimized:false, ide_visible:true })[0].text, /ide_minimized=false  ide_visible=true/)
+const modalStateText=state.output.render({}, {ide_running:true,ide_window:'0x2A',blocked:true,ide_enabled:false,trial_dialog:false,dialogs:[{handle:'0x99',title:'Save/Zip project as',enabled:true,message:'File name:',buttons:[{id:2,label:'Cancel'}]}]})[0].text;
+assert.match(modalStateText,/ide_enabled=false  trial_dialog=false/);
+assert.match(modalStateText,/Dialog 0x99 "Save\/Zip project as" \(enabled=true\): File name: \[Cancel\]/);
+assert.match(state.output.render({}, {ide_running:true,ide_window:'0x2A',blocked:true,dialogs:[{handle:'0x99',title:'Unknown state',message:'',buttons:[]}]})[0].text,/enabled=unknown/);
 console.log('trial-aware startup state render checks passed')

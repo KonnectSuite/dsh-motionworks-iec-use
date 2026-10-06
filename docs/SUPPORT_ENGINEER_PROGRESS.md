@@ -1701,3 +1701,48 @@ The same immutable baseline token matched all seven categories after cleanup;
 the active project and compiled/unmodified state stayed unchanged. No Save,
 Build, close, restart or controller action occurred in this test. This proves
 the registered repository path; live Arya blocked-start acceptance is separate.
+
+## Live ready-IDE reuse and worksheet navigation
+
+Arya fixture turn 13 passed one mw_ide_start reuse of ready frame 0x40920,
+matching before/after state and project identity, then one native open and one
+inspect-only read for each TopCutterInitialize variables/code worksheet. Each
+active logical identity matched; all views stayed unmodified. The original
+retained-token comparison matched all seven categories and compile state stayed
+compiled=true, modified=false. No save/build/edit/close/restart occurred in this
+chat check. No keyboard-focus or fresh-compile claim is made. One auxiliary
+compression request failed and a corrected compression range succeeded; no
+MotionWorks operation failed or was replayed. No requested check was omitted.
+Independent audit arya-start-reuse-chat.json is accepted=true; its audit helper
+arya-start-reuse-chat-audit.mjs stays outside the published package.
+
+## Live existing-modal refusal and identity delivery
+
+Reloaded Arya turn 14 received the new ordinary-modal refusal from one
+mw_ide_start request, naming fixture frame 0x40920 and Save/Zip project as
+dialog 0x2006D4. Before/after state showed the same blocked frame and unchanged
+dialog controls. The expected start error was not retried; no dialog answer,
+COM mutation or duplicate launch occurred. arya-start-modal-chat.json retains
+the expected refusal and auxiliary compression failure separately. The dialog
+title was observed externally; the original state render omitted it, so this
+turn alone does not prove model-facing exact initial identity.
+
+The follow-up state render exposes exact dialog title/handle and explicit
+enabled state, plus known ide_enabled/trial_dialog booleans. Missing values
+remain unknown instead of implying a background dialog. Native behavior and
+schemas are unchanged. Focused rendering, registration, skill delivery and
+installed preflight checks passed. Fresh trial-start remains a separate pending
+live chat test; the overall support-engineer objective remains incomplete.
+
+After another idle Arya host restart, turn 15 independently accepted delivery
+of the updated skill and one native state read. The result explicitly named
+Save/Zip project as, 0x2006D4, enabled=true, ide_enabled=false and trial_dialog=false.
+No MotionWorks operation beyond that read was called. No failure or corrective
+follow-up was needed. arya-modal-state-delivery-chat.json is accepted=true.
+
+Deliberate Cancel then closed the unchanged dialog. Registered read-only cleanup
+arya-modal-cleanup-d5dee256-34f0-4e17-8b6a-81946559d19c.json is accepted=true,
+cleanup_verified=true. It confirms the original frame/project, no modal, compiled
+and unmodified state, and all seven categories matching the same immutable token.
+The turn 14 receipt now links this cleanup evidence. No Save/Build/restart/edit
+of MotionWorks occurred. The updated Arya host is open/idle; version remains 0.5.5.

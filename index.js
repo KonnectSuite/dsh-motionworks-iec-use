@@ -2726,11 +2726,12 @@ function defineTools() {
             `MotionWorks is running (${v.ide_window}), ${v.blocked ? 'BLOCKED' : 'not blocked'}.`,
           ];
           if (typeof v.ide_minimized === 'boolean' || typeof v.ide_visible === 'boolean') lines.push(`ide_minimized=${v.ide_minimized ?? 'unknown'}  ide_visible=${v.ide_visible ?? 'unknown'}`);
+          if (typeof v.ide_enabled === 'boolean' || typeof v.trial_dialog === 'boolean') lines.push(`ide_enabled=${v.ide_enabled ?? 'unknown'}  trial_dialog=${v.trial_dialog ?? 'unknown'}`);
           if (v.ide_minimized === true) lines.push('IDE frame is minimized. Restore this exact frame deliberately with the connected Windows tool, reobserve, then read diagnostics. Do not repeat a failed pane read while minimized.');
           else if (v.ide_visible === false) lines.push('IDE frame is hidden; do not assume it is ready for visible diagnostics or input.');
           for (const d of v.dialogs) {
             const btns = d.buttons.map((b) => b.label).join(' / ');
-            lines.push(`Dialog ${d.handle}${d.enabled ? '' : ' (behind)'}: ${d.message} [${btns}]`);
+            lines.push(`Dialog ${d.handle} ${JSON.stringify(d.title)} (enabled=${d.enabled ?? 'unknown'}): ${d.message} [${btns}]`);
           }
           if (v.blocked && v.dialogs.length) {
             lines.push('The IDE is waiting for a button. The COM API cannot proceed until it is '

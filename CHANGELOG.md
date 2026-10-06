@@ -6,6 +6,11 @@ existing native edit-guide tool instead of guessed ASAR filesystem paths.
 
 ## Unreleased
 
+- Deliver ordinary-dialog titles and explicit enabled/frame-enabled/trial state
+  in mw_ide_state's model-facing output. Preserve unknown state instead of
+  describing an omitted enabled flag as a background dialog. Existing schemas
+  and native read behavior stay unchanged.
+
 - Refuse an existing disabled IDE frame blocked by an observed ordinary modal
   immediately, instead of waiting the full startup timeout. Recheck exact frame
   and disabled state; preserve native Use Trial handling and unknown loading
