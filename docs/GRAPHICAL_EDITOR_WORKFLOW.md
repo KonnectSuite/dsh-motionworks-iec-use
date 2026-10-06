@@ -319,6 +319,11 @@ Inspect both the IDE PNG and `cursor.path` (native glyph on light/dark backgroun
 `rendered:true` means the draw API succeeded; require `glyph_visible:true` as
 pixel evidence before treating it as a visible symbol. A blank or transparent
 native cursor supplies no connection-cursor proof, even if `visible:true`.
+Use the actual PNG pixel coordinates and current window origin when translating
+to screen input. A thin wire can occupy one pixel row; a scaled preview or
+rounded coordinate can put the hover above it. Confirm close-up geometry and
+the cursor cue before input. Blank glyphs at one location do not establish that
+the renderer is broken or that every connection point has a blank cursor.
 If the connection cursor cannot be established, do not
 guess another pixel and drag; use a documented route with its own verified
 selection/mode state or report the unresolved input path.

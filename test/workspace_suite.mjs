@@ -60,6 +60,8 @@ const commands = [
     ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', 'test/ide_window_state.ps1']],
   [join(process.env.SystemRoot ?? 'C:\\Windows', 'System32/WindowsPowerShell/v1.0/powershell.exe'),
     ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', 'test/focus_screenshot.ps1']],
+  [join(process.env.SystemRoot ?? 'C:\\Windows', 'System32/WindowsPowerShell/v1.0/powershell.exe'),
+    ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', 'test/cursor_render.ps1']],
 ];
 for (const [command, args] of commands) {
   const result = spawnSync(command, args, { cwd: root, stdio: 'inherit', windowsHide: true });

@@ -1746,3 +1746,16 @@ cleanup_verified=true. It confirms the original frame/project, no modal, compile
 and unmodified state, and all seven categories matching the same immutable token.
 The turn 14 receipt now links this cleanup evidence. No Save/Build/restart/edit
 of MotionWorks occurred. The updated Arya host is open/idle; version remains 0.5.5.
+
+## Graphical wiring deferred after live cursor checks
+
+The user accepted moving on with low confidence in arbitrary graphical wiring.
+Turns 24/25 delivered native cursor capture and complete fixture cleanup, but
+neither established the vendor connection symbol or a new wire. Turn 25 sent no
+drag or keyboard edit. Same-original checkpoint-report-6a852c16-8a93-4c4d-b355-
+5d1d1ac142dc.json verified all seven preservation categories, compiled=true and
+modified=false. arya-measured-cursor-chat.json retains source/native comparisons,
+three intermediate raw-container hash differences after import, and the initial
+minimized-IDE refusal with successful recovery. No exact intermediate binary
+preservation or graphical acceptance is claimed. See HANDOFF_2026-10-05.md for
+the current evidence and remaining native workflow checks. Version stays 0.5.5.
