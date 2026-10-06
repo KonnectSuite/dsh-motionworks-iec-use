@@ -1634,3 +1634,9 @@ bundled workflows through mw_ide_edit_guide, and explicitly separates the two
 mutually exclusive code-input forms. Focused render/skill checks passed.
 The complete chat audit is retained separately; broader graphical/group/startup
 acceptance and the overall support-engineer goal remain incomplete.
+
+Final delivery: patch 8c57107 installed/reloaded while idle. Turn 11 passed five
+read-only skill/discovery/state/compile-state/edit-guide calls; explicit normal
+frame booleans and the complete variable guide reached the model, and it correctly
+described exclusive code input forms. Evidence: arya-guidance-delivery-chat.json,
+accepted=true. No failures in this final turn; fixture remains saved/compiled.
