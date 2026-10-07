@@ -4266,7 +4266,7 @@ function defineTools() {
         render: (_a, v) => text(`IDE screenshot: ${v.path} (${v.width}x${v.height})${v.cursor?'\nCursor observation: '+JSON.stringify(v.cursor)+'; inspect the actual glyph in this PNG before connection input.':''}`),
       },
       presentCall: () => ({ card: 'generic', title: 'Screenshot MotionWorks IDE', kind: 'read' }),
-      execute: () => withIdeHeld(() => {
+      execute: (args={}) => withIdeHeld(() => {
         const out = join(IPC_DIR, 'shots', `ide-${Date.now()}.png`);
         mkdirSync(dirname(out), { recursive: true });
         return verb('screenshot', { path: out, ...(args.capture_cursor===true?{capture_cursor:true}:{}) }, 30000);
