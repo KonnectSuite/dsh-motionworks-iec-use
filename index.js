@@ -443,7 +443,11 @@ function dockSentence(v) {
       : ` Docked in the native window panel, not on screen (${v.dock_reason ?? 'unknown'}).`;
   }
   if (typeof v.dock_reason === 'string' && v.dock_reason !== 'no-dock') {
-    return ` Not docked (${v.dock_reason}).`;
+    // "Not docked" is the ordinary state and does not need its own reason repeated
+    // after it; a reason that names a failure is worth printing.
+    return v.dock_reason === 'not-docked'
+      ? ' Not docked in the native window panel.'
+      : ` Not docked (${v.dock_reason}).`;
   }
   return '';
 }
