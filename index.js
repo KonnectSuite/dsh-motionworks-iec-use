@@ -405,6 +405,48 @@ function ideHwnd(value) {
   const parsed = Number.parseInt(value, 16);
   return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : null;
 }
+/**
+ * The IDE's window handle, from whichever source can still see it.
+ *
+ * The bridge finds the IDE by caption over VISIBLE windows, which is right for a
+ * bare IDE on the desktop and wrong for a docked one: a docked window that is not
+ * the tab on screen is parked with SW_HIDE, and a hidden window is invisible to
+ * that search — measured live, `mw_ide_status` answered "window 0x0" for an IDE
+ * the dock was holding by the handle. Since the hold is exactly what the parked
+ * case needs, the handle has to come from somewhere that does not depend on
+ * visibility, and the dock is that somewhere: it knows what it is holding.
+ *
+ * @param windowField - the bridge's `ide_window`, when it managed to see one.
+ */
+async function ideWindowHandle(windowField) {
+  const direct = ideHwnd(windowField);
+  if (direct !== null) return direct;
+  const dock = dockService();
+  if (dock === null) return null;
+  try {
+    const tabs = await dock.list();
+    const tab = (tabs ?? []).find(
+      (candidate) => String(candidate?.process ?? '').toLowerCase().includes('mwt'),
+    );
+    return typeof tab?.hwnd === 'number' ? tab.hwnd : null;
+  } catch {
+    // Nothing to resolve from: the caller falls back to running without a hold.
+    return null;
+  }
+}
+
+/** One sentence about where the IDE window stands in the dock, or nothing. */
+function dockSentence(v) {
+  if (v.docked === true) {
+    return v.dock_visible === true
+      ? ' Docked in the native window panel and on screen.'
+      : ` Docked in the native window panel, not on screen (${v.dock_reason ?? 'unknown'}).`;
+  }
+  if (typeof v.dock_reason === 'string' && v.dock_reason !== 'no-dock') {
+    return ` Not docked (${v.dock_reason}).`;
+  }
+  return '';
+}
 
 /**
  * Where the IDE window stands in the dock, for a caller that wants the audience's view.
@@ -418,7 +460,7 @@ function ideHwnd(value) {
  */
 async function ideDockState(windowField) {
   const dock = dockService();
-  const hwnd = ideHwnd(windowField);
+  const hwnd = await ideWindowHandle(windowField);
   if (dock === null) return { docked: false, dock_visible: false, dock_reason: 'no-dock' };
   if (hwnd === null) return { docked: false, dock_visible: false, dock_reason: 'no-window' };
   try {
@@ -470,7 +512,7 @@ async function dockIdeWindow(started) {
 async function withIdeHeld(work) {
   const dock = dockService();
   const status = await verb('status', {}, 20000).catch(() => null);
-  const hwnd = ideHwnd(status?.ide_window);
+  const hwnd = await ideWindowHandle(status?.ide_window);
   if (dock === null || hwnd === null) return await work();
   let release = null;
   try {
@@ -1938,7 +1980,8 @@ function defineTools() {
         render: (_a, v) => {
           if (!v.is_project_open) {
             return text(
-              `MotionWorks IEC ${v.version} is running (window ${v.ide_window}), no project open.`,
+              `MotionWorks IEC ${v.version} is running (window ${v.ide_window}), no project open.`
+              + dockSentence(v),
             );
           }
           if (v.in_stage === false) {
@@ -1947,7 +1990,8 @@ function defineTools() {
               + 'That project is NOT the staged workspace copy, so it will not be compiled, '
               + 'saved, or edited. Ask the user whether the agent may save and close this named '
               + 'project before opening the staged copy. '
-              + 'A project outside the workspace can be read with reference: true.',
+              + 'A project outside the workspace can be read with reference: true.'
+              + dockSentence(v),
             );
           }
           const who = v.identity_source
@@ -1955,7 +1999,8 @@ function defineTools() {
             : '';
           return text(
             `MotionWorks IEC ${v.version} is running (window ${v.ide_window}) `
-            + `with '${v.identity_name ?? v.active_project}' open.${who}`,
+            + `with '${v.identity_name ?? v.active_project}' open.${who}`
+            + dockSentence(v),
           );
         },
       },
