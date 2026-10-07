@@ -375,6 +375,119 @@ let bridgeSpawned = false;
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const text = (t) => [{ type: 'text', text: t }];
 
+// ── the native window dock, when this profile has one ──────────────────────────────
+//
+// The dock is a SEPARATE plugin (`dsh-native-window`): it may not be installed, and every
+// task this plugin performs must keep working when it is not. So the service is read per
+// call rather than declared as an injection, and every use of it is best-effort — docking
+// is a convenience for the person watching the screen, never a precondition for the work.
+//
+// WHAT IT IS FOR. A support engineer and the person they are helping need to be looking at
+// the same window. Docking puts the IDE into the panel beside the conversation, at a known
+// rectangle, owned by the AryaAI window so it cannot be buried behind it — which is also
+// what makes a screen-coordinate step from the computer-use companion reliable rather than
+// a guess about where the desktop last put the IDE.
+
+/** The dock service, or null when the profile does not have the plugin. */
+function dockService() {
+  try {
+    return hostCtx?.get?.('nativeWindow') ?? null;
+  } catch {
+    // A service registry that refuses the lookup is the same thing as a profile without
+    // the dock: there is nothing to dock into, and that is not this plugin's problem.
+    return null;
+  }
+}
+
+/** The IDE handle the bridge reported (`0x4A0A12`) as a number, or null. */
+function ideHwnd(value) {
+  if (typeof value !== 'string') return null;
+  const parsed = Number.parseInt(value, 16);
+  return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : null;
+}
+
+/**
+ * Where the IDE window stands in the dock, for a caller that wants the audience's view.
+ *
+ * `dock_visible` is the question the live-UI steps actually care about: a docked window
+ * that is parked behind another tab, or whose panel is on another page, is not on screen —
+ * and a step that needs to see or type into it would fail there. Reporting it here turns
+ * "the screenshot came back black" into a cause the caller can act on.
+ *
+ * @param windowField - the bridge's `ide_window` value.
+ */
+async function ideDockState(windowField) {
+  const dock = dockService();
+  const hwnd = ideHwnd(windowField);
+  if (dock === null) return { docked: false, dock_visible: false, dock_reason: 'no-dock' };
+  if (hwnd === null) return { docked: false, dock_visible: false, dock_reason: 'no-window' };
+  try {
+    const state = await dock.visibility(hwnd);
+    return {
+      docked: state?.docked === true,
+      dock_visible: state?.visible === true,
+      dock_reason: state?.reason ?? null,
+    };
+  } catch (error) {
+    return { docked: false, dock_visible: false, dock_reason: String(error?.message ?? error) };
+  }
+}
+
+/**
+ * Dock the running IDE, reporting what happened without ever failing the call.
+ *
+ * @param started - the bridge's `start_ide` answer, carrying `ide_window`.
+ * @returns `{ docked, dock_note }` — a note only when something worth saying happened.
+ */
+async function dockIdeWindow(started) {
+  const dock = dockService();
+  const hwnd = ideHwnd(started?.ide_window);
+  if (dock === null) return { docked: false, dock_note: null };
+  if (hwnd === null) {
+    return { docked: false, dock_note: 'the bridge reported no IDE window to dock' };
+  }
+  try {
+    const answer = await dock.attach(hwnd);
+    return answer?.ok === true
+      ? { docked: true, dock_note: null }
+      : { docked: false, dock_note: answer?.detail ?? answer?.reason ?? 'the window was not docked' };
+  } catch (error) {
+    return { docked: false, dock_note: String(error?.message ?? error) };
+  }
+}
+
+/**
+ * Run one step with the IDE window held on screen, and release it afterwards.
+ *
+ * WHY THIS EXISTS. A docked window that is not the tab on screen is parked with SW_HIDE,
+ * and a hidden window has nothing to render: a screenshot of one is black or stale. The
+ * hold asks the dock to keep this window on screen for the duration, whatever the panel
+ * is doing — including while the panel is on another page entirely. When there is no dock,
+ * or the IDE is not docked, the step runs exactly as it always did.
+ *
+ * @param work - the async step to run while the window is held.
+ */
+async function withIdeHeld(work) {
+  const dock = dockService();
+  const status = await verb('status', {}, 20000).catch(() => null);
+  const hwnd = ideHwnd(status?.ide_window);
+  if (dock === null || hwnd === null) return await work();
+  let release = null;
+  try {
+    const hold = await dock.hold(hwnd);
+    release = typeof hold?.release === 'function' ? hold.release : null;
+  } catch {
+    // Holding is an optimisation for the capture that follows; failing to hold must not
+    // stop the capture, which still works whenever the IDE happens to be on screen.
+    release = null;
+  }
+  try {
+    return await work();
+  } finally {
+    if (release !== null) await release().catch(() => {});
+  }
+}
+
 /** Bridge log tail, for honest diagnostics instead of a bare timeout. */
 function logTail(lines = 6) {
   try {
@@ -764,6 +877,21 @@ const STATUS_SCHEMA = {
     identity_name: { oneOf: [{ type: 'string' }, { type: 'null' }] },
     identity_source: { oneOf: [{ type: 'string' }, { type: 'null' }] },
     identity_workspace: { oneOf: [{ type: 'string' }, { type: 'null' }] },
+    docked: {
+      type: 'boolean',
+      description: 'True when this IDE window is a tab in the native window panel.',
+    },
+    dock_visible: {
+      type: 'boolean',
+      description: 'True when that tab is on screen right now. A parked tab, or a panel on '
+        + 'another page, is docked but NOT visible — and a capture or a keystroke into it '
+        + 'would fail there.',
+    },
+    dock_reason: {
+      oneOf: [{ type: 'string' }, { type: 'null' }],
+      description: 'Why the window is not on screen: parked, panel-away, not-docked, '
+        + 'helper-down, no-dock, or no-window.',
+    },
   },
 };
 
@@ -1835,7 +1963,7 @@ function defineTools() {
       execute: async () => {
         const status = await verb('status', {}, 20000);
         const id = identityMatching(status.active_project);
-        return { ...status, ...identityFields(id) };
+        return { ...status, ...identityFields(id), ...await ideDockState(status.ide_window) };
       },
     },
 
@@ -2518,7 +2646,7 @@ function defineTools() {
           const out = join(IPC_DIR, 'shots', `pane-${pane.replace(/\W+/g, '')}-${Date.now()}.png`);
           mkdirSync(dirname(out), { recursive: true });
           try {
-            const shot = await verb('screenshot', { path: out }, 30000);
+            const shot = await withIdeHeld(() => verb('screenshot', { path: out }, 30000));
             shotPath = shot.path;
           } catch { shotPath = null; }
         }
@@ -2570,12 +2698,22 @@ function defineTools() {
             trial_method: { oneOf: [{ type: 'string' }, { type: 'null' }] },
             dismissed_project: { oneOf: [{ type: 'string' }, { type: 'null' }] },
             foreign_project: { oneOf: [{ type: 'string' }, { type: 'null' }] },
+            docked: {
+              type: 'boolean',
+              description: 'True when the IDE window was taken into the native window panel.',
+            },
+            dock_note: {
+              oneOf: [{ type: 'string' }, { type: 'null' }],
+              description: 'Why the IDE was not docked. Null when it was, or when there is no dock.',
+            },
           },
         },
         render: (_a, v) => text(
           `MotionWorks IEC ${v.version} running at ${v.ide_window}`
           + (v.already_running ? ' (was already up)' : ' (launched)')
           + (v.trial_dialog ? `. Use Trial closure verified${v.trial_method ? ' via '+v.trial_method : ''}` : '')
+          + (v.docked ? ', docked in the native window panel.' : '')
+          + (v.dock_note ? ` Not docked: ${v.dock_note}.` : '')
           + (v.foreign_project
             ? `. Another project is open (${v.foreign_project}). Ask the user before saving and closing it; do not build it.`
             : ''),
@@ -2588,11 +2726,15 @@ function defineTools() {
       execute: async (args) => {
         const path = `${projectOf(args)}.mwt`;
         const binding = await runCode('check_mwt', { project: path });
-        return verb('start_ide', {
+        const started = await verb('start_ide', {
           include_trial_method: true,
           ...(args?.exe ? { exe: String(args.exe) } : {}),
           path, wrapper_sha256: binding.wrapper_sha256,
         }, 330000);
+        // Docked AFTER the window exists, never before: start_ide waits for it, so by the
+        // time this returns there is a window to hand over. Best-effort by construction —
+        // a profile without the dock plugin still starts the IDE and says so.
+        return { ...started, ...await dockIdeWindow(started) };
       },
     },
 
@@ -2752,7 +2894,7 @@ function defineTools() {
           const out = join(IPC_DIR, 'shots', `state-${Date.now()}.png`);
           mkdirSync(dirname(out), { recursive: true });
           try {
-            const shot = await verb('screenshot', { path: out }, 30000);
+            const shot = await withIdeHeld(() => verb('screenshot', { path: out }, 30000));
             return { ...state, screenshot: shot.path };
           } catch {
             return { ...state, screenshot: null };
@@ -4124,11 +4266,11 @@ function defineTools() {
         render: (_a, v) => text(`IDE screenshot: ${v.path} (${v.width}x${v.height})${v.cursor?'\nCursor observation: '+JSON.stringify(v.cursor)+'; inspect the actual glyph in this PNG before connection input.':''}`),
       },
       presentCall: () => ({ card: 'generic', title: 'Screenshot MotionWorks IDE', kind: 'read' }),
-      execute: (args={}) => {
+      execute: () => withIdeHeld(() => {
         const out = join(IPC_DIR, 'shots', `ide-${Date.now()}.png`);
         mkdirSync(dirname(out), { recursive: true });
         return verb('screenshot', { path: out, ...(args.capture_cursor===true?{capture_cursor:true}:{}) }, 30000);
-      },
+      }),
     },
   ];
 }
