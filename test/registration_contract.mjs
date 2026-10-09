@@ -86,8 +86,9 @@ if (failed) {
   process.exit(1);
 }
 
-assert.equal(registered.length, defined.length,
+assert.equal(registered.length, defined.length - 2,
   `apply() defined ${defined.length} tool(s) but registered ${registered.length}`);
+assert(!registered.some(t => ['mw_ide_stage', 'mw_code_sync_back'].includes(t.name)));
 
 // ── 3. names must be unique, and none may be the reserved transport name ─────────
 const names = registered.map((t) => t.name);

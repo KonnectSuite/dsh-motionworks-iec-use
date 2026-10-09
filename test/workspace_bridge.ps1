@@ -5,7 +5,8 @@ $ast = [System.Management.Automation.Language.Parser]::ParseFile(
     (Join-Path $PSScriptRoot '../bridge/mw_bridge.ps1'), [ref]$tokens, [ref]$errors)
 if ($errors.Count) { throw ($errors | Out-String) }
 $names = @('Normalize-MwPath', 'Set-RequestScope', 'Assert-NoLinkedPath',
-    'Test-InsideWorkspace', 'Test-InsideStage', 'Test-SameProject', 'Assert-ProvenCopy',
+    'Test-InsideWorkspace', 'Test-InsideStage', 'Test-SameProject', 'Get-MwSha256',
+    'Get-DirectIdentity', 'Assert-ProvenCopy',
     'Get-OpenProjectPath', 'Assert-StagedOpen', 'Assert-CloseConsent', 'Get-WorksheetEditorState', 'Get-WorksheetInstanceView')
 foreach ($fn in $ast.FindAll({param($node) $node -is [System.Management.Automation.Language.FunctionDefinitionAst]}, $true)) {
     if ($names -contains $fn.Name) { . ([scriptblock]::Create($fn.Extent.Text)) }
@@ -87,7 +88,25 @@ try {
     Refuses { Assert-CloseConsent @{ user_approved = $true; expected_project = $project } $null 'closing the IDE' }
     Assert-CloseConsent @{ user_approved = $true; expected_project = $project } $project 'closing the IDE'
     Assert-CloseConsent @{ user_approved = $true } $null 'closing the IDE'
-    Write-Output '11 bridge workspace and consent checks passed; no IDE started'
+    $direct = Join-Path $ws 'Direct.mwt'
+    $directDir = Join-Path $ws 'Direct'
+    $recordDir = Join-Path $ws '.motionworks/attached/records'
+    $manifestDir = Join-Path $ws '.motionworks/attached/backups/fixture'
+    [IO.Directory]::CreateDirectory($directDir) | Out-Null
+    [IO.Directory]::CreateDirectory($recordDir) | Out-Null
+    [IO.Directory]::CreateDirectory($manifestDir) | Out-Null
+    [IO.File]::WriteAllText($direct, 'wrapper')
+    $manifest = Join-Path $manifestDir 'backup-manifest.json'
+    [IO.File]::WriteAllText($manifest, '{"files":[]}')
+    $recordPath = Join-Path $recordDir 'fixture.json'
+    $directId = @{mode='direct';workspace=$ws;mwt=$direct;directory=$directDir;backup=$manifestDir;backup_manifest=$manifest;backup_manifest_sha256=(Get-MwSha256 $manifest)}
+    [IO.File]::WriteAllText($recordPath, ($directId | ConvertTo-Json))
+    if (-not (Test-InsideStage $direct)) { throw 'Verified direct workspace project was refused' }
+    Assert-ProvenCopy $direct
+    [IO.File]::WriteAllText($manifest, 'tampered')
+    if (Test-InsideStage $direct) { throw 'Tampered direct backup passed' }
+    Refuses { Assert-ProvenCopy $direct }
+    Write-Output '14 bridge workspace and consent checks passed; no IDE started'
 } finally {
     $resolved = [IO.Path]::GetFullPath($testRoot)
     if (-not $resolved.StartsWith([IO.Path]::GetFullPath($tempBase), [StringComparison]::OrdinalIgnoreCase)) { throw 'Invalid cleanup target' }

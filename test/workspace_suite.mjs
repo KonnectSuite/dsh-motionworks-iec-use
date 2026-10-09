@@ -25,6 +25,7 @@ const commands = [
   [process.execPath, ['test/skill_delivery.mjs', root]],
   [process.execPath, ['test/workspace_session.mjs']],
   [process.execPath, ['test/workspace_boundary.mjs']],
+  [process.execPath, ['test/direct_attach.mjs']],
   [process.execPath, ['test/stage_copy.mjs']],
   [process.execPath, ['test/packaged_runtime.mjs']],
   [process.execPath, ['test/close_consent.mjs']],

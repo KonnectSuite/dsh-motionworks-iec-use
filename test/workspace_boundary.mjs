@@ -8,7 +8,9 @@ import { mwtFixture } from './mwt_fixture.mjs';
 // All mutations are confined to fresh temporary workspaces. No IDE is started.
 const root = mkdtempSync(join(tmpdir(), 'mw-boundary-'));
 const tools = new Map();
+process.env.MW_TEST_LEGACY_TOOLS = '1';
 apply({ get: () => undefined, tools: { register: t => tools.set(t.name, t) }, on() {} });
+delete process.env.MW_TEST_LEGACY_TOOLS;
 const run = (name, args, ws, id = 'session') => tools.get(name).execute(args, {
   agent: { id, session: { header: { cwd: ws } } },
 });

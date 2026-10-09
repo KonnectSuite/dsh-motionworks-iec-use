@@ -12,12 +12,14 @@ than wiring/noise, polarity, software rearming, startup behavior or repeated req
 
 ## Hybrid workflow
 
-1. `mw_project_find` establishes the workspace. Inspect `mw_ide_state` for blockers
-   and `mw_ide_status` for active project identity. Match the exact requested project.
-2. Continue an already-open verified stage. Do not call stage/open/close to begin
-   each coding request. Current tools permit guarded edits/builds only on verified
-   stages. An arbitrary open production project is not automatically adopted: inspect
-   read-only and obtain approval for a test copy. Never weaken identity guards.
+1. Inspect `mw_ide_state` and `mw_ide_status`, then use `mw_project_find` to confirm
+   the exact active project is the intended one inside this session's workspace.
+2. For an already-open workspace project, ask before its first full backup in this
+   session, reconcile native Save All, then call `mw_ide_attach` with the exact open
+   `.mwt`, `backup_approved:true` and `baseline_saved:true`. Require the verified full backup path and attach
+   result before any native edit. Continue the same open project in place. If the
+   open project is outside the workspace, keep it read-only and ask the user to
+   place a copy inside the workspace. Do not close, reopen or restage to attach.
 3. Preserve unsaved UI edits. Reconcile visible text with saved files before relying
    on disk. Save through the API when authorized and check complete read-back. If a
    worksheet remains dirty or absent on disk, use observed File > Save All. Never
@@ -117,7 +119,7 @@ project open with no visible modal; API attachment remains unresolved.
 
 The stale plugin-owned bridge was identified by its exact process command line and
 restarted outside the restricted execution context. API status then matched the
-already-open disposable stage. This establishes a working attachment in this run;
+already-open workspace project. This establishes a working attachment in this run;
 it does not justify weakening identity checks or killing the IDE when attach fails.
 
 The approved test copy received a non-motion `SheetDetectionPrototype` Program using

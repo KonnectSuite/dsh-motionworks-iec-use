@@ -123,6 +123,55 @@ def assert_proven(project_root: Path | str) -> Path:
     return given
 
 
+def assert_direct_attached(project_root: Path | str) -> Path:
+    """Authorize read-only inspection of one backed-up, directly attached workspace project.
+
+    Offline writers still call assert_proven/assert_staged and remain stage-only.
+    """
+    import hashlib
+    import json
+
+    given = Path(project_root).resolve()
+    directory = given.with_suffix("") if given.suffix.lower() == ".mwt" else given
+    wrapper = Path(str(directory) + ".mwt")
+    workspace = workspace_root()
+    if not _inside(directory, workspace) or _inside(directory, workspace / ".motionworks"):
+        raise StagingRefused("REFUSED: direct project is outside the writable workspace area.")
+    records = workspace / ".motionworks" / "attached" / "records"
+    if not records.is_dir():
+        raise StagingRefused("REFUSED: direct project has no verified attachment backup.")
+    for record_file in records.glob("*.json"):
+        try:
+            record = json.loads(record_file.read_text(encoding="utf-8"))
+            if record.get("mode") != "direct":
+                continue
+            if Path(record["mwt"]).resolve() != wrapper or Path(record["directory"]).resolve() != directory:
+                continue
+            backup = Path(record["backup"]).resolve()
+            manifest = Path(record["backup_manifest"]).resolve()
+            backup_root = workspace / ".motionworks" / "attached" / "backups"
+            if (Path(record["workspace"]).resolve() != workspace
+                    or not _inside(backup, backup_root)
+                    or not _inside(manifest, backup)
+                    or not manifest.is_file()
+                    or hashlib.sha256(manifest.read_bytes()).hexdigest() != record["backup_manifest_sha256"]
+                    or not wrapper.is_file() or not directory.is_dir()):
+                break
+            manifest_data = json.loads(manifest.read_text(encoding="utf-8"))
+            if not isinstance(manifest_data.get("files"), list) or any(
+                    not _inside(backup / item["path"], backup)
+                    or not (backup / item["path"]).is_file()
+                    for item in manifest_data["files"]):
+                break
+            for member in directory.rglob("*"):
+                if not _inside(member, directory):
+                    raise StagingRefused(f"REFUSED: linked project member escapes attachment: {member}")
+            return given
+        except (OSError, ValueError, KeyError, TypeError):
+            continue
+    raise StagingRefused("REFUSED: direct project attachment or backup identity is invalid.")
+
+
 def is_staged(project_root: Path | str) -> bool:
     """Whether a path is inside the staging root, for a caller that wants to ask rather than try."""
     given = Path(project_root).resolve()

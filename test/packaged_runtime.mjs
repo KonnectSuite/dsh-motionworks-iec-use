@@ -15,7 +15,7 @@ let mod;
 try {
   for (const p of [virtual, physical]) {
     mkdirSync(p, { recursive: true });
-    for (const f of (p === virtual ? ['index.js', 'package.json'] : ['index.js', 'verification.js', 'edit-session.js', 'native-variables.js', 'native-groups.js', 'native-structure.js', 'native-code.js', 'graphical-listing.js', 'pou-package.js', 'pou-conversion.js', 'fb-insertion.js', 'compiler-interface.js', 'project-checkpoint.js', 'stage-copy.js', 'package.json'])) copyFileSync(join(repo, f), join(p, f));
+    for (const f of (p === virtual ? ['index.js', 'package.json'] : ['index.js', 'verification.js', 'edit-session.js', 'native-variables.js', 'native-groups.js', 'native-structure.js', 'native-code.js', 'graphical-listing.js', 'pou-package.js', 'pou-conversion.js', 'fb-insertion.js', 'compiler-interface.js', 'project-checkpoint.js', 'stage-copy.js', 'direct-attach.js', 'package.json'])) copyFileSync(join(repo, f), join(p, f));
   }
   cpSync(join(repo, 'code'), join(physical, 'code'), { recursive: true });
   cpSync(join(repo, 'bridge'), join(physical, 'bridge'), { recursive: true });
@@ -26,7 +26,9 @@ try {
   assert.ok(!mod.__internals.IPC_DIR.startsWith(root));
   const tools = new Map();
   const skills = [];
+  process.env.MW_TEST_LEGACY_TOOLS = '1';
   mod.apply({ get: key => key === 'skills' ? {register: s => skills.push(s)} : undefined, tools: { register: t => tools.set(t.name, t) }, on() {} });
+  delete process.env.MW_TEST_LEGACY_TOOLS;
   assert.equal(skills.length, 1);
   assert.match(skills[0].content, /VARIABLE_WORKSHEET_WORKFLOW/);
   const variableGuide = await tools.get('mw_ide_edit_guide').execute({operation:'variables'});

@@ -5,14 +5,15 @@ It helps an agent inspect, troubleshoot, design and maintain MotionWorks project
 It is not a standalone desktop application or an MCP server: a separately connected
 computer-use MCP performs visible editor actions.
 
-**Safety boundary:** use supervised, disposable project copies. This plugin does not
+**Safety boundary:** use supervised workspace projects. Select the project inside the workspace, approve its first full backup in the session,
+then edit those same files in place. A closed IDE is started and opens that project. This plugin does not
 download to controllers, force IO or command motion. Compilation is not proof of
 machine behavior, motion performance or functional safety.
 
 Use `mw_ide_code_change` for native ST body replacement with an exact saved
 body precondition, full code/comment read-back and collateral source checks.
 Follow its accepted verdict with fresh Build/Make.
-Use `mw_ide_verify` with `mode:"capture_baseline"`, the exact staged project and
+Use `mw_ide_verify` with `mode:"capture_baseline"`, the exact workspace project and
 `baseline_saved:true` before an authorized lifecycle. Retain its `baseline_id`.
 After cleanup, `mode:"compare_baseline"` compares complete supported saved
 sources, declarations/task settings, translations, native package state and every
@@ -96,9 +97,9 @@ inside your task workspace. A wrapper alone is not a complete project backup.
 
 1. Discover the workspace project and inspect the running IDE's exact active path.
    A matching caption/project name alone is insufficient.
-2. Continue an already-open **verified staged copy** without closing/re-staging.
+2. Continue an already-open workspace project after its approved verified backup.
    An arbitrary open project—even inside the workspace—is not automatically approved
-   for editing. Inspect read-only and approve a disposable stage first. Preserve
+   for editing. Inspect read-only and approve its first verified backup before editing. Preserve
    unsaved work before switching projects.
 3. Review requirements/code, edit inside the IDE, Save All, and compare saved source,
    declarations and task bindings with the intended changes.
@@ -137,7 +138,7 @@ failures/recovery and actual coverage. These are dated evidence, not universal g
 
 ## Documentation map
 
-- [Attach-first workflow](docs/OPEN_IDE_REMOTE_ENGINEER.md): continue an open verified stage.
+- [Attach-first workflow](docs/OPEN_IDE_REMOTE_ENGINEER.md): continue an open backed-up workspace project.
 - [IDE-first workflow](docs/IDE_FIRST_WORKFLOW.md): companion setup and operation recipes.
 - [Engineering workflow](docs/ENGINEERING_WORKFLOW.md): design/review and machine acceptance.
 - [Workflow and verification](WORKFLOW.md): saved-source and compiler release checks.
@@ -175,7 +176,7 @@ using `mw_ide_edit_guide` for operation-specific steps.
 Eight offline code/variable/POU editors and the unsupported Rebuild API are
 removed from the public catalog, not merely gated. See [IDE-first workflow](docs/IDE_FIRST_WORKFLOW.md).
 For an IDE already open, use the [attach-first Remote Engineer workflow](docs/OPEN_IDE_REMOTE_ENGINEER.md).
-Continue a verified open stage; do not close/restage it for each coding request.
+Continue the backed-up workspace project without closing it for each coding request.
 Read the [engineering workflow](docs/ENGINEERING_WORKFLOW.md) for requirements,
 FB lifecycle, tasks, cams, registration, PLC authority, stops/recovery, IO scaling
 and behavioral acceptance. `mw_ide_edit_guide` includes an `engineering` operation.
@@ -193,7 +194,7 @@ npm test
 ```
 
 For live UI smoke tests, follow the operation matrix in the IDE-first workflow on
-a disposable staged project. Capture actual computer-tool observations and compile
+a backed-up workspace project. Capture actual computer-tool observations and compile
 reports. Isolated regressions do not operate the IDE or prove live UI acceptance.
 Historical offline write probes are not a supported smoke workflow.
 
@@ -201,7 +202,7 @@ Windows plugin for workspace-bound MotionWorks IEC discovery, staging, IDE-first
 editing and verification. It never downloads to a controller or commands motion.
 
 The selected `.mwt` and expanded directory must be inside the calling agent workspace.
-Editable copies live in `<workspace>/.motionworks/stage/`; there is no hard-coded user
+The selected project stays at its original path inside the workspace; there is no hard-coded user
 project path. Outside references are read-only. Exports, backups and transaction journals
 stay inside that workspace too.
 
@@ -231,7 +232,7 @@ Open, Build and close passed a live check on a disposable TopCutter copy with Mo
 1.19. Rebuild through the bridge API was not accepted and is retired; observed native
 menu Rebuild has separate evidence in the 2026-10-01 IDE smoke report.
 
-Discover → attach to verified stage (or stage/open if needed) → engineering review →
+Discover → approve and verify backup → open the workspace project → engineering review →
 edit inside IDE → Save All → read back → Build/Make → inspect diagnostics →
 approved close/reopen → validate and fresh Build/Make again → handoff.
 

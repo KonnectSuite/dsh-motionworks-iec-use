@@ -105,15 +105,17 @@ global, not window-scoped, and returns `ok:true` for input submission, not edit 
 
 ## Identity, backup and focus
 
-When the requested verified stage is already open, use the
+When the selected backed-up workspace project is already open, use the
 [attach-first workflow](OPEN_IDE_REMOTE_ENGINEER.md). The sequence below is for a new
 disposable session; staging/opening is not required again for every code request.
 
-1. Run `mw_project_find`; select only the intended project in the session workspace.
-2. Stage a disposable copy for experiments with `mw_ide_stage`. Keep production untouched.
+1. Inspect `mw_ide_status`, then use `mw_project_find` to confirm the intended
+   project is in the session workspace. If it is already open, reconcile Save All
+   and call `mw_ide_attach` to make a verified backup; continue in place.
+2. For a closed IDE, call `mw_ide_attach` on the workspace `.mwt` after first-backup approval.
 3. Inspect `mw_ide_status` and `mw_ide_state`. Obtain consent before replacing/closing
    a user's existing project. Do not assume a modal or COM failure means the IDE closed.
-4. Open the exact staged wrapper and compare its actual IDE identity to the stage.
+4. Verify the IDE opened the exact selected workspace wrapper.
 5. Take a computer screenshot. If MotionWorks is not foreground, select its observed
    window/taskbar entry and observe again. Never send editor shortcuts into another app.
 6. Capture baseline Build diagnostics. Existing warnings must not be attributed to the change.
@@ -218,7 +220,7 @@ task assignment compiled, but offline assigned-POU deletion did not reopen succe
 ## Real IDE-first edit evidence, 2026-10-01
 
 After the user brought MotionWorks to the foreground, an authenticated local connection
-to the actual KonnectSuite computer MCP performed these operations on a fresh staged
+to the actual KonnectSuite computer MCP performed these operations on a fresh workspace
 copy, without native code writes:
 
 | Operation | Observed result |

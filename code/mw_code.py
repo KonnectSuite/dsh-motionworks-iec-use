@@ -699,8 +699,11 @@ def verb_bind_mwt(req):
 def verb_check_mwt(req):
     """Reject a wrapper that would open a different project before COM sees it."""
     from motionworks_iec_mcp.mwt_bind import embedded_paths
-    from motionworks_iec_mcp.staging import assert_proven
-    mwt = assert_proven(req["project"])
+    from motionworks_iec_mcp.staging import assert_proven, assert_direct_attached, StagingRefused
+    try:
+        mwt = assert_proven(req["project"])
+    except StagingRefused:
+        mwt = assert_direct_attached(req["project"])
     if mwt.suffix.lower() != ".mwt":
         raise ValueError("open requires a .mwt wrapper")
     directory = mwt.with_suffix("").resolve()
@@ -721,6 +724,13 @@ READ_VERBS = frozenset({
     "worksheet_target",
     "structure_snapshot", "block_interface",
     "pous", "read_st", "read_text", "unsupported", "globals", "tasks", "types", "library",
+})
+
+# Direct attach enables these inspection verbs only. Retired offline mutation
+# verbs continue through the staging guard even when a direct identity exists.
+DIRECT_READ_VERBS = READ_VERBS | frozenset({
+    "workflow_check", "source_manifest", "check_mwt", "validate", "check_program",
+    "eip_map", "graphical_listing", "compiled_source_evidence",
 })
 
 def verb_sync_back(req):
@@ -1185,12 +1195,25 @@ def main(argv):
     reference_read = req.get("reference") is True and verb in READ_VERBS
     if assert_staged is not None and req.get("project") and not reference_read:
         try:
-            assert_staged(req["project"], what=f"{verb} project")
+            if verb in DIRECT_READ_VERBS:
+                try:
+                    from engine.motionworks_iec_mcp.staging import assert_direct_attached
+                except ImportError:
+                    from motionworks_iec_mcp.staging import assert_direct_attached
+                try:
+                    assert_direct_attached(req["project"])
+                    direct_read = True
+                except StagingRefused:
+                    direct_read = False
+            else:
+                direct_read = False
+            if not direct_read:
+                assert_staged(req["project"], what=f"{verb} project")
             try:
                 from engine.motionworks_iec_mcp.staging import assert_proven
             except ImportError:
                 from motionworks_iec_mcp.staging import assert_proven
-            if verb != "workflow_check":
+            if verb != "workflow_check" and not direct_read:
                 assert_proven(req["project"])
         except StagingRefused as exc:
             _write(res, _fail(str(exc), refused_by="staging guard", verb=verb))

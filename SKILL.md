@@ -1,7 +1,7 @@
 ---
 name: motionworks-iec-use
-description: Operate a running Yaskawa MotionWorks IEC 3 Pro IDE and edit its code — stage and open a project, read the live object model, read and rewrite POU Structured Text and Instruction List, add variable declarations, compile, and read the compiler's verdict and error text. START HERE: run mw_project_find before anything else, and work only on a project inside the workspace — never on one from elsewhere on the machine, even if you know where it is. Use when the user wants the agent to actually drive MotionWorks IEC rather than only inspect files. Never downloads to a controller and never commands motion.
-whenToUse: The user has MotionWorks IEC 3 Pro open or asks for work in it — a real build, a compile verdict, the live project model, reading or changing POU Structured Text or Instruction List, or reading the IDE's error list. ALSO USE WHEN a MotionWorks project is mentioned at all, even to ask a question about it, because the first step is always to find which project is actually in the workspace. For pure offline `.mwt` inspection without the IDE, the file-level tools alone are enough.
+description: Operate a running Yaskawa MotionWorks IEC 3 Pro IDE and edit its code — select a workspace project, make an approved verified backup, and edit it in place; read the live object model, edit POUs and declarations, compile, and read diagnostics. START HERE: inspect mw_ide_status, then confirm the intended project with mw_project_find. Work only on a project inside the session workspace. Never downloads to a controller or commands motion.
+whenToUse: The user has MotionWorks IEC 3 Pro open or asks for work in it — a real build, a compile verdict, the live project model, reading or changing POU Structured Text or Instruction List, or reading the IDE's error list. Also use when a MotionWorks project is mentioned: inspect the open project and confirm its workspace identity before selecting it. For pure offline `.mwt` inspection without the IDE, the file-level tools alone are enough.
 ---
 
 # MotionWorks IEC workspace editing
@@ -20,7 +20,7 @@ a comparison to a different source copy cannot prove full preservation. Keep
 compiler outputs and IDE bookkeeping outside source-only claims, and report
 any categories that were not compared.
 For an authorized edit/build/cleanup lifecycle, first capture an immutable
-checkpoint with mw_ide_verify(mode:"capture_baseline", project:<exact stage>,
+checkpoint with mw_ide_verify(mode:"capture_baseline", project:<exact authorized project>,
 baseline_saved:true). Require accepted:true and retain its displayed baseline_id.
 After intended cleanup, call mode:"compare_baseline" with the same project,
 baseline_id and baseline_saved:true. Require preservation_verified and all seven
@@ -85,7 +85,7 @@ The state display includes each ordinary dialog's exact title/handle and enabled
 state, plus known frame-enabled/trial booleans. Unknown values remain unknown;
 do not infer dialog identity from the button set alone.
 Offline code/variable/POU editors and the unsupported Rebuild API are retired.
-For declarations use `mw_ide_variable_change` with the staged project, exact POU
+For declarations use `mw_ide_variable_change` with the selected workspace project, exact POU
 (omit for resource globals), operation, and `baseline_saved:true` only after
 reconciling saved edits. Add/edit requires all seven declaration fields and an
 existing writable group. Inspect `verification.accepted` before continuing;
@@ -105,7 +105,7 @@ retained evidence on failure before further actions. This changes group labels;
 moving an existing variable between groups still follows the worksheet workflow.
 Run fresh Build/Make after the intended edits. This API does not require opening
 a worksheet. To inspect or edit a named worksheet, use `mw_ide_open_worksheet`
-with kind `variables` or `code`, the staged project, and exact POU (omit only for
+with kind `variables` or `code`, the selected workspace project, and exact POU (omit only for
 globals). Require `accepted:true`: the tool verifies the native view and two
 responsive frames with the expected editor caption. Its `keyboard_focus_verified`
 remains false. Observe current editable focus with the connected computer tool
@@ -222,7 +222,7 @@ observation, not another key. See docs/GRAPHICAL_EDITOR_WORKFLOW.md for the
 verified two-block constant edit and its limits.
 For native POU exchange use `mw_ide_pou_package`: export an exact writable POU
 with `baseline_saved:true`, then retain its session-bound `package_token`.
-Import accepts only that unchanged native package into the same staged project
+Import accepts only that unchanged native package into the same workspace project
 with the original POU name absent and `dependencies_reviewed:true`. It checks
 library bindings and external globals, preserves native declaration flags/groups
 and complete graph/code sources, and refuses overwrites or arbitrary paths.
@@ -281,15 +281,16 @@ Confirm the harness actually exposes its computer tool. If unavailable, report t
 dependency; do not silently fall back to native file modification or invent tool calls.
 `mw_ide_edit_guide(operation)` returns a read-only checklist, not an executed edit.
 
-If the IDE is already open, discover the workspace, inspect `mw_ide_state` and
-`mw_ide_status`, and match the active project to its existing stage identity. Continue
-that exact verified stage without closing, restaging or reopening it. Preserve unsaved
-editor changes: saved files are not the live editor buffer. Read
-`docs/OPEN_IDE_REMOTE_ENGINEER.md` for the attach-first workflow and registration-eye
-investigation. If status times out or contradicts visible state, do not launch another
-IDE or conclude it is closed. Report the API attach failure.
+Inspect `mw_ide_state` and `mw_ide_status`, then select the exact `.mwt` with
+`mw_project_find`. Ask the user before the first full backup in this session.
+Once that approved backup exists, continue the same project without asking again.
+If it is already open, reconcile native Save All and call `mw_ide_attach` with
+`backup_approved:true` and `baseline_saved:true`. If the IDE is closed, call
+the same tool with `backup_approved:true`; it starts the IDE and opens the original
+workspace project after the backup verifies. Preserve unsaved editor changes.
+If another project is open, obtain consent tied to that exact project before closing it.
 
-After selecting/staging and opening (or attaching to) the exact project, use the IDE's editors for ST,
+After selecting and opening (or attaching to) the exact project, use the IDE's editors for ST,
 code bodies, descriptions, LD/FBD and libraries when no verified native tool is
 available. Prefer the native code, declaration, POU and task tools above for their
 supported operations; UI actions are the fallback. Do not edit native streams
@@ -304,7 +305,7 @@ modal dialogs require inspection; never repeatedly press Enter to dismiss them.
 
 The generic computer tool controls the foreground desktop and cannot enforce this
 plugin's workspace guards. Independently confirm MotionWorks is foreground and has
-the exact staged project before every edit. If the user changes focus, re-observe.
+the exact authorized workspace project before every edit. If the user changes focus, re-observe.
 Do not automate terminals, authentication, security dialogs or other apps. Never
 use Online/Download, controller Run/Reset, forces, jogs or test-motion controls.
 
@@ -317,15 +318,17 @@ FB, graphical command, task operation or library version works.
 
 ## Select and bind the project
 
-1. Run `mw_project_find` first. Discovery is confined to the calling session workspace.
+1. Inspect `mw_ide_status` and `mw_ide_state`, then use `mw_project_find` to confirm
+   the active project is the intended one inside the calling session workspace.
 2. If no project exists there, ask the user to provide the project in that workspace.
    Do not search Desktop, Downloads, other chats, or remembered paths for a substitute.
 3. Select the intended `.mwt` and its expanded directory. If several exist and intent
    cannot be determined from the request, clarify which one is intended.
-4. If no matching verified stage is already open, call `mw_ide_stage`. It copies both into `<workspace>/.motionworks/stage/`, rewrites
-   the wrapper binding and records source identity. Edit this workspace copy.
-5. Pass the selected project explicitly when multiple staged copies exist. Opening
-   validates the wrapper's embedded directory and its digest before the bridge acts.
+4. Ask for approval before the first complete backup in this session, then call
+   `mw_ide_attach` with the exact `.mwt` and `backup_approved:true`. For an already
+   open project, reconcile native Save All and add `baseline_saved:true`. The tool
+   verifies the backup before native edits and opens the same workspace project if needed.
+5. Verify the IDE active project is the exact selected path before editing.
 
 The session header determines the workspace. The DSH profile and plugin installation
 folder are not project workspaces. Missing context is a refusal, not an invitation to
@@ -338,23 +341,10 @@ Exports and backups also belong inside the workspace.
 
 ## Inspect before changing
 
-For an existing stage, call `mw_workflow_check` with its explicit directory before
-editing. It reports identity/binding problems, native validation and next steps without
-starting the IDE. In a relocated workspace it can inspect stale identities read-only;
-that does not authorize writes. Never clear this failure by restaging over unsynced work.
-`mw_ide_stage` now refuses replacing an existing stage unless
-`replace_existing:true` records a reviewed fresh-copy operation. Prefer continuing
-the verified stage. Replacement refuses an open target stage or unknown IDE state,
-prepares/binds the incoming copy first, and retains the old expanded directory,
-wrapper and available identity together in `previous_stage_backup` with hashes.
-On a staging failure, inspect retained paths and current state before another call.
-Back up each stage as three matching items: its expanded project directory,
-the sibling `.mwt`, and the sibling `<project>.identity.json` under
-`.motionworks/stage/`. The identity is outside the expanded directory. Missing
-identity after restore is a provenance failure, not permission to manufacture
-one or overwrite current work. Inspect matching backup evidence and the source
-binding before reviewed recovery with the IDE closed. Relocated identities need
-separate binding review; copying one from another project does not establish it.
+For the selected workspace project, call `mw_workflow_check` before editing.
+The verified backup contains the sibling `.mwt` and complete expanded directory.
+Keep its manifest with the backup and inspect it before any restore. Never restore
+under an open IDE; obtain exact-project close consent first.
 Wrappers with no embedded absolute path can legitimately use their sibling directory;
 verify the IDE's actual project after opening instead of inventing a wrapper path.
 
@@ -382,28 +372,11 @@ Ask for save/close consent tied to the exact open project. Pass user_approved an
 expected_project to the native close/open tools. Preserve unsaved editor changes;
 do not close or restage to work around an API attach failure.
 
-## Promoting the stage back, and the wrapper
+## Saving the workspace project
 
-The default release loop is edit in IDE -> Save -> read back -> Build/Make -> inspect
-diagnostics -> approved close/reopen -> verify. Promotion is a separate user-authorized
-operation, not an automatic consequence of a successful edit.
-`mw_code_sync_back` is the copy-back step, and it takes its destination from the source
-directory `mw_ide_stage` recorded rather than from a convention:
-
-- It carries SOURCE ONLY - POU containers (`src.st1`), declaration and grid streams, the
-  project tree, the type list, the resource files. It never carries the `.mwt` wrapper, whose
-  stored path is bound to the stage and would point the real project at a temporary copy of
-  itself, and it never carries compiler output (`.DLL`, `.pdb`) or scratch files. An inclusion
-  rule, not an exclusion list: an unlisted new build artifact is simply not carried.
-- Every file is verified by sha256 after the copy. A non-empty `failures` means the release is
-  NOT synced even though the call returned.
-- `dry_run` defaults to true. Read `would_copy` before applying.
-
-If `mw_ide_open` refuses a wrapper as not bound to the staged project, do NOT re-stage: that
-overwrites the stage and takes any POU created since with it. Call `mw_code_wrapper_binding` to
-see which wrapper is stale and whether re-binding clears it, then `mw_code_rebind_wrapper`. That
-is idempotent, so it is safe to call when already bound; it reports `would_change: false` and
-leaves the file digest unchanged.
+Edit in IDE -> Save All -> read back -> Build/Make -> inspect diagnostics ->
+approved close/reopen -> verify. The workspace project is the editable deliverable.
+There is no copy-back or promotion step.
 
 A POU that is assigned to no task never runs, and a clean build does not prove otherwise - a POU
 containing an undeclared variable compiled cleanly while unassigned. `mw_code_tasks` lists the
@@ -441,7 +414,7 @@ Private engine tests do not authorize offline project mutation.
 
 ## IDE acceptance after edits
 
-Prefer `mw_ide_verify(project)` on the exact open stage for validation, Build, Make,
+Prefer `mw_ide_verify(project)` on the exact open workspace project for validation, Build, Make,
 diagnostics and Save in one call. It retains a JSON report in workspace
 `.motionworks/verification/`, including failures. With explicit consent use
 `close_reopen: true, user_approved: true` for persistence comparison. Do not interpret
@@ -458,7 +431,7 @@ Compile results distinguish `observed_compile_transition`, `already_up_to_date`
 (Make only), and `completion_unverified`. A no-op Make is useful state evidence but
 not a freshly compiled Build. Report warnings separately from compilation success.
 
-1. Validate the changed project offline and open the exact staged wrapper.
+1. Validate the changed project offline and open the exact selected wrapper.
 2. Use `mw_ide_build` for Compile(2), which is Build. Make is Compile(1).
    Native Rebuild is a separate command and was not accepted on the installed 1.19 IDE.
 3. Inspect the returned verdict, `mw_ide_state`, and `mw_ide_errors`. A posted command
@@ -523,11 +496,10 @@ they do not assign tasks or establish safe machine behavior. Consult
 
 ## Delivery report
 
-Summarize the changed workspace project and files, transaction journal, offline checks,
-IDE acceptance actually observed, and remaining limitations. The staged copy is the editable
-deliverable; promote it to the source project only when the user asks, and do it with
-`mw_code_sync_back` so the promotion carries source only and is verified by hash - not with a
-blanket directory copy, which drags compiled output over the real project. Reload the AryaAI DSH
+Summarize the changed workspace project and files, verified backup or transaction journal,
+IDE acceptance actually observed, and remaining limitations. The selected workspace
+project is the editable deliverable; its verified backup stays under `.motionworks/attached`.
+Reload the AryaAI DSH
 plugin after changing its installed code so updated tool schemas and bridge logic are used.
 Restart a stale bridge when its protocol version is refused; never weaken the workspace checks
 to retain an old bridge.

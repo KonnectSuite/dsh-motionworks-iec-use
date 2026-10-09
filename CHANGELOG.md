@@ -6,6 +6,19 @@ existing native edit-guide tool instead of guessed ASAR filesystem paths.
 
 ## Unreleased
 
+- Select a workspace project, approve and verify its first complete backup in the
+  session, then edit the original files in place. The same attachment tool opens
+  the project when the IDE is closed. Hide staging and sync-back from the agent
+  tool catalog; keep legacy implementation only for compatibility tests.
+
+- Add direct attachment for the exact project already open inside the calling
+  workspace. `mw_ide_attach` requires reconciled native Save All, copies and
+  SHA-256 verifies a complete backup, and records project identity before native
+  IDE edits. Bridge and read-only engine guards accept that identity; retired
+  offline writers remain stage-only. Projects outside the workspace still refuse.
+  The new path has guard/packaging tests but awaits live IDE acceptance on a
+  disposable direct workspace project.
+
 - Bound compiled-interface artifact freshness to the completed native Build/Make
   sequence, including type tables written while Make settles. Keep old, unchanged
   and later artifacts refused; retain per-operation start/completion timestamps.

@@ -8,7 +8,7 @@ from pathlib import Path
 
 from .cfb import CompoundFile
 from .mwt_bind import embedded_paths
-from .staging import assert_staged, assert_proven, workspace_root
+from .staging import assert_staged, assert_proven, assert_direct_attached, StagingRefused, workspace_root
 
 
 def source_manifest(root: Path) -> dict:
@@ -66,20 +66,25 @@ def check(project: str) -> dict:
     from .project import Project
     from .validation import validate
 
-    root = assert_staged(project)
+    try:
+        root = assert_staged(project)
+        direct = False
+    except StagingRefused:
+        root = assert_direct_attached(project)
+        direct = True
     if root.suffix.lower() == '.mwt':
         root = root.with_suffix('')
     # Diagnostic bypass is deliberately read-only, and still confines EVERY file
     # to the stage. It is necessary to explain relocated identities, not trust them.
     stage = workspace_root() / '.motionworks' / 'stage'
-    if root.parent != stage.resolve() or not root.is_dir():
-        raise ValueError('Select one expanded project directly inside workspace .motionworks/stage')
+    if (not direct and root.parent != stage.resolve()) or not root.is_dir():
+        raise ValueError('Select an authorized expanded workspace project')
     for member in root.rglob('*'):
         if not member.resolve().is_relative_to(root):
             raise ValueError(f'Linked project member escapes stage: {member}')
     blockers, warnings = [], []
     try:
-        assert_proven(root)
+        (assert_direct_attached if direct else assert_proven)(root)
         identity_ok = True
     except Exception as exc:
         identity_ok = False
@@ -121,4 +126,5 @@ def check(project: str) -> dict:
             'validation': validation, 'manifest': source_manifest(root),
             'st_pous': list(bodies), 'evidence_level': 'offline_only',
             'next_step': blockers[0]['next'] if blockers else
-            'Open this exact wrapper; verify Build, Make, errors, save and reopen. Never download from this tool.'}
+            ('Continue the already-open directly attached project; verify Build, Make, errors and Save. Close/reopen only with consent.'
+             if direct else 'Open this exact wrapper; verify Build, Make, errors, save and reopen. Never download from this tool.')}

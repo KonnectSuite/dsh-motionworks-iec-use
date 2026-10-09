@@ -983,8 +983,48 @@ function Test-InsideStage([string]$path) {
     $full = Normalize-MwPath $path
     $root = Normalize-MwPath $StageRoot
     if (-not $full -or -not $root) { return $false }
-    return ($full.Equals($root, [StringComparison]::OrdinalIgnoreCase) -or
-            $full.StartsWith($root + '\', [StringComparison]::OrdinalIgnoreCase))
+    if ($full.Equals($root, [StringComparison]::OrdinalIgnoreCase) -or
+        $full.StartsWith($root + '\', [StringComparison]::OrdinalIgnoreCase)) { return $true }
+    # Legacy callers use this guard for every authorized IDE project. A direct
+    # workspace attachment is authorized only with its verified backup identity.
+    return ($null -ne (Get-DirectIdentity $path))
+}
+
+function Get-DirectIdentity([string]$path) {
+    if (-not (Test-InsideWorkspace $path)) { return $null }
+    $folder = Join-Path $script:WorkspaceRoot '.motionworks\attached\records'
+    if (-not (Test-Path -LiteralPath $folder)) { return $null }
+    foreach ($file in Get-ChildItem -LiteralPath $folder -Filter '*.json' -File) {
+        Assert-NoLinkedPath $file.FullName
+        try { $raw = Get-Content -LiteralPath $file.FullName -Raw -Encoding UTF8 | ConvertFrom-Json }
+        catch { continue }
+        if ([string]$raw.mode -cne 'direct' -or -not (Test-SameProject ([string]$raw.mwt) $path)) { continue }
+        $backupRoot = Normalize-MwPath (Join-Path $script:WorkspaceRoot '.motionworks\attached\backups')
+        $backup = Normalize-MwPath ([string]$raw.backup)
+        $manifestPath = Normalize-MwPath ([string]$raw.backup_manifest)
+        if (-not (Test-InsideWorkspace $backup) -or -not (Test-InsideWorkspace $manifestPath)) { return $null }
+        if (-not (Test-InsideWorkspace ([string]$raw.mwt)) -or
+            -not (Test-InsideWorkspace ([string]$raw.directory)) -or
+            -not ((Normalize-MwPath ([string]$raw.workspace)).Equals((Normalize-MwPath $script:WorkspaceRoot), [StringComparison]::OrdinalIgnoreCase)) -or
+            -not (Test-SameProject ([string]$raw.directory) $path) -or
+            -not (Test-Path -LiteralPath ([string]$raw.mwt)) -or
+            -not (Test-Path -LiteralPath ([string]$raw.directory)) -or
+            -not $backup.StartsWith($backupRoot + '\', [StringComparison]::OrdinalIgnoreCase) -or
+            -not $manifestPath.StartsWith($backup + '\', [StringComparison]::OrdinalIgnoreCase) -or
+            -not (Test-Path -LiteralPath ([string]$raw.backup_manifest))) { return $null }
+        if ((Get-MwSha256 ([string]$raw.backup_manifest)) -ine [string]$raw.backup_manifest_sha256) { return $null }
+        try {
+            $manifest = Get-Content -LiteralPath $manifestPath -Raw -Encoding UTF8 | ConvertFrom-Json
+            foreach ($item in @($manifest.files)) {
+                $member = Normalize-MwPath (Join-Path $backup ([string]$item.path))
+                if (-not $member.StartsWith($backup + '\', [StringComparison]::OrdinalIgnoreCase) -or
+                    -not (Test-InsideWorkspace $member) -or
+                    -not (Test-Path -LiteralPath $member)) { return $null }
+            }
+        } catch { return $null }
+        return $raw
+    }
+    return $null
 }
 
 function Test-SameProject([string]$active, [string]$requested) {
@@ -1021,6 +1061,7 @@ function Get-OpenProjectPath($app) {
 # A project outside stage/ is the wrong project — often one MotionWorks restored,
 # or one the .mwt wrapper still pointed at — and it is not edited from here.
 function Assert-ProvenCopy([string]$path) {
+    if (Get-DirectIdentity $path) { return }
     # A directory under stage/ is not provenance. mw_ide_stage writes <name>.identity.json
     # with the workspace source. Compile and save refuse a copy that has none.
     $full = Normalize-MwPath $path
@@ -1126,6 +1167,7 @@ while ($true) {
                 if ($isOpen) { try { $activeName = $app.ActiveProject.FullName } catch { } }
                 $inStage = $false
                 if ($activeName) { $inStage = Test-InsideStage $activeName }
+                $directIdentity = if ($activeName) { Get-DirectIdentity $activeName } else { $null }
                 $ok = $true
                 $data = [ordered]@{
                     version         = [string]$app.Version
@@ -1133,6 +1175,7 @@ while ($true) {
                     is_project_open = $isOpen
                     active_project  = $activeName
                     in_stage        = [bool]$inStage
+                    project_mode    = $(if ($directIdentity) { 'direct' } elseif ($inStage) { 'stage' } else { 'unverified' })
                 }
             }
 

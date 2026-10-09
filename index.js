@@ -76,12 +76,13 @@ const [
   { assertStageClosed },
   { compilerInterface, compilerArtifacts, compiledLibraryManifest },
   { captureCheckpoint, compareCheckpoint, checkpointDigest, libraryBaseline, checkpointContextMatches },
+  { createDirectAttachment, findDirectAttachment, listDirectAttachments },
 ] = await Promise.all([
   'verification.js', 'edit-session.js', 'native-variables.js',
   'native-structure.js', 'native-code.js', 'graphical-listing.js',
   'pou-package.js', 'pou-conversion.js', 'fb-insertion.js',
   'native-groups.js', 'stage-copy.js',
-  'compiler-interface.js', 'project-checkpoint.js',
+  'compiler-interface.js', 'project-checkpoint.js', 'direct-attach.js',
 ].map(file => import(pathToFileURL(join(HERE, file)).href)));
 
 export const name = 'motionworks-iec-use';
@@ -816,6 +817,11 @@ function tagProject(verdict, status) {
 
 function identityMatching(activePath) {
   if (!activePath) return null;
+  const direct = findDirectAttachment(workspaceRoot(), activePath);
+  if (direct) return {
+    name: direct.mwt.slice(direct.mwt.lastIndexOf(sep) + 1, -4),
+    source: direct.mwt, workspace: direct.workspace, mode: 'direct',
+  };
   const want = resolve(String(activePath)).toLowerCase();
   let names;
   try {
@@ -920,6 +926,7 @@ const STATUS_SCHEMA = {
     is_project_open: { type: 'boolean' },
     active_project: { oneOf: [{ type: 'string' }, { type: 'null' }] },
     in_stage: { oneOf: [{ type: 'boolean' }, { type: 'null' }] },
+    project_mode: { type: 'string', enum: ['stage', 'direct', 'unverified'] },
     identity_name: { oneOf: [{ type: 'string' }, { type: 'null' }] },
     identity_source: { oneOf: [{ type: 'string' }, { type: 'null' }] },
     identity_workspace: { oneOf: [{ type: 'string' }, { type: 'null' }] },
@@ -1333,6 +1340,8 @@ async function unassignedWarning(project, names) {
  * was editable, including a copy whose source was never recorded.
  */
 function assertProven(p) {
+  const direct = findDirectAttachment(workspaceRoot(), String(p));
+  if (direct) return resolve(String(p));
   const staged = assertStaged(String(p));
   const dir = stagedProjectDir(staged);
   const name = dir.slice(dir.lastIndexOf(sep) + 1);
@@ -1417,19 +1426,20 @@ function projectOf(args) {
     try { assertProven(dir); eligible.push(dir); }
     catch { unproven.push(name); }
   }
+  eligible.push(...listDirectAttachments(workspaceRoot()));
   if (eligible.length === 1) return eligible[0];
   if (eligible.length === 0) {
     throw new Error(
-      `no staged copy of a project in the workspace '${workspaceRoot()}'. `
+      `no backed-up MotionWorks project in the workspace '${workspaceRoot()}'. `
       + (unproven.length
         ? `Ignored ${unproven.join(', ')} because they have no source inside this workspace. `
         : '')
-      + 'Call mw_project_find, then mw_ide_stage.',
+      + 'Call mw_project_find, obtain first-backup approval, then mw_ide_attach.',
     );
   }
   const names = eligible.map((d) => d.slice(d.lastIndexOf(sep) + 1));
   throw new Error(
-    `${eligible.length} staged workspace projects (${names.join(', ')}). `
+    `${eligible.length} backed-up workspace projects (${names.join(', ')}). `
     + 'Pass project so this cannot edit the wrong one.',
   );
 }
@@ -1965,7 +1975,7 @@ function defineTools() {
           ...(args.operation === 'variables' ? { variable_guidance: readFileSync(join(HERE, 'docs', 'VARIABLE_WORKSHEET_WORKFLOW.md'), 'utf8') } : {}),
           ...(args.operation === 'graphical' ? { graphical_guidance: readFileSync(join(HERE, 'docs', 'GRAPHICAL_EDITOR_WORKFLOW.md'), 'utf8') } : {}),
           ...(args.operation === 'st' || args.operation === 'il' ? { text_guidance: readFileSync(join(HERE, 'docs', 'NATIVE_TEXT_WORKFLOW.md'), 'utf8') } : {}), steps: [
-          'Run mw_project_find and inspect mw_ide_state/mw_ide_status. If the requested verified stage is already open, continue it without restaging, closing or reopening. Otherwise stage/open only with the required exact-project consent. Preserve unsaved IDE changes before relying on disk reads.',
+          'Inspect mw_ide_state/mw_ide_status and select the exact workspace project with mw_project_find. Ask before the first backup in this session. Call mw_ide_attach with backup_approved:true; if already open, reconcile Save All and add baseline_saved:true. The tool verifies the backup and opens the same workspace project when needed. Preserve unsaved IDE changes before relying on disk reads.',
           'Observe MotionWorks with the computer tool. One action, then a fresh screenshot; confirm focus before typing. Stop on unexpected dialogs or project identity changes.',
           ...instructions[args.operation],
           'Prefer mw_ide_save before whole-project read-back; use observed File > Save All for an unsupported fallback. Ctrl+S may save only the active worksheet. Inspect native read-back, run a fresh Build and Make, capture Errors/Warnings, and test save/close/reopen only with consent.',
@@ -1976,7 +1986,7 @@ function defineTools() {
       name: 'mw_ide_status',
       description:
         'Detect the running MotionWorks IEC 3 Pro IDE and report its automation version, '
-        + 'window handle, and whether a project is open in it. After mw_project_find, inspect this: every other '
+        + 'window handle, and whether a project is open in it. Inspect this first, then confirm the active project against mw_project_find: every other '
         + 'mw_ide_* tool needs a live IDE, and this says whether one exists.',
       parameters: { type: 'object', additionalProperties: false, properties: {} },
       output: {
@@ -1989,17 +1999,24 @@ function defineTools() {
             );
           }
           if (v.in_stage === false) {
+            if (v.active_project && isInsideWorkspace(v.active_project)) {
+              return text(`MotionWorks IEC ${v.version} has workspace project '${v.active_project}' open. `
+                + 'Ask before the first backup in this session. Reconcile native Save All, then call mw_ide_attach with this exact project and backup_approved:true to continue in place.'
+                + dockSentence(v));
+            }
             return text(
               `MotionWorks IEC ${v.version} has '${v.active_project}' open. `
-              + 'That project is NOT the staged workspace copy, so it will not be compiled, '
+              + 'That project is not the selected backed-up workspace project, so it will not be compiled, '
               + 'saved, or edited. Ask the user whether the agent may save and close this named '
-              + 'project before opening the staged copy. '
+              + 'project before opening the selected workspace project. '
               + 'A project outside the workspace can be read with reference: true.'
               + dockSentence(v),
             );
           }
           const who = v.identity_source
-            ? ` Staged from ${v.identity_source} (workspace ${v.identity_workspace}).`
+            ? (v.project_mode === 'direct'
+              ? ` Direct workspace project with verified backup (workspace ${v.identity_workspace}).`
+              : ` Staged from ${v.identity_source} (workspace ${v.identity_workspace}).`)
             : '';
           return text(
             `MotionWorks IEC ${v.version} is running (window ${v.ide_window}) `
@@ -2017,13 +2034,60 @@ function defineTools() {
     },
 
     {
+      name: 'mw_ide_attach',
+      description: 'Select the exact workspace .mwt, make and verify a complete backup, then use those same project files in place. If the IDE is closed, start it and open this project. If it is already open, continue without reopening. Refuses another active project, linked paths, or a changed active project. Obtain user approval for this backup before calling.',
+      parameters: {
+        type: 'object', additionalProperties: false,
+        required: ['project', 'backup_approved'],
+        properties: {
+          project: { type: 'string', description: 'Exact open workspace .mwt path.' },
+          baseline_saved: { type: 'boolean', description: 'True only after reconciling editor buffers and using native Save All when this project is already open.' },
+          backup_approved: { type: 'boolean', description: 'True only after the user approved making a verified backup of this exact workspace project.' },
+        },
+      },
+      output: {
+        schema: { type: 'object', additionalProperties: false,
+          required: ['mode', 'project', 'backup', 'backup_manifest', 'attached'],
+          properties: {
+            mode: { type: 'string' }, project: { type: 'string' }, backup: { type: 'string' },
+            backup_manifest: { type: 'string' }, attached: { type: 'boolean' },
+          } },
+        render: (_a, v) => text(`Attached to the open workspace project ${v.project}. Verified backup: ${v.backup}. Continue native IDE work in place.`),
+      },
+      presentCall: (a) => ({ card: 'generic', title: 'Attach to open MotionWorks project', kind: 'execute', rawInput: a.project }),
+      execute: async (args) => {
+        if (args?.backup_approved !== true) throw Error('REFUSED: user approval for a verified backup is required before using this project.');
+        const requested = resolve(workspaceRoot(), String(args.project));
+        if (!requested.toLowerCase().endsWith('.mwt') || !isInsideWorkspace(requested)) {
+          throw Error('REFUSED: direct attach requires an exact .mwt inside the calling workspace.');
+        }
+        const state = await verb('ide_state', {}, 45000);
+        const status = state.ide_running ? await verb('status', {}, 20000) : null;
+        const sameProject = (left, right) => resolve(String(left)).replace(/\.mwt$/i, '').toLowerCase()
+          === resolve(String(right)).replace(/\.mwt$/i, '').toLowerCase();
+        if (status?.is_project_open && !sameProject(status.active_project, requested)) {
+          throw Error(`REFUSED: another MotionWorks project is open (${status.active_project}). Obtain exact-project save/close approval first.`);
+        }
+        if (status?.is_project_open && args?.baseline_saved !== true)
+          throw Error('REFUSED: reconcile unsaved IDE buffers and use native Save All before backing up the open project.');
+        const record = createDirectAttachment(workspaceRoot(), requested, String(attachedAgent()?.id ?? ''));
+        if (!state.ide_running) await defineTools().find(t => t.name === 'mw_ide_start').execute({ project: requested });
+        const current = await verb('status', {}, 20000);
+        if (!current.is_project_open) await defineTools().find(t => t.name === 'mw_ide_open').execute({ path: requested });
+        const after = await verb('status', {}, 20000);
+        if (!after?.is_project_open || !sameProject(after.active_project, requested)) {
+          throw Error(`REFUSED: requested project is not active. Preserve ${record.backup} and inspect IDE state.`);
+        }
+        return { mode: 'direct', project: record.mwt, backup: record.backup,
+          backup_manifest: record.backup_manifest, attached: true };
+      },
+    },
+
+    {
       name: 'mw_project_find',
       description:
-        'Find MotionWorks projects INSIDE THE WORKSPACE. Call this first for any MotionWorks task, '
-        + 'before mw_ide_stage: it answers "which project am I supposed to be working on" and '
-        + 'mw_ide_stage will refuse a path outside the workspace. '
-        + 'A MotionWorks project is a .mwt file beside its expanded directory, so each result '
-        + 'returns the .mwt to pass to mw_ide_stage. '
+        'Find MotionWorks projects INSIDE THE WORKSPACE. Select the intended .mwt and pass it to mw_ide_attach after first-backup approval. '
+        + 'A MotionWorks project is a .mwt file beside its expanded directory. '
         + 'IF THERE ARE NO PROJECTS IT SAYS SO and tells you to ask the user for the files - that is '
         + 'the intended behaviour, not a failure. Do not go looking elsewhere on the machine; a '
         + 'project outside the workspace is not one the task asked for. '
@@ -2061,7 +2125,7 @@ function defineTools() {
         render: (_a, v) => text(v.count
           ? `${v.count} MotionWorks project(s) in the workspace:\n`
             + v.projects.map((p) => `  ${p.name}  ${p.mwt}`).join('\n')
-            + '\n\nStage one with mw_ide_stage { source: "<the .mwt>" }.'
+            + '\n\nAsk before the first backup in this session, then use mw_ide_attach on the selected .mwt. If already open, reconcile Save All first.'
           : `No MotionWorks projects found in ${v.root}`
             + ` (workspace from ${v.workspace_source}).\n\n${v.guidance}`),
       },
@@ -2087,7 +2151,7 @@ function defineTools() {
               ? 'NOTE: this root is OUTSIDE the workspace. Nothing here was modified. '
                 + 'Do not stage or open any of these. To inspect one, call mw_code_read_st or '
                 + 'mw_code_pous with reference: true and that path. That is read-only.'
-              : 'Pass one of these .mwt paths to mw_ide_stage.')
+              : 'Ask before the first backup in this session, then pass the selected .mwt to mw_ide_attach. Reconcile Save All if it is already open.')
             : 'STOP AND ASK THE USER. There is no MotionWorks project in this workspace, and a '
               + 'project elsewhere on the machine is not what the task asked for. Tell the user '
               + 'what you looked for (.mwt files) and where you looked, then ask them to put the '
@@ -2301,20 +2365,17 @@ function defineTools() {
     {
       name: 'mw_ide_open',
       description:
-        'Open a staged project inside the running MotionWorks IDE. The path must be inside this '
-        + 'plugin\'s stage directory; use mw_ide_stage first. If another project is already open, '
+        'Open a backed-up workspace project inside the running MotionWorks IDE. Use mw_ide_attach to select and back up a workspace project. If another project is already open, '
         + 'ask the user whether the agent may save and close it, then pass user_approved=true '
         + 'and its exact path as expected_project. A changed project is refused. After the IDE loads, the project it '
         + 'actually has open is compared with the path that was asked for. A mismatched project '
-        + 'is left open and the call fails. Success means the staged '
-        + 'workspace copy is the project in the window, and the result names where it was staged '
-        + 'from.',
+        + 'is left open and the call fails. Success means the selected workspace project is active.',
       parameters: {
         type: 'object',
         additionalProperties: false,
         required: ['path'],
         properties: {
-          path: { type: 'string', description: 'Staged .mwt path.' },
+          path: { type: 'string', description: 'Backed-up workspace .mwt path.' },
           user_approved: { type: 'boolean', description: 'True only after the user approved saving and closing the named current project.' },
           expected_project: { type: 'string', description: 'Exact current project path named in the user approval; checked again immediately before closing it.' },
         },
@@ -2339,9 +2400,9 @@ function defineTools() {
         render: (_a, v) => text(
           v.is_project_open && v.matches_request
             ? `The IDE now has '${v.identity_name ?? v.active_project}' open`
-              + (v.identity_source ? `, staged from ${v.identity_source}` : '')
+              + (v.identity_source ? `, selected from ${v.identity_source}` : '')
               + (v.dismissed_project ? `. Saved and closed the approved previous project (${v.dismissed_project}).` : '.')
-            : 'OpenProject returned but the staged project is not what the IDE has open.',
+            : 'OpenProject returned but the selected workspace project is not what the IDE has open.',
         ),
       },
       presentCall: (a) => ({
@@ -2718,7 +2779,7 @@ function defineTools() {
         'Start MotionWorks IEC visibly with the verified workspace project wrapper. '
         + 'Resolves the exact native Use Trial prompt during initial startup or an already-running blocked startup; do not launch a second IDE. '
         + 'Source edits happen inside the open IDE. '
-        + 'Inspect mw_ide_status afterward; continue the exact stage if it is already open, '
+        + 'Inspect mw_ide_status afterward; continue the selected workspace project if it is already open, '
         + 'or use mw_ide_open when no project is open. If MotionWorks '
         + 'restores another project, it is left open until the user approves saving and closing it.',
       parameters: {
@@ -2726,7 +2787,7 @@ function defineTools() {
         additionalProperties: false,
         properties: {
           exe: { type: 'string', description: 'Override the Mwt.exe path.' },
-          project: { type: 'string', description: 'Staged workspace project; required when several copies exist.' },
+          project: { type: 'string', description: 'Backed-up workspace project; required when several projects exist.' },
         },
       },
       output: {
@@ -3739,7 +3800,7 @@ function defineTools() {
 
     {
       name: 'mw_workflow_check',
-      description: 'Read-only readiness report for an explicit staged project, including stale or relocated identities that other tools refuse. Reports native validation, wrapper binding, source hashes, blockers and the next safe action. Does not repair, overwrite, start the IDE or download.',
+      description: 'Read-only readiness report for an explicit staged or directly attached workspace project. Reports native validation, wrapper binding, source hashes, blockers and the next safe action. Does not repair, overwrite, start the IDE or download.',
       parameters: { type: 'object', additionalProperties: false, required: ['project'], properties: { project: { type: 'string' } } },
       output: { schema: { type: 'object', additionalProperties: true }, render: (_a, v) => text([
         `Project: ${v.project}`, `Evidence: ${v.evidence_level}; ready for IDE open: ${v.ready_for_ide_open}`,
@@ -3747,7 +3808,7 @@ function defineTools() {
         ...(v.warnings ?? []).map(w => `WARNING ${w.pou ?? ''}: ${w.detail}`),
         `Next: ${v.next_step}`,
       ].join('\n')) },
-      execute: (args) => runCode('workflow_check', { project: assertStaged(resolve(workspaceRoot(), args.project)) }),
+      execute: (args) => runCode('workflow_check', { project: assertProven(resolve(workspaceRoot(), args.project)) }),
     },
 
     {
@@ -3760,7 +3821,7 @@ function defineTools() {
 
     {
       name: 'mw_ide_verify',
-      description: 'Read-only mode capture_baseline captures complete saved/native/library state after baseline_saved:true; compare_baseline requires the returned baseline_id, compares the same workspace/project and retains full evidence. No Build, Save, navigation or source edits in either baseline mode. Preservation excludes compiler output and root IDE bookkeeping and is not compile/runtime acceptance. Default acceptance mode: after native Save All and intended-change read-back, verify the exact open stage: validation, manifests, fresh Build, Make, messages and Save. With consent, close/reopen, compare persistence, then repeat fresh Build/Make and integrity checks. Retains a JSON report on failure. Never force-closes, repairs files, downloads or commands motion. Cached Make is not fresh Build.',
+      description: 'Read-only mode capture_baseline captures complete saved/native/library state after baseline_saved:true; compare_baseline requires the returned baseline_id, compares the same workspace/project and retains full evidence. No Build, Save, navigation or source edits in either baseline mode. Preservation excludes compiler output and root IDE bookkeeping and is not compile/runtime acceptance. Default acceptance mode: after native Save All and intended-change read-back, verify the exact open authorized workspace project: validation, manifests, fresh Build, Make, messages and Save. With consent, close/reopen, compare persistence, then repeat fresh Build/Make and integrity checks. Retains a JSON report on failure. Never force-closes, repairs files, downloads or commands motion. Cached Make is not fresh Build.',
       parameters: { type: 'object', additionalProperties: false, required: ['project'], properties: {
         project: { type: 'string' }, mode: {type:'string',enum:['acceptance','capture_baseline','compare_baseline']}, baseline_saved:{type:'boolean',description:'Required true for baseline modes, after reconciling saved edits.'}, baseline_id:{type:'string',description:'Exact integrity-pinned receipt returned by capture_baseline. Required for compare_baseline; not a path.'}, close_reopen: { type: 'boolean', default: false },
         user_approved: { type: 'boolean', description: 'Explicit consent to save/close/reopen this disposable or named project. Required when close_reopen is true.' },
@@ -4420,7 +4481,8 @@ export function apply(ctx) {
     try { ctx.logger?.warn?.(`motionworks-iec-use: could not register the skill: ${e?.message ?? e}`); } catch { /* ignore */ }
   }
 
-  for (const definition of defineTools()) {
+  for (const definition of defineTools().filter(t => process.env.MW_TEST_LEGACY_TOOLS === '1'
+    || !['mw_ide_stage', 'mw_code_sync_back'].includes(t.name))) {
     // `defineTool()` Ã¢â‚¬â€ which we cannot import here Ã¢â‚¬â€ wraps execute in an async
     // function, so a validation throw becomes a rejection rather than a
     // synchronous throw out of the registry's dispatch. Registering directly, we

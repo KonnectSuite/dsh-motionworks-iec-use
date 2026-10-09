@@ -22,7 +22,8 @@ try {
     assert.equal(guide.mode,'ide-first');
     assert.equal(guide.action_performed,false);
     assert.ok(guide.steps.length>=5);
-    assert.match(guide.steps[0],/already open.*without restaging/);
+    assert.match(guide.steps[0],/Ask before the first backup/);
+    assert.match(guide.steps[0],/mw_ide_attach.*backup_approved:true/);
     assert.match(guide.steps[0],/unsaved IDE changes/);
     assert.ok(Array.isArray(tools.get('mw_ide_edit_guide').output.render({},guide)));
   }
