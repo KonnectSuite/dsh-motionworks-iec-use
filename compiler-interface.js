@@ -7,6 +7,11 @@ const digest=value=>createHash('sha256').update(JSON.stringify(value)).digest('h
 const source=s=>Object.fromEntries(keys.map(k=>[k,s[k]]));
 const hash=value=>typeof value==='string'&&/^[a-f0-9]{64}$/i.test(value);
 
+export function assertCompiledReviewNative(block,native){
+ if(!hash(block.native_baseline_digest)||digest(native)!==block.native_baseline_digest)
+  throw Error('Native evidence changed since compiler verification');
+}
+
 export function compilerArtifacts(block,project){
  return [block.compiler_dependency,block.compiler_type_table].map(path=>{
   if(lstatSync(path).isSymbolicLink()||!realpathSync(path).toLowerCase().startsWith(realpathSync(project).toLowerCase()+sep))throw Error('Compiler artifact outside exact project');
@@ -71,7 +76,7 @@ export async function compilerInterface(args,deps){
   project_compiler_freshness_verified:true,compiler_library_binding_verified:true,
   compiler_source_binding_verified:false,compiler_cache_freshness_verified:false,
   insertion_eligible:true,compile_acceptance_only:true,action_performed:true,bound_library:bound[0],
-  source_baseline_digest:digest(source(before)),library_manifest_digest:library.digest,
+  source_baseline_digest:digest(source(before)),native_baseline_digest:digest(currentNative),library_manifest_digest:library.digest,
   verified_at_ms:Date.now(),compiler_artifacts:fresh,compiler_started_at_ms:started,compiler_completed_at_ms:ended,build,make,
   note:'Current native compiled contract matched the unique bound installed block and its complete explicit cached declarations, with complete source/native/library preservation. Eligible only for this compiled contract; protected worksheet decoding and library-cache regeneration are not proved. Fresh Build/Make of each inserted call remains required.'};
 }

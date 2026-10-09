@@ -6,6 +6,14 @@ existing native edit-guide tool instead of guessed ASAR filesystem paths.
 
 ## Unreleased
 
+- Combine the saved-state guard and complete native declaration snapshot for
+  variable edits, eliminating a separate compile-state round trip. Refuse dirty,
+  unknown or drifting saved state; retain the full mutation baseline/read-back.
+  Reuse the verified compiler snapshot digest as compiled review's baseline,
+  eliminating one full project traversal while retaining a fresh final traversal
+  and library/source/artifact checks. Add task guidance to avoid redundant manual
+  inventories/saves and combine exact ST/IL patches for one body.
+
 - Speed up direct-project backup guards with native filesystem attribute reads
   and one identity validation per guarded direct IDE verb. Continue checking
   every ancestor and backup member afresh; do not cache authorization between

@@ -74,7 +74,7 @@ const [
   { fbInsertionPlan },
   { nativeGroupChange },
   { assertStageClosed },
-  { compilerInterface, compilerArtifacts, compiledLibraryManifest },
+  { compilerInterface, compilerArtifacts, compiledLibraryManifest, assertCompiledReviewNative },
   { captureCheckpoint, compareCheckpoint, checkpointDigest, libraryBaseline, checkpointContextMatches },
   { createDirectAttachment, findDirectAttachment, listDirectAttachments },
 ] = await Promise.all([
@@ -1852,7 +1852,7 @@ function defineTools() {
         mkdirSync(directory,{recursive:true});
         const evidence_path=join(directory,'native-variable-'+randomUUID()+'.json');
         const result=await nativeVariableChange(args,{status:()=>verb('compile_state',{},30000),saved,
-          snapshot:()=>verb('variable_snapshot',{pou:args.pou},30000),
+          snapshotSaved:()=>verb('variable_snapshot',{pou:args.pou,require_saved:true},30000),
           mutate:request=>verb('variable_mutate',{...request,project},60000),
           compare:compareVariables,globals:()=>runCode('globals',{project})});
         if(!isInsideWorkspace(evidence_path))throw new Error('REFUSED: linked evidence file');
@@ -3331,7 +3331,7 @@ function defineTools() {
         if(args?.refresh_compiler===true && (args.installed_interfaces!==true||args.baseline_saved!==true||!args.interface_libraries||Object.keys(args.interface_libraries).length!==1))throw Error('Compiled review requires installed_interfaces, saved baseline, and one exact block/library selector');
         const project=projectOf(args),request={...(args??{}),project};
         delete request.native_compiled_interfaces;
-        let verifiedSource,verifiedNative,verifiedBlock;
+        let verifiedSource,verifiedBlock;
         if(args?.installed_interfaces===true){
           const identity=await assertIdeProjectProven();
           if(resolve(identity.active_project).replace(/\.mwt$/i,'').toLowerCase()!==project.toLowerCase())throw Error('REFUSED: wrong open project');
@@ -3346,7 +3346,8 @@ function defineTools() {
             const sourceDigest=source=>createHash('sha256').update(JSON.stringify(Object.fromEntries(['pous','tasks','globals','program_sources','translation_files'].map(k=>[k,source[k]])))).digest('hex');
             verifiedSource=sourceDigest(await runCode('structure_snapshot',{project}));
             if(block.evidence_kind!=='fresh-bound-compiled-block-interface'||block.source_baseline_digest!==verifiedSource)throw Error('Compiled review source baseline changed');
-            verifiedNative=await verb('pou_package_snapshot',{},180000);verifiedBlock=block;
+            if(!/^[a-f0-9]{64}$/i.test(block.native_baseline_digest??''))throw Error('Complete compiler native baseline digest required');
+            verifiedBlock=block;
             request.native_compiled_interfaces=[block];
           }
         }
@@ -3357,7 +3358,8 @@ function defineTools() {
           const state=await verb('compile_state',{},30000);
           if(after!==verifiedSource||state.is_modified!==false||state.is_compiled!==true)throw Error('Native/source state changed during compiled review');
           const native=await verb('pou_package_snapshot',{},180000);
-          if(JSON.stringify(native)!==JSON.stringify(verifiedNative)||compiledLibraryManifest(verifiedBlock,native.libraries).digest!==verifiedBlock.library_manifest_digest||JSON.stringify(compilerArtifacts(verifiedBlock,project))!==JSON.stringify(verifiedBlock.compiler_artifacts))throw Error('Native/library/compiler evidence changed during compiled review');
+          assertCompiledReviewNative(verifiedBlock,native);
+          if(compiledLibraryManifest(verifiedBlock,native.libraries).digest!==verifiedBlock.library_manifest_digest||JSON.stringify(compilerArtifacts(verifiedBlock,project))!==JSON.stringify(verifiedBlock.compiler_artifacts))throw Error('Native/library/compiler evidence changed during compiled review');
         }
         return result;
       },

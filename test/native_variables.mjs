@@ -16,6 +16,17 @@ async function run(input=args,override={}) {
 }
 assert.equal((await run()).verification.accepted,true);
 {
+ let combinedReads=0;
+ const snapshotSaved=async()=>{combinedReads++;return {is_modified:false,variables:[{...row,...flags}],groups:[{name:'Default',read_only:false}]};};
+ const noSeparateReads={status:async()=>assert.fail('Combined read must replace state call'),snapshot:async()=>assert.fail('Combined read must replace snapshot call'),snapshotSaved};
+ assert.equal((await run(args,noSeparateReads)).verification.accepted,true);
+ assert.equal(combinedReads,1);
+ for(const is_modified of [true,null,undefined]) {
+  await assert.rejects(()=>run(args,{...noSeparateReads,snapshotSaved:async()=>({...(await snapshotSaved()),is_modified}),noMutation:true}),/unsaved or unknown/);
+ }
+ await assert.rejects(()=>run(args,{...noSeparateReads,snapshotSaved:async()=>({...(await snapshotSaved()),variables:[]}),noMutation:true}),/disagree/);
+}
+{
   let reads=0,mutations=0;
   const emptyDeps={status:async()=>({is_modified:false}),saved:async()=>({variables:reads++?[addition]:[]}),snapshot:async()=>({variables:[],groups:[{name:'Default',read_only:false}]}),mutate:async()=>{mutations++;return {saved:true,is_modified:false,variables:[{...addition,...flags}]};},compare:__internals.compareVariables,globals:async()=>({variables:[]})};
   assert.equal((await nativeVariableChange(args,emptyDeps)).verification.accepted,true);

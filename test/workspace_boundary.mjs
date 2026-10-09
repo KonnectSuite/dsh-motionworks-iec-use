@@ -2,11 +2,15 @@ import assert from 'node:assert/strict';
 import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
-import { apply, __internals as i } from '../index.js';
+import {pathToFileURL} from 'node:url';
+import {copyClosedIdePlugin} from './closed_ide_fixture.mjs';
 import { mwtFixture } from './mwt_fixture.mjs';
 
 // All mutations are confined to fresh temporary workspaces. No IDE is started.
 const root = mkdtempSync(join(tmpdir(), 'mw-boundary-'));
+const fixturePlugin=join(root,'plugin');
+copyClosedIdePlugin(resolve(import.meta.dirname,'..'),fixturePlugin);
+const {apply,__internals:i}=await import(pathToFileURL(join(fixturePlugin,'index.js')).href);
 const tools = new Map();
 process.env.MW_TEST_LEGACY_TOOLS = '1';
 apply({ get: () => undefined, tools: { register: t => tools.set(t.name, t) }, on() {} });

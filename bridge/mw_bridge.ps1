@@ -765,6 +765,22 @@ function Get-VariableSheet($app,[string]$pou) {
     if(-not $resource){throw 'REFUSED: exact resource not found'}
     return ,($resource.Variables)
 }
+function Get-VariableSnapshot($app,[string]$pou,$requireSaved=$false) {
+    if($requireSaved -isnot [bool]){throw 'REFUSED: require_saved must be an explicit boolean'}
+    if($requireSaved -and $app.ActiveProject.IsModified -ne $false){throw 'REFUSED: reconcile/save native edits before snapshot'}
+    $vars=Get-VariableSheet $app $pou
+    $groups=@()
+    for($i=1;$i -le $vars.Groups.Count;$i++) {
+        $g=$vars.Groups.Item($i)
+        $groups+=@{name=[string]$g.Name;read_only=[bool]$g.ReadOnly}
+    }
+    $data=[ordered]@{variables=(Get-VariableRows $vars);groups=$groups}
+    if($requireSaved) {
+        if($app.ActiveProject.IsModified -ne $false){throw 'REFUSED: native saved state changed during snapshot'}
+        $data.is_modified=$false
+    }
+    return $data
+}
 function Initialize-SdkVariableReader {
     if ($script:SdkReaderAttempted) { return }
     $script:SdkReaderAttempted=$true
@@ -1747,13 +1763,8 @@ while ($true) {
             'variable_snapshot' {
                 $app=Connect-App
                 [void](Assert-StagedOpen $app $verb)
-                $vars=Get-VariableSheet $app ([string]$req.pou)
-                $groups=@()
-                for($i=1;$i -le $vars.Groups.Count;$i++) {
-                    $g=$vars.Groups.Item($i)
-                    $groups+=@{name=[string]$g.Name;read_only=[bool]$g.ReadOnly}
-                }
-                $data=[ordered]@{variables=(Get-VariableRows $vars);groups=$groups}
+                $requireSaved=if($null -eq $req.require_saved){$false}else{$req.require_saved}
+                $data=Get-VariableSnapshot $app ([string]$req.pou) $requireSaved
                 $ok=$true
             }
             'library_snapshot' {

@@ -23,17 +23,20 @@ export function variableChangePlan(baseline,args,existingGroups=baseline.map(v=>
   const expected=variableExpectation(rest,declaration,args.pou,existingGroups);
   return {expected,old};
 }
-export async function nativeVariableChange(args,{status,saved,snapshot,mutate,compare,globals}) {
+export async function nativeVariableChange(args,{status,saved,snapshot,snapshotSaved,mutate,compare,globals}) {
   if(args.flags!==undefined) {
     if(!args.flags||typeof args.flags!=='object'||Array.isArray(args.flags)||Object.entries(args.flags).some(([k,v])=>!flagFields.includes(k)||typeof v!=='boolean'))throw new Error('flags must contain only explicit boolean native variable flags');
     if(args.operation==='delete')throw new Error('Flag changes require add/edit, not delete');
   }
   if(args.baseline_saved!==true)throw new Error('Save/reconcile IDE edits before a native variable operation');
-  const state=await status();
-  if(state.is_modified!==false)throw new Error('Native project has unsaved changes; save/reconcile first');
+  // The combined native read proves saved state before/after enumeration. It is
+  // fresh for this operation; the mutation still checks the complete baseline.
+  const combined=snapshotSaved?await snapshotSaved():null;
+  const state=snapshotSaved?combined:await status();
+  if(state?.is_modified!==false)throw new Error('Native project has unsaved or unknown changes; save/reconcile first');
   const before=await saved();
   if(before.warnings?.length)throw new Error('Saved declaration parse warnings; no native action performed');
-  const live=await snapshot();
+  const live=snapshotSaved?combined:await snapshot();
   const nativeRows=savedProjection(live.variables);
   const aligned=compare(before.variables,nativeRows);
   if(!aligned.accepted)throw new Error('Live declarations disagree with saved baseline; no native action performed');

@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import {compilerInterface} from '../compiler-interface.js';
+import {compilerInterface,assertCompiledReviewNative} from '../compiler-interface.js';
 const h='a'.repeat(64);
 const block={name:'Example',library:'Vendor',kind:'FUNCTION_BLOCK',hidden:false,evidence_kind:'installed-compiled-block-interface',insertion_eligible:false,compiler_pin_types_verified:true,pins:[{name:'Execute',type:'BOOL',direction:'input'}],source_declaration_count:1,compiler_declaration_count:2,
  ...Object.fromEntries(['source_sha256','registry_sha256','worksheet_sha256','cache_sha256','compiler_dependency_sha256','compiler_type_table_sha256'].map(k=>[k,h])),
@@ -14,6 +14,12 @@ async function run(change={}){
  const result=await compilerInterface({name:'Example',library:'Vendor',baseline_saved:true},deps);assert.equal(count,1);assert.deepEqual(events,['build','make']);assert.equal(reads,2);return result;
 }
 const good=await run();assert.equal(good.project_compiler_freshness_verified,true);assert.equal(good.compiler_library_binding_verified,true);assert.equal(good.compiler_source_binding_verified,false);assert.equal(good.insertion_eligible,true);
+assertCompiledReviewNative(good,native);
+for(const changed of [{...native,structure:{pous:['Changed']}},{...native,libraries:[]},
+ {...native,declarations:{Main:[{name:'Retained',retain:true}]}}])
+ assert.throws(()=>assertCompiledReviewNative(good,changed),/Native evidence changed/);
+for(const native_baseline_digest of [undefined,'not-a-digest','b'.repeat(64)])
+ assert.throws(()=>assertCompiledReviewNative({...good,native_baseline_digest},native),/Native evidence changed/);
 // A compiler can finish writing the type table while Make settles the pipeline.
 const realNow=Date.now;let clock=10000,artifactReads=0;
 try{

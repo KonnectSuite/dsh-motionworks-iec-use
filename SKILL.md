@@ -103,6 +103,15 @@ optional POU (omit for globals). Rename uses `new_name`; delete requires approva
 an empty group and another remaining group. Require `accepted:true` and inspect
 retained evidence on failure before further actions. This changes group labels;
 moving an existing variable between groups still follows the worksheet workflow.
+For efficiency, plan the intended declaration list and ST/IL changes before
+editing. Combine exact replacements for one body in a single `changes` array.
+Successful native code/variable tools already save and verify their complete
+baselines; do not add a manual Save, state query, or full-project inventory after
+every successful declaration edit. Require each tool's verification verdict.
+Failures, unknown state, intervening external edits, project changes, or UI
+fallbacks require fresh inspection. Read the relevant `mw_ide_edit_guide` once
+and reuse unchanged bundled guidance within the task. Do not dispatch concurrent
+COM mutations or claim individual calls are an atomic declaration batch.
 Run fresh Build/Make after the intended edits. This API does not require opening
 a worksheet. To inspect or edit a named worksheet, use `mw_ide_open_worksheet`
 with kind `variables` or `code`, the selected workspace project, and exact POU (omit only for

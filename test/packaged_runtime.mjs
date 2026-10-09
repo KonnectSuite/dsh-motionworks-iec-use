@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import {mockClosedIdeBridge} from './closed_ide_fixture.mjs';
 import { cpSync, copyFileSync, existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
@@ -19,6 +20,7 @@ try {
   }
   cpSync(join(repo, 'code'), join(physical, 'code'), { recursive: true });
   cpSync(join(repo, 'bridge'), join(physical, 'bridge'), { recursive: true });
+  mockClosedIdeBridge(join(physical,'bridge'));
   cpSync(join(repo, 'docs'), join(physical, 'docs'), { recursive: true });
   copyFileSync(join(repo, 'SKILL.md'), join(physical, 'SKILL.md'));
   mod = await import(pathToFileURL(join(virtual, 'index.js')).href);
