@@ -912,11 +912,15 @@ if ($verb -notin @('ping', 'stop')) {
 function Assert-NoLinkedPath([string]$path) {
     $cursor = [IO.Path]::GetFullPath($path)
     while ($cursor) {
-        if (Test-Path -LiteralPath $cursor) {
-            $item = Get-Item -LiteralPath $cursor -Force -ErrorAction Stop
-            if ($item.Attributes -band [IO.FileAttributes]::ReparsePoint) {
-                throw "REFUSED: linked path cannot be used by the IDE bridge: $cursor"
-            }
+        # Check each ancestor afresh. FileSystem provider cmdlets are expensive
+        # across hundreds of backup members; the native attributes preserve the
+        # same reparse-point guard without caching paths across IDE operations.
+        $attributes = $null
+        try { $attributes = [IO.File]::GetAttributes($cursor) }
+        catch [IO.FileNotFoundException] { }
+        catch [IO.DirectoryNotFoundException] { }
+        if ($null -ne $attributes -and ($attributes -band [IO.FileAttributes]::ReparsePoint)) {
+            throw "REFUSED: linked path cannot be used by the IDE bridge: $cursor"
         }
         $parent = [IO.Path]::GetDirectoryName($cursor)
         if ($parent -eq $cursor) { break }
@@ -1095,11 +1099,12 @@ function Assert-ProvenCopy([string]$path) {
 function Assert-StagedOpen($app, [string]$what) {
     $path = Get-OpenProjectPath $app
     if (-not $path) { throw 'no project is open in the IDE' }
+    # A direct identity already proves workspace containment and the backup.
+    # Avoid traversing that same backup again through both legacy stage guards.
+    # This is local to this invocation: later verbs validate a fresh identity.
+    if (Get-DirectIdentity $path) { return $path }
     if (-not (Test-InsideStage $path)) {
-        throw ("REFUSED: {0} would act on '{1}', which is outside the staging root '{2}'. " +
-               "That is not the staged workspace copy. Close it, or open the staged project " +
-               "with mw_ide_open. A program outside the workspace can be read with " +
-               "mw_code_read_st { reference: true } and is never opened or edited here.") -f $what, $path, $StageRoot
+        throw "REFUSED: $what would act on unverified project '$path' in workspace '$script:WorkspaceRoot'. Attach the exact workspace project with mw_ide_attach and a verified backup before editing."
     }
     Assert-ProvenCopy $path
     return $path
@@ -1165,9 +1170,10 @@ while ($true) {
                 $isOpen = $null; $activeName = $null
                 try { $isOpen = $app.IsProjectOpen() } catch { $isOpen = $null }
                 if ($isOpen) { try { $activeName = $app.ActiveProject.FullName } catch { } }
-                $inStage = $false
-                if ($activeName) { $inStage = Test-InsideStage $activeName }
                 $directIdentity = if ($activeName) { Get-DirectIdentity $activeName } else { $null }
+                $inStage = $false
+                if ($directIdentity) { $inStage = $true }
+                elseif ($activeName) { $inStage = Test-InsideStage $activeName }
                 $ok = $true
                 $data = [ordered]@{
                     version         = [string]$app.Version

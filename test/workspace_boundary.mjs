@@ -117,7 +117,7 @@ try {
     const file = join(a, '.motionworks', 'stage', 'Machine.identity.json');
     const raw = readFileSync(file, 'utf8');
     writeFileSync(file, JSON.stringify({ ...JSON.parse(raw), workspace: b }));
-    await assert.rejects(run('mw_code_pous', {}, a), /no staged copy/);
+    await assert.rejects(run('mw_code_pous', {}, a), /no backed-up MotionWorks project/);
     writeFileSync(file, raw);
   });
   await check('wrapper pointing elsewhere is refused before any IDE call', async () => {

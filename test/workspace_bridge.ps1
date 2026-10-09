@@ -96,17 +96,44 @@ try {
     [IO.Directory]::CreateDirectory($recordDir) | Out-Null
     [IO.Directory]::CreateDirectory($manifestDir) | Out-Null
     [IO.File]::WriteAllText($direct, 'wrapper')
+    # Real filesystem guards: a missing leaf is allowed only when its existing
+    # ancestors are ordinary directories, and no result survives path replacement.
+    $guardDir = Join-Path $ws 'guard'
+    [IO.Directory]::CreateDirectory($guardDir) | Out-Null
+    Assert-NoLinkedPath (Join-Path $guardDir 'missing/leaf.txt')
+    Assert-NoLinkedPath $direct
+    [IO.Directory]::Delete($guardDir)
+    [IO.Directory]::CreateDirectory($other) | Out-Null
+    New-Item -ItemType Junction -Path $guardDir -Target $other | Out-Null
+    try {
+        Refuses { Assert-NoLinkedPath $guardDir }
+        Refuses { Assert-NoLinkedPath (Join-Path $guardDir 'missing/leaf.txt') }
+    } finally { [IO.Directory]::Delete($guardDir) }
+    [IO.Directory]::CreateDirectory($guardDir) | Out-Null
+    Assert-NoLinkedPath (Join-Path $guardDir 'missing/leaf.txt')
     $manifest = Join-Path $manifestDir 'backup-manifest.json'
-    [IO.File]::WriteAllText($manifest, '{"files":[]}')
+    $backupMember = Join-Path $manifestDir 'member.txt'
+    [IO.File]::WriteAllText($backupMember, 'backup')
+    [IO.File]::WriteAllText($manifest, '{"files":[{"path":"member.txt"}]}')
     $recordPath = Join-Path $recordDir 'fixture.json'
     $directId = @{mode='direct';workspace=$ws;mwt=$direct;directory=$directDir;backup=$manifestDir;backup_manifest=$manifest;backup_manifest_sha256=(Get-MwSha256 $manifest)}
     [IO.File]::WriteAllText($recordPath, ($directId | ConvertTo-Json))
     if (-not (Test-InsideStage $direct)) { throw 'Verified direct workspace project was refused' }
     Assert-ProvenCopy $direct
+    $fakeApp.ActiveProject.FullName = $direct
+    if ((Assert-StagedOpen $fakeApp 'save') -ne $direct) { throw 'Direct open identity was lost' }
+    [IO.File]::Delete($backupMember)
+    if (Test-InsideStage $direct) { throw 'Deleted backup member passed a later request' }
+    Refuses { Assert-ProvenCopy $direct }
+    Refuses { Assert-StagedOpen $fakeApp 'save' }
+    [IO.File]::WriteAllText($backupMember, 'backup')
+    Assert-ProvenCopy $direct
     [IO.File]::WriteAllText($manifest, 'tampered')
     if (Test-InsideStage $direct) { throw 'Tampered direct backup passed' }
     Refuses { Assert-ProvenCopy $direct }
+    Refuses { Assert-StagedOpen $fakeApp 'save' }
     Write-Output '14 bridge workspace and consent checks passed; no IDE started'
+    Write-Output 'Fresh native path attributes refuse junction ancestors and missing backup members; no cached authorization'
 } finally {
     $resolved = [IO.Path]::GetFullPath($testRoot)
     if (-not $resolved.StartsWith([IO.Path]::GetFullPath($tempBase), [StringComparison]::OrdinalIgnoreCase)) { throw 'Invalid cleanup target' }

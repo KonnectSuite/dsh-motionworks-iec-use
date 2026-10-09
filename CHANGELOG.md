@@ -6,6 +6,11 @@ existing native edit-guide tool instead of guessed ASAR filesystem paths.
 
 ## Unreleased
 
+- Speed up direct-project backup guards with native filesystem attribute reads
+  and one identity validation per guarded direct IDE verb. Continue checking
+  every ancestor and backup member afresh; do not cache authorization between
+  calls. Missing backup members, tampered manifests and junctions still refuse.
+
 - Select a workspace project, approve and verify its first complete backup in the
   session, then edit the original files in place. The same attachment tool opens
   the project when the IDE is closed. Hide staging and sync-back from the agent
