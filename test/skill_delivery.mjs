@@ -65,7 +65,11 @@ check('whenToUse fires on merely mentioning a project',
   /mentioned at all/i.test(when), when.slice(0, 60) + '...');
 check('it is model-invocable so the agent can load it',
   skill.invocation?.modelInvocable === true, JSON.stringify(skill.invocation));
-check('the source is bundled', skill.source === 'bundled', String(skill.source));
+// `custom` plus an absolute SKILL.md path is what makes the Skills page switch available:
+// the manager only offers one for a source it may edit and a file outside node_modules.
+check('the skill is user-editable so the Skills page can switch it off',
+  skill.source === 'custom' && typeof skill.path === 'string' && /SKILL\.md$/.test(skill.path),
+  `${String(skill.source)} ${String(skill.path)}`);
 
 console.log('\n  ══ and the tools are unaffected ══');
 check('all tools still register', registered.tools.length >= 38, `${registered.tools.length} tools`);

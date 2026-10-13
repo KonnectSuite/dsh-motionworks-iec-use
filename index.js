@@ -889,7 +889,7 @@ const REFERENCE_PARAM = {
   type: 'boolean',
   description:
     'Read a project that is not the staged workspace copy, including one outside '
-    + 'the workspace. Read-only: nothing is staged, opened, or modified.',
+    + 'the workspace. Read-only.',
 };
 
 /** Check the complete tree before copying; junctions must not import another project. */
@@ -1445,7 +1445,7 @@ function projectOf(args) {
 }
 
 const VARIABLE_FIELDS = ['name', 'type', 'section', 'group', 'address', 'initial_value', 'description'];
-const VARIABLE_FLAGS_SCHEMA = {type:'object',additionalProperties:false,description:'Explicit native flag changes for add/edit. Omitted flags preserve existing values, or default false for a new declaration. Review retention, publication and execution effects before changing.',properties:Object.fromEntries(['retain','pdd','opc','disabled','not_on_plc','redundant'].map(k=>[k,{type:'boolean'}]))};
+const VARIABLE_FLAGS_SCHEMA = {type:'object',additionalProperties:false,description:'Native flag changes for add/edit. Omitted flags keep existing values, or default false for a new declaration.',properties:Object.fromEntries(['retain','pdd','opc','disabled','not_on_plc','redundant'].map(k=>[k,{type:'boolean'}]))};
 const VARIABLE_SCHEMA = {
   type: 'object', additionalProperties: false, required: VARIABLE_FIELDS,
   properties: Object.fromEntries(VARIABLE_FIELDS.map(field => [field,
@@ -1610,8 +1610,8 @@ function defineTools() {
   return [
     {
       name:'mw_ide_pou_convert',
-      description:'Convert one exact writable saved ST/LD/FBD POU in place to FBD or LD through native Pou.Convert. Requires baseline_saved:true, conversion_reviewed:true and its exact expected_body_sha256 from mw_code_pous. Replaces source language; review loss of original layout/comments and prefer an isolated POU copy for generation. Runs a fresh native Build before conversion, requires regenerated compiler artifacts for that exact source POU, and runs a fresh graphical Build/listing after it. Requires preserved native declaration flags/groups, libraries, POU type, saved declarations and every unrelated source/task/global/translation. The compiler can omit unused POUs; this tool never assigns tasks to manufacture a compiled source. No conversion to ST, binary rewriting, desktop input or controller action. Full phase evidence is retained; stop after any failure and never retry/rollback blindly. Native conversion/build does not prove canvas geometry, individual pin wiring or machine behavior.',
-      parameters:{type:'object',additionalProperties:false,required:['project','pou','language','expected_body_sha256','baseline_saved','conversion_reviewed'],properties:{project:{type:'string'},pou:{type:'string'},language:{type:'string',enum:['FBD','LD']},expected_body_sha256:{type:'string',description:'Exact lowercase hex SHA-256 (64 chars) reported by mw_code_pous for this body.'},baseline_saved:{type:'boolean'},conversion_reviewed:{type:'boolean'}}},
+      description: 'Convert one exact writable saved ST, LD or FBD POU in place to FBD or LD through native Pou.Convert. Needs baseline_saved:true, conversion_reviewed:true and the exact expected_body_sha256 from mw_code_pous. Replaces the source language, so review the loss of original layout and comments and prefer an isolated POU copy for generation. Runs a fresh native Build before conversion and a graphical Build and listing after it. Requires preserved native declaration flags/groups, libraries, POU type, saved declarations and every unrelated source, task, global and translation. Any failure stops the run without retry. Does not prove canvas geometry, individual pin wiring or machine behavior.',
+      parameters:{type:'object',additionalProperties:false,required:['project','pou','language','expected_body_sha256','baseline_saved','conversion_reviewed'],properties:{project:{type:'string'},pou:{type:'string'},language:{type:'string',enum:['FBD','LD']},expected_body_sha256:{type:'string',description:'Exact lowercase hex SHA-256 (64 characters) from mw_code_pous for this body.'},baseline_saved:{type:'boolean'},conversion_reviewed:{type:'boolean'}}},
       output:{schema:openOutput(['accepted','action_performed','evidence_path']),render:(_a,v)=>text(JSON.stringify(v,null,2))},
       execute:async args=>{
         const project=projectOf(args),identity=await assertIdeProjectProven();
@@ -1640,7 +1640,7 @@ function defineTools() {
     },
     {
       name:'mw_ide_pou_package',
-      description:'Export one writable ST/LD/FBD POU through the native IDE to a new private workspace package, or import that exact untouched package into its original staged project with its POU name absent. Export returns a session-bound package_token; import requires it and dependencies_reviewed:true. Receipts expire when this plugin process reloads and are consumed before one import attempt. Refuses arbitrary packages, path arguments, overwrites, changed libraries, missing/mismatched externals, stale source/native baselines and altered packages. Verifies full graph/code/declarations, native flags/groups and unrelated sources/tasks/globals/translations. No binary rewriting, desktop input, task assignment or controller action. Import preserves completed phases on failure; inspect evidence, never retry blindly. Finish intended imports with fresh Build/Make.',
+      description: 'Export one writable ST, LD or FBD POU through the native IDE to a new private workspace package, or import that exact untouched package into its original staged project with its POU name absent. Export returns a session-bound package_token; import needs it and dependencies_reviewed:true. Receipts expire when this plugin process reloads and are consumed before one import attempt. Refuses arbitrary packages, path arguments, overwrites, changed libraries, missing or mismatched externals, stale baselines, and altered packages. Verifies the full graph, code and declarations, native flags/groups, and unrelated sources, tasks, globals and translations. No binary rewriting, desktop input, task assignment or controller action. Import preserves completed phases on failure; inspect evidence and never retry blindly. Finish intended imports with a fresh Build/Make.',
       parameters:{type:'object',additionalProperties:false,required:['project','operation','baseline_saved'],properties:{project:{type:'string'},operation:{type:'string',enum:['export','import']},baseline_saved:{type:'boolean'},pou:{type:'string'},package_token:{type:'string'},dependencies_reviewed:{type:'boolean'}}},
       output:{schema:openOutput(['accepted','action_performed','evidence_path']),render:(_a,v)=>text(JSON.stringify(v,null,2))},
       execute:async args=>{
@@ -1687,7 +1687,7 @@ function defineTools() {
     },
     {
       name:'mw_ide_graphical_listing',
-      description:'Inspect one exact saved LD/FBD POU through its compiler-generated networks. Runs a fresh native Build; requires baseline_saved:true and a clean native saved state. Checks full source/declaration/task/translation preservation, matching listing/declaration/worksheet/source-map identities, and returns bounded raw instructions with declaration symbol annotations and artifact hashes. FB pin names/directions require an exact compiler dependency type matching the saved instance, complete declaration ordinals and fresh dependency artifacts from that Build; compiler ordinals can differ from installed interface order. Private fields and unknown compiler tokens remain unresolved. Does not decode/write GB files, open/focus the editor, verify canvas placement/wiring, or command a controller. A failed/unverified Build or changed baseline stops inspection; do not retry automatically.',
+      description: 'Inspect one exact saved LD or FBD POU through its compiler-generated networks. Runs a fresh native Build and needs baseline_saved:true with a clean native saved state. Checks full source/declaration/task/translation preservation and matching listing, declaration, worksheet and source-map identities, then returns bounded raw instructions with declaration symbol annotations and artifact hashes. FB pin names and directions need an exact compiler dependency type matching the saved instance, complete declaration ordinals and fresh dependency artifacts from that Build. Private fields and unknown compiler tokens stay unresolved. Does not decode or write GB files, open or focus the editor, verify canvas placement or wiring, or command a controller. A failed or unverified Build, or a changed baseline, stops inspection without retry.',
       parameters:{type:'object',additionalProperties:false,required:['project','pou','baseline_saved'],properties:{project:{type:'string'},pou:{type:'string'},baseline_saved:{type:'boolean'},start:{type:'integer',description:'First row to list, 1-based.'},limit:{type:'integer',description:'Maximum rows to list (1-50).'}}},
       output:{schema:openOutput(['accepted','evidence_path']),render:(_a,v)=>text(JSON.stringify(v,null,2))},
       execute:async args=>{
@@ -1715,15 +1715,15 @@ function defineTools() {
     },
     {
       name:'mw_code_installed_help',
-      description:'Read/search actual installed English MotionWorks CHM help as inert text. Omit module to list installed archives; then use an exact module to list topics, query words, or read an exact topic. Provides archive/topic hashes and native help links, caches text in this session workspace, and never opens help or edits the IDE. Use for shortcut/editor/toolbox and programming semantics instead of guessing keys or signatures. Images may contain diagrams or key symbols omitted from text. Installed help is source evidence, not proof of live operation or controller/library compatibility. Refuses absent/ambiguous roots, unknown modules and cache integrity changes.',
-      parameters:{type:'object',additionalProperties:false,properties:{module:{type:'string'},query:{type:'string',description:'Search topic text using words, at most 256 characters. Use this for partial searches.'},topic:{type:'string',description:'Exact relative topic filename from the module topic list, including its .htm/.html extension; not a partial filter. For example GE_ConnectObjects.htm. At most 256 characters.'},limit:{type:'integer',description:'Maximum hits to return (1-10).'}}},
+      description: 'Read or search actual installed English MotionWorks CHM help as inert text. Omit module to list installed archives; then use an exact module to list topics, search words, or read one exact topic. Provides archive and topic hashes and native help links, caches text in this session workspace, and never opens help or edits the IDE. Use it for shortcut, editor, toolbox and programming semantics instead of guessing keys or signatures. Images may contain diagrams or key symbols omitted from text. Installed help is source evidence, not proof of live operation or controller and library compatibility. Refuses absent or ambiguous roots, unknown modules and cache integrity changes.',
+      parameters:{type:'object',additionalProperties:false,properties:{module:{type:'string'},query:{type:'string',description:'Search topic text using words, at most 256 characters.'},topic:{type:'string',description:'Exact relative topic filename from the module list, with its .htm/.html extension; not a partial filter.'},limit:{type:'integer',description:'Maximum hits to return (1-10).'}}},
       output:{schema:openOutput(['evidence_kind','action_performed']),render:(_a,v)=>text(JSON.stringify(v,null,2))},
       execute:async args=>runCode('installed_help',args??{}),
     },
     {
       name:'mw_ide_fb_insert',
-      description:'Insert ONE new FB instance and ST call using installed declarations or an explicitly verified current native compiled contract. Prefer expected_body_sha256 set to readable text_body_sha256 from mw_code_pous; alternatively supply exact expected_body. Requires saved baseline and explicit pin bindings. Use before for a unique exact line-boundary insertion anchor, or offset; omit both to append. No need to re-emit a long body. Resolves block/library through live-bound parameter/declaration tables; rejects hidden/non-FB blocks, unknown/duplicate pins, missing in-out pins, instance collisions and direct-variable type mismatches. Outputs/in-outs currently require existing direct local/external variables. Inputs allow single expressions; compiler validation remains required. For a protected library already resolved by the current compiler, compiler_verified:true runs fresh Build/Make and complete native/source/library checks; unique block binding is required and stale diagnostic caches alone remain refused. Adds the instance via guarded native variable API, then imports/verifies the code via native DDE. Retains plan/phase evidence; a partial failure reports completed phases and never retries or silently rolls back. No graphical insertion or controller action. Require verification.accepted then fresh Build/Make.',
-      parameters:{type:'object',additionalProperties:false,required:['project','pou','block','instance','baseline_saved','bindings'],properties:{project:{type:'string'},pou:{type:'string'},block:{type:'string'},library:{type:'string'},instance:{type:'string'},expected_body:{type:'string'},expected_body_sha256:{type:'string',description:'Exact readable text_body_sha256 from mw_code_pous, not its raw body_sha256.'},baseline_saved:{type:'boolean'},compiler_verified:{type:'boolean',description:'Explicitly verify a protected block against the unique current native compiled contract before insertion. Runs fresh Build/Make with complete source/native/library checks; does not decode protected source.'},group:{type:'string'},before:{type:'string',description:'Unique exact text to insert before; must start at a line boundary outside comments/strings. Mutually exclusive with offset.'},offset:{type:'integer',description:'Zero-based character offset at a line boundary; defaults to append.'},bindings:{type:'object',additionalProperties:true,description:'Pin name to the exact value or symbol to bind.'}}},
+      description: 'Insert ONE new FB instance and ST call using installed declarations or a verified compiled contract. Prefer expected_body_sha256 from mw_code_pous, else exact expected_body. Needs a saved baseline and explicit pin bindings. before anchors at an exact line boundary, offset is the alternative; omit both to append. Rejects hidden or non-FB blocks, unknown or duplicate pins, missing in-out pins, instance collisions and direct-variable type mismatches. Outputs and in-outs need existing direct local or external variables; inputs take single expressions. compiler_verified:true runs a fresh Build/Make with full native/source/library checks for a protected library the compiler already resolved. Adds the instance through the guarded native variable API, then imports and verifies code over native DDE. A partial failure reports completed phases and never retries. No graphical insertion or controller action. Then require verification.accepted and a fresh Build/Make.',
+      parameters:{type:'object',additionalProperties:false,required:['project','pou','block','instance','baseline_saved','bindings'],properties:{project:{type:'string'},pou:{type:'string'},block:{type:'string'},library:{type:'string'},instance:{type:'string'},expected_body:{type:'string'},expected_body_sha256:{type:'string',description:'Exact readable text_body_sha256 from mw_code_pous, not raw body_sha256.'},baseline_saved:{type:'boolean'},compiler_verified:{type:'boolean',description:'Verify a protected block against the current compiled contract with a fresh Build/Make. Does not decode protected source.'},group:{type:'string'},before:{type:'string',description:'Unique exact text to insert before; must start at a line boundary. Mutually exclusive with offset.'},offset:{type:'integer',description:'Zero-based character offset at a line boundary; defaults to append.'},bindings:{type:'object',additionalProperties:true,description:'Pin name to the exact value or symbol to bind.'}}},
       output:{schema:openOutput(['verification','completed_phases','evidence_path']),render:(_a,v)=>text(JSON.stringify(v,null,2))},
       execute:async args=>{
         const project=projectOf(args),definitions=defineTools(),tool=name=>definitions.find(t=>t.name===name);
@@ -1759,8 +1759,8 @@ function defineTools() {
     },
     {
       name:'mw_code_block_interface',
-      description:'List bound project/toolbox/firmware blocks, or read one exact block interface with pin names, declared types and input/output/in-out directions. Matches saved references against the live IDE library paths. Reads native firmware .PT tables or project/library declarations, with source/registry hashes; does not infer directions from compiled identifier names. Protected user-library worksheets default to diagnostic explicit cache declarations with insertion_eligible:false. refresh_compiler:true and baseline_saved:true verify the uniquely bound current compiled contract through fresh Build/Make, regenerated dependency/type tables and complete preservation checks. This mode may authorize insertion against that contract; it does not decode protected worksheets or prove freshness of the library cache against its source. Omit name for catalog, specify library to resolve duplicates. IEC/eCLR implicit references are separately identified; controller firmware profile still requires verification. Default is read-only. Explicit compiler refresh performs native Build/Make; no desktop input, library edits or controller action.',
-      parameters:{type:'object',additionalProperties:false,required:['project'],properties:{project:{type:'string'},name:{type:'string'},library:{type:'string'},refresh_compiler:{type:'boolean',description:'For a protected user-library diagnostic interface, verify the current unique bound compiled contract through fresh native Build/Make and complete source/native/library preservation. Does not decode protected source or regenerate the installed library cache.'},baseline_saved:{type:'boolean',description:'Required true for refresh_compiler.'}}},
+      description: 'List bound project, toolbox or firmware blocks, or read one exact block interface with pin names, declared types and input/output/in-out directions. Matches saved references against live IDE library paths and reads native firmware .PT tables or project and library declarations with source/registry hashes; it never infers directions from compiled identifier names. Protected user-library worksheets default to diagnostic cache declarations with insertion_eligible:false. refresh_compiler:true with baseline_saved:true verifies the uniquely bound compiled contract through a fresh Build/Make and full preservation checks; that mode may authorize insertion but does not decode protected worksheets or prove cache freshness. Omit name for the catalog; pass library to resolve duplicates. IEC and eCLR implicit references are identified separately, and the controller firmware profile still needs verification. Read-only unless refresh_compiler is set.',
+      parameters:{type:'object',additionalProperties:false,required:['project'],properties:{project:{type:'string'},name:{type:'string'},library:{type:'string'},refresh_compiler:{type:'boolean',description:'Verify the bound compiled contract through a fresh Build/Make with full source, native and library preservation. Does not decode protected source.'},baseline_saved:{type:'boolean',description:'Required true for refresh_compiler.'}}},
       output:{schema:openOutput(['evidence_kind','action_performed']),render:(_a,v)=>text(JSON.stringify(v,null,2))},
       presentCall:a=>({card:'generic',title:a.refresh_compiler?'Verify current compiled block interface':'Read installed block interface',kind:a.refresh_compiler?'execute':'read'}),
       execute:async args=>{
@@ -1793,8 +1793,8 @@ function defineTools() {
     },
     {
       name:'mw_ide_code_change',
-      description:'Edit an existing writable ST or IL worksheet through MotionWorks native ChangeCodeWS API. Prefer expected_body_sha256 set to text_body_sha256 from mw_code_pous plus small exact changes [{find,replace,count?}] for long bodies; count defaults to 1, ambiguous/missing matches refuse before import. Changes apply sequentially in memory to the independently read saved body. Alternatively supply exact expected_body plus complete code. Choose exactly one form: never include expected_body_sha256 or changes with expected_body + code, even for an empty body. Never reproduce a large body manually or ask the user to paste supported ST/IL edits. Requires reconciled saved baseline and printable ASCII code. Retains the plan, guards complete saved/native source baselines, imports once, saves and verifies full code including comments, unchanged declarations/native flags, tasks, globals and other POUs. Compact result by default; detailed_result:true exposes full output. No mouse input, clipboard, disk source editing, controller action or automatic retry. Check verification.accepted, then fresh Build/Make. Graphical body editing is not supported by this tool.',
-      parameters:{type:'object',additionalProperties:false,required:['project','pou','baseline_saved'],properties:{project:{type:'string'},pou:{type:'string'},baseline_saved:{type:'boolean'},expected_body:{type:'string'},code:{type:'string'},expected_body_sha256:{type:'string',description:'Exact 64-character lowercase text_body_sha256 from mw_code_pous, not raw body_sha256; hashes readable UTF-8 body including restored native comments and line endings.'},changes:{type:'array',items:{type:'object',additionalProperties:false,required:['find','replace'],properties:{find:{type:'string'},replace:{type:'string'},count:{type:'integer',description:'Exact expected nonoverlapping occurrence count, 1-100; defaults to 1.'}}}},detailed_result:{type:'boolean'}}},
+      description: 'Edit an existing writable ST or IL worksheet through the native ChangeCodeWS API. Use expected_body_sha256 from mw_code_pous with small exact changes [{find,replace,count?}] (count defaults to 1; ambiguous or missing matches refuse before import), or exact expected_body plus complete code - never both forms. Changes apply sequentially to the independently read saved body. Needs a reconciled saved baseline and printable ASCII code. Imports once, saves, then verifies code including comments, unchanged declarations and native flags, tasks, globals and other POUs. Compact result unless detailed_result:true. No mouse input, clipboard, disk editing or automatic retry. Check verification.accepted, then Build/Make. Graphical body editing is unsupported.',
+      parameters:{type:'object',additionalProperties:false,required:['project','pou','baseline_saved'],properties:{project:{type:'string'},pou:{type:'string'},baseline_saved:{type:'boolean'},expected_body:{type:'string'},code:{type:'string'},expected_body_sha256:{type:'string',description:'Exact 64-character lowercase text_body_sha256 from mw_code_pous, not raw body_sha256.'},changes:{type:'array',items:{type:'object',additionalProperties:false,required:['find','replace'],properties:{find:{type:'string'},replace:{type:'string'},count:{type:'integer',description:'Expected nonoverlapping occurrence count, 1-100; defaults 1.'}}}},detailed_result:{type:'boolean'}}},
       output:{schema:openOutput(['pou','action_performed','method','native_result','verification','body','evidence_path','next_step']),render:renderNativeEdit},
       execute:async args=>{
         const project=projectOf(args),identity=await assertIdeProjectProven();
@@ -1828,20 +1828,18 @@ function defineTools() {
     },
     ...['pou','task'].map(scope=>({
       name:`mw_ide_${scope}_change`,
-      description:scope==='pou'?
-        'Native COM POU create/copy/rename/delete with complete saved/native inventories, source baseline guards and unrelated source/translation checks. Creates blank PROGRAM, FUNCTION_BLOCK or FUNCTION (explicit simple return_type), with language ST (default), IL, FBD or LD. Graphical defaults must match the independently observed native empty body; unknown bodies fail verification. Copy/rename uses new_name and preserves source language; populated ST and LD copy/rename/delete passed with body/declaration preservation. This does not prove graphical body editing or wiring. Rename/delete requires references_reviewed including graphical/indirect calls; delete additionally requires user_approved. Refuses detected ST/declaration/task references and read-only POUs. Evidence lists graphical POUs the ST scan cannot cover. Full baseline retained in evidence_path. Reconcile/save first, check verification.accepted, then fresh Build/Make. No mouse input, disk-source editing, download or automatic retry.':
-        'Native COM task create/edit/delete/assign/unassign with full saved/native structural/source checks. Edit imports a generated settings file through Task.ImportSettingsFile, preserving all existing fields; settings_changes keys must exist in the saved task. Task names max 7 characters. Assignment requires PROGRAM and optionally an exact instance name. Unassignment requires exact instance and user_approved; task deletion requires approval and an empty task. Reconcile/save first, check verification.accepted, then fresh Build/Make. No download or automatic retry.',
+      description: scope==='pou'? 'Native COM POU create, copy, rename or delete with complete saved/native inventories and unrelated source/translation checks. Creates blank PROGRAM, FUNCTION_BLOCK or FUNCTION (explicit simple return_type) in ST (default), IL, FBD or LD; graphical defaults must match the independently observed native empty body. Copy and rename use new_name and keep the source language. Rename and delete need references_reviewed including graphical and indirect calls; delete also needs user_approved. Refuses detected ST, declaration or task references and read-only POUs. Does not prove graphical body editing or wiring. Reconcile and save first, then Build/Make. No mouse input, disk-source editing, download or automatic retry.' : 'Native COM task create, edit, delete, assign or unassign with full saved and native structural and source checks. Edit imports a generated settings file through Task.ImportSettingsFile, preserving all existing fields; settings_changes keys must already exist in the saved task, and task names are limited to 7 characters. Assignment requires PROGRAM and optionally an exact instance name. Unassignment requires the exact instance and user_approved; deletion requires approval and an empty task. Reconcile and save first, then Build/Make. No download or automatic retry.',
       parameters:{type:'object',additionalProperties:false,required:['project','operation','name','baseline_saved'],properties:{
         project:{type:'string'},operation:{type:'string',enum:scope==='pou'?['create','copy','rename','delete']:['create','edit','delete','assign','unassign']},name:{type:'string'},baseline_saved:{type:'boolean'},user_approved:{type:'boolean'},
         ...(scope==='pou'?{new_name:{type:'string'},pou_type:{type:'string',enum:['PROGRAM','FUNCTION_BLOCK','FUNCTION']},language:{type:'string',enum:['ST','IL','FBD','LD'],description:'Creation language; defaults to ST. Copy retains its source language.'},return_type:{type:'string'},references_reviewed:{type:'boolean'}}:
-          {kind:{type:'string',enum:['CYCLIC','DEFAULT','SYSTEM']},pou:{type:'string'},instance:{type:'string'},settings_changes:{type:'object',additionalProperties:true,description:'Task setting name to its new value; every key must already exist in the saved task.'}})}},
+          {kind:{type:'string',enum:['CYCLIC','DEFAULT','SYSTEM']},pou:{type:'string'},instance:{type:'string'},settings_changes:{type:'object',additionalProperties:true,description:'Task setting name to its new value; every key must already exist in the task.'}})}},
       output:{schema:openOutput(['scope','operation','action_performed','native_result','verification','baseline','expected_native','next_step']),render:(_a,v)=>text(JSON.stringify(v,null,2))},
       execute:args=>executeNativeStructure(scope,args),
     })),
     {
       name:'mw_ide_variable_change',
-      description:'Add, edit or delete ONE declaration through the native MotionWorks COM API by exact POU/resource, without grid input or worksheet navigation. Requires reconciled saved edits; compares the complete live/saved baseline before changing and verifies all saved declarations afterward. Uses the selected existing writable group. Externals require the matching global name/type. Edit accepts the complete desired seven-field declaration and optional explicit boolean flags (retain, pdd, opc, disabled, not_on_plc, redundant); omitted flags stay unchanged. Native flags are independently verified on every declaration. Delete requires explicit approval and reference review. Does not download, compile automatically, move groups or repair/retry partial failures.',
-      parameters:{type:'object',additionalProperties:false,required:['project','operation','baseline_saved'],properties:{project:{type:'string'},pou:{type:'string'},operation:{type:'string',enum:['add','edit','delete']},baseline_saved:{type:'boolean'},name:{type:'string',description:'Existing exact name for edit/delete'},declaration:VARIABLE_SCHEMA,flags:VARIABLE_FLAGS_SCHEMA,user_approved:{type:'boolean'},references_reviewed:{type:'boolean'},rename_reviewed:{type:'boolean'},detailed_result:{type:'boolean',description:'Return full inventories in the rendered result; defaults to compact verification and evidence path.'}}},
+      description: 'Add, edit or delete ONE declaration through the native MotionWorks COM API by exact POU or resource, without grid input or worksheet navigation. Needs reconciled saved edits: it compares the complete live and saved baseline before changing and verifies all saved declarations afterward. Uses the selected existing writable group; externals need the matching global name and type. Edit accepts the complete desired seven-field declaration and optional explicit boolean flags (retain, pdd, opc, disabled, not_on_plc, redundant); omitted flags stay unchanged. Delete needs explicit approval and reference review. Does not download, compile automatically, move groups, or repair and retry partial failures.',
+      parameters:{type:'object',additionalProperties:false,required:['project','operation','baseline_saved'],properties:{project:{type:'string'},pou:{type:'string'},operation:{type:'string',enum:['add','edit','delete']},baseline_saved:{type:'boolean'},name:{type:'string',description:'Existing exact name for edit/delete'},declaration:VARIABLE_SCHEMA,flags:VARIABLE_FLAGS_SCHEMA,user_approved:{type:'boolean'},references_reviewed:{type:'boolean'},rename_reviewed:{type:'boolean'},detailed_result:{type:'boolean',description:'Return full inventories; defaults to compact verification and evidence path.'}}},
       output:{schema:openOutput(['operation','action_performed','native_result','verification','baseline','expected_variables','next_step']),render:renderNativeEdit},
       execute:async args=>{
         const project=projectOf(args),identity=await assertIdeProjectProven();
@@ -1862,8 +1860,8 @@ function defineTools() {
     },
     {
       name:'mw_ide_variable_group_change',
-      description:'Create, rename, or delete an empty local/global declaration group through the native IDE API. Omit pou for resource globals. Requires exact saved/native declaration alignment; preserves every target declaration/flag, POU code, tasks, libraries and unrelated saved streams. Rename changes group labels/member metadata; it does not rename or move variables. Delete requires user_approved:true, no members, and another remaining group. Refuses read-only or ambiguous groups, name collisions, stale source/native baselines and unsaved state. Retains full before/after evidence, renders a compact result; finish intended changes with fresh Build/Make. On unverified action inspect evidence and current state without automatic retry.',
-      parameters:{type:'object',additionalProperties:false,required:['project','operation','name','baseline_saved'],properties:{project:{type:'string'},pou:{type:'string',description:'Exact POU identifier; omit only for resource globals.'},operation:{type:'string',enum:['create','rename','delete']},name:{type:'string',description:'Exact existing group name, or new trimmed group name for create; 1-255 characters.'},new_name:{type:'string',description:'New trimmed group name for rename only; 1-255 characters.'},baseline_saved:{type:'boolean'},user_approved:{type:'boolean'}}},
+      description: 'Create, rename or delete an empty local or global declaration group through the native IDE API. Omit pou for resource globals. Requires exact saved and native declaration alignment and preserves every target declaration and flag, POU code, task, library and unrelated saved stream. Rename changes group labels and member metadata; it does not rename or move variables. Delete requires user_approved:true, no members, and another remaining group. Refuses read-only or ambiguous groups, name collisions, stale source and native baselines, and unsaved state. Retains full before/after evidence and renders a compact result; finish intended changes with a fresh Build/Make. On an unverified action, inspect evidence and current state without an automatic retry.',
+      parameters:{type:'object',additionalProperties:false,required:['project','operation','name','baseline_saved'],properties:{project:{type:'string'},pou:{type:'string',description:'Exact POU identifier; omit only for resource globals.'},operation:{type:'string',enum:['create','rename','delete']},name:{type:'string',description:'Exact existing group name, or the new trimmed name for create; 1-255 characters.'},new_name:{type:'string',description:'New trimmed group name for rename only; 1-255 characters.'},baseline_saved:{type:'boolean'},user_approved:{type:'boolean'}}},
       output:{schema:openOutput(['accepted','action_performed','operation','evidence_path']),render:(_a,v)=>text(JSON.stringify(v))},
       execute:async args=>{
         const project=projectOf(args),identity=await assertIdeProjectProven();
@@ -1890,15 +1888,15 @@ function defineTools() {
     },
     {
       name: 'mw_ide_active_view',
-      description: 'Read the exact active worksheet logical name from the live IDE. Use after native navigation instead of trusting a clipped tab or guessed tree row. Does not open, focus, edit or save a worksheet. No active editor returns an explicit error field, never a guessed target.',
+      description: 'Read the exact active worksheet logical name from the live IDE. Use it after native navigation instead of trusting a clipped tab or a guessed tree row. Does not open, focus, edit or save a worksheet. No active editor returns an explicit error field, never a guessed target.',
       parameters: {type:'object',additionalProperties:false,properties:{}},
       output: {schema:{type:'object',additionalProperties:false,required:['active_project','logical_name','error'],properties:{active_project:{type:'string'},logical_name:{oneOf:[{type:'string'},{type:'null'}]},error:{oneOf:[{type:'string'},{type:'null'}]},ui_responsive:{oneOf:[{type:'boolean'},{type:'null'}]},editor_caption:{oneOf:[{type:'string'},{type:'null'}]},keyboard_focus_verified:{type:'boolean'}}},render:(_a,v)=>text(JSON.stringify(v))},
       execute: () => verb('active_view',{},20000),
     },
     {
       name:'mw_ide_open_worksheet',
-      description:'Open the exact saved POU code/variables worksheet or resource globals through native COM, using the internal document URN resolved from PROJECT.TRE. inspect_only:true checks the current editor without opening it: use after an unsettled request instead of repeating navigation. Verifies the active logical name (or exact native task-instance type and full worksheet/context caption), unchanged modified state, and two responsive frames with the expected editor caption. COM view metadata alone is not editor readiness. keyboard_focus_verified remains false: observe current editor focus through the connected computer tool before keys or text. Native declaration/code APIs need no editor focus. Does not use mouse input, save, edit, compile or download. Code requires a POU; omit POU only for globals. Refuses ambiguous/unparsed tree identities and an unresponsive/unknown IDE frame. An unsettled navigation returns accepted=false and action_performed=true; inspection always returns action_performed=false. Never repeat navigation automatically.',
-      parameters:{type:'object',additionalProperties:false,required:['project','kind'],properties:{project:{type:'string'},kind:{type:'string',enum:['code','variables']},pou:{type:'string'},inspect_only:{type:'boolean',description:'Check current editor identity/readiness only, without OpenDocument or input; defaults to false.'}}},
+      description: 'Open the exact saved POU code or variables worksheet, or resource globals, through native COM using the internal document URN from PROJECT.TRE. inspect_only:true checks the current editor without opening it, for use after an unsettled request instead of repeating navigation. Verifies the active logical name, unchanged modified state, and two responsive frames. COM view metadata alone is not editor readiness, and keyboard_focus_verified stays false: check editor focus through the connected computer tool before keys or text. Native declaration and code APIs need no editor focus. No mouse input, save, edit, compile or download. Code requires a POU; omit POU only for globals. An unsettled navigation returns accepted=false with action_performed=true. Never repeat navigation automatically.',
+      parameters:{type:'object',additionalProperties:false,required:['project','kind'],properties:{project:{type:'string'},kind:{type:'string',enum:['code','variables']},pou:{type:'string'},inspect_only:{type:'boolean',description:'Check editor identity and readiness only, without opening it; defaults false.'}}},
       output:{schema:openOutput(['accepted','action_performed','logical_name','requested_logical_name','active_project','method','is_modified','modified_state_unchanged','urn']),render:(_a,v)=>text(JSON.stringify(v,null,2))},
       execute:async args=>{
         if(args.inspect_only!==undefined&&typeof args.inspect_only!=='boolean')throw new Error('REFUSED: inspect_only must be a boolean');
@@ -1910,7 +1908,7 @@ function defineTools() {
     },
     {
       name: 'mw_ide_variable_plan',
-      description: 'Prepare ONE native variable addition: verify the exact open stage and variable worksheet, retain the complete saved baseline internally, reject duplicate names/addresses and overlength identifiers, and return explicit Create Variable Set dialog values plus a verification token. READ/PLAN ONLY: does not insert or send keys. Reconcile and save unsaved worksheet edits first. Never allocate an IO address from arithmetic alone.',
+      description: 'Prepare ONE native variable addition: verify the exact open stage and variable worksheet, retain the complete saved baseline internally, reject duplicate names and addresses and overlength identifiers, and return explicit Create Variable Set dialog values plus a verification token. READ-ONLY PLANNING: it does not insert or send keys. Reconcile and save unsaved worksheet edits first. Never allocate an IO address from arithmetic alone.',
       parameters:{type:'object',additionalProperties:false,required:['project','baseline_saved','declaration'],properties:{project:{type:'string'},pou:{type:'string'},baseline_saved:{type:'boolean',description:'True only after reconciling unsaved edits and native Save All.'},declaration:VARIABLE_SCHEMA}},
       output:{schema:openOutput(['token','expected_count','declaration','dialog_values','action_performed','expires_in_seconds']),render:(_a,v)=>text(JSON.stringify(v,null,2))},
       execute: async args => {
@@ -1926,7 +1924,7 @@ function defineTools() {
     },
     {
       name: 'mw_ide_variable_verify',
-      description: 'After native Create Variable Set and Save All, verify the entire saved worksheet using the retained plan token. No need to resend hundreds of declarations. Detects missing additions, unrelated renames/group/type/address changes and extra rows. No Save or input; not a keyboard interlock. accepted:true is declaration agreement only, not compiler or machine acceptance.',
+      description: 'After a native Create Variable Set and Save All, verify the entire saved worksheet using the retained plan token, with no need to resend hundreds of declarations. Detects missing additions, unrelated renames and group, type or address changes, and extra rows. No Save and no input; it is not a keyboard interlock. accepted:true is declaration agreement only, not compiler or machine acceptance.',
       parameters:{type:'object',additionalProperties:false,required:['token'],properties:{token:{type:'string'}}},
       output:{schema:openOutput(['accepted','evidence_kind','expected_count','saved_count','missing','unexpected','changed','errors']),render:(_a,v)=>text(JSON.stringify(v,null,2))},
       execute: async args => {
@@ -1942,7 +1940,7 @@ function defineTools() {
     },
     {
       name: 'mw_ide_edit_guide',
-      description: 'IDE-first editing and engineering checklists. Read-only: does not type or edit anything. Use engineering before designing motion logic and read docs/ENGINEERING_WORKFLOW.md. Use the connected computer tool for observed editor actions; never report a checklist as completed work.',
+      description: 'IDE-first editing and engineering checklists. Read-only: it does not type or edit anything. Use engineering before designing motion logic and read docs/ENGINEERING_WORKFLOW.md. Use the connected computer tool for observed editor actions, and never report a checklist as completed work.',
       parameters: { type: 'object', additionalProperties: false, properties: {
         operation: { type: 'string', enum: ['st', 'il', 'variables', 'pou', 'graphical', 'tasks', 'libraries', 'engineering'] },
       }, required: ['operation'] },
@@ -1984,10 +1982,7 @@ function defineTools() {
     },
     {
       name: 'mw_ide_status',
-      description:
-        'Detect the running MotionWorks IEC 3 Pro IDE and report its automation version, '
-        + 'window handle, and whether a project is open in it. Inspect this first, then confirm the active project against mw_project_find: every other '
-        + 'mw_ide_* tool needs a live IDE, and this says whether one exists.',
+      description: 'Detect the running MotionWorks IEC 3 Pro IDE and report its automation version, window handle, and whether a project is open in it. Inspect this first, then confirm the active project against mw_project_find: every other mw_ide_* tool needs a live IDE, and this says whether one exists.',
       parameters: { type: 'object', additionalProperties: false, properties: {} },
       output: {
         schema: STATUS_SCHEMA,
@@ -2035,14 +2030,14 @@ function defineTools() {
 
     {
       name: 'mw_ide_attach',
-      description: 'Select the exact workspace .mwt, make and verify a complete backup, then use those same project files in place. If the IDE is closed, start it and open this project. If it is already open, continue without reopening. Refuses another active project, linked paths, or a changed active project. Obtain user approval for this backup before calling.',
+      description: 'Select the exact workspace .mwt, make and verify a complete backup, then use those same project files in place. If the IDE is closed, start it and open this project; if it is already open, continue without reopening. Refuses another active project, linked paths, or a changed active project. Obtain user approval for this backup before calling.',
       parameters: {
         type: 'object', additionalProperties: false,
         required: ['project', 'backup_approved'],
         properties: {
           project: { type: 'string', description: 'Exact open workspace .mwt path.' },
-          baseline_saved: { type: 'boolean', description: 'True only after reconciling editor buffers and using native Save All when this project is already open.' },
-          backup_approved: { type: 'boolean', description: 'True only after the user approved making a verified backup of this exact workspace project.' },
+          baseline_saved: { type: 'boolean', description: 'True only after reconciling buffers and using native Save All on an already-open project.' },
+          backup_approved: { type: 'boolean', description: 'True only after the user approved a verified backup of this workspace project.' },
         },
       },
       output: {
@@ -2085,14 +2080,7 @@ function defineTools() {
 
     {
       name: 'mw_project_find',
-      description:
-        'Find MotionWorks projects INSIDE THE WORKSPACE. Select the intended .mwt and pass it to mw_ide_attach after first-backup approval. '
-        + 'A MotionWorks project is a .mwt file beside its expanded directory. '
-        + 'IF THERE ARE NO PROJECTS IT SAYS SO and tells you to ask the user for the files - that is '
-        + 'the intended behaviour, not a failure. Do not go looking elsewhere on the machine; a '
-        + 'project outside the workspace is not one the task asked for. '
-        + 'The search is bounded (5 levels, hidden and build directories skipped) so it stays fast '
-        + 'on a large tree.',
+      description: 'Find MotionWorks projects INSIDE THE WORKSPACE. Select the intended .mwt and pass it to mw_ide_attach after first-backup approval. A MotionWorks project is a .mwt file beside its expanded directory. If there are no projects it says so and tells you to ask the user for the files - that is the intended behaviour, not a failure. Do not go looking elsewhere on the machine; a project outside the workspace is not one the task asked for. The search is bounded to 5 levels, skipping hidden and build directories.',
       parameters: {
         type: 'object',
         additionalProperties: false,
@@ -2161,23 +2149,7 @@ function defineTools() {
     },
     {
       name: 'mw_ide_stage',
-      description:
-        'Copy a MotionWorks project into this plugin\'s staging area so it can be opened '
-        + 'without touching the original. Accepts a project folder or its .mwt file, and copies '
-        + 'both the .mwt and its sibling expanded directory. This only ever copies; the source '
-        + 'is never modified, moved or deleted. '
-        + 'THE SOURCE MUST BE INSIDE THE WORKSPACE. There is no override. A project elsewhere on '
-        + 'the machine is refused, because a task that mentions MotionWorks does not mean "find '
-        + 'any project anywhere". Call mw_project_find first, and if it holds nothing, STOP AND '
-        + 'ASK THE USER. To look at another program for reference, read it with reference: true '
-        + '— that does not stage it and does not open it. '
-        + 'After the copy, the .mwt is rewritten so the path stored inside it is the staged '
-        + 'directory. Left alone, opening the wrapper loads whatever directory it still names, '
-        + 'which has been a project outside the workspace. Existing stages require '
-        + 'replace_existing:true after reviewing replacement; the old folder, wrapper and '
-        + 'identity are retained together in a hashed backup. Incoming copy/binding is prepared '
-        + 'before replacing files. Refuses an open target stage or unknown IDE state. '
-        + 'Prefer continuing the existing verified stage; never restage to repair an attach error.',
+      description: 'Copy a MotionWorks project into this plugin\'s staging area so it opens without touching the original. Accepts a project folder or its .mwt, and copies the .mwt plus its sibling expanded directory; the source is never modified, moved or deleted. The source MUST be inside the workspace, with no override; a project elsewhere is refused. Call mw_project_find first, and if it finds nothing, stop and ask the user. reference:true reads another program without staging or opening it. The copied .mwt is rewritten to name the staged directory. Existing stages need replace_existing:true after reviewing the replacement; the old folder, wrapper and identity are kept in a hashed backup. Prefer continuing an existing verified stage; never restage to repair an attach error.',
       parameters: {
         type: 'object',
         additionalProperties: false,
@@ -2185,9 +2157,9 @@ function defineTools() {
         properties: {
           source: {
             type: 'string',
-            description: 'Path to the project folder or its .mwt file. Must be inside the workspace.',
+            description: 'Project folder or its .mwt file. Must be inside the workspace.',
           },
-          replace_existing: {type:'boolean',description:'Explicitly reviewed replacement of an existing stage. Defaults false; the prior stage is backed up before replacement. Does not permit replacing an open stage.'},
+          replace_existing: {type:'boolean',description:'Reviewed replacement of an existing stage; defaults false. The prior stage is backed up first. Cannot replace an open stage.'},
         },
       },
       output: {
@@ -2364,20 +2336,15 @@ function defineTools() {
 
     {
       name: 'mw_ide_open',
-      description:
-        'Open a backed-up workspace project inside the running MotionWorks IDE. Use mw_ide_attach to select and back up a workspace project. If another project is already open, '
-        + 'ask the user whether the agent may save and close it, then pass user_approved=true '
-        + 'and its exact path as expected_project. A changed project is refused. After the IDE loads, the project it '
-        + 'actually has open is compared with the path that was asked for. A mismatched project '
-        + 'is left open and the call fails. Success means the selected workspace project is active.',
+      description: 'Open a backed-up workspace project inside the running MotionWorks IDE. Use mw_ide_attach to select and back up a workspace project first. If another project is already open, ask the user whether the agent may save and close it, then pass user_approved=true and its exact path as expected_project; a changed project is refused. After the IDE loads, the project it actually has open is compared with the path that was requested. A mismatched project is left open and the call fails. Success means the selected workspace project is active.',
       parameters: {
         type: 'object',
         additionalProperties: false,
         required: ['path'],
         properties: {
           path: { type: 'string', description: 'Backed-up workspace .mwt path.' },
-          user_approved: { type: 'boolean', description: 'True only after the user approved saving and closing the named current project.' },
-          expected_project: { type: 'string', description: 'Exact current project path named in the user approval; checked again immediately before closing it.' },
+          user_approved: { type: 'boolean', description: 'True only after the user approved saving and closing that project.' },
+          expected_project: { type: 'string', description: 'Exact current project path named in the approval; rechecked immediately before closing.' },
         },
       },
       output: {
@@ -2427,9 +2394,7 @@ function defineTools() {
 
     {
       name: 'mw_ide_pous',
-      description:
-        'List the POUs of the project open in the IDE, read from the IDE\'s live object model '
-        + '(not from files). Language codes: 1=IL, 2=ST, 3=FBD, 4=LD, 5=SFC, 6=MSFC, 7=FFLD.',
+      description: 'List the POUs of the project open in the IDE, read from the IDE\'s live object model (not from files). Language codes: 1=IL, 2=ST, 3=FBD, 4=LD, 5=SFC, 6=MSFC, 7=FFLD.',
       parameters: { type: 'object', additionalProperties: false, properties: {} },
       output: {
         schema: {
@@ -2463,11 +2428,7 @@ function defineTools() {
 
     {
       name: 'mw_ide_variables',
-      description:
-        'Read the live variable model of the project open in the IDE: name, data type, section, group, description, initial '
-        + 'value, IEC address and six native flags (retain, pdd, opc, disabled, not_on_plc, redundant) per declaration, with group read_only state. Optionally '
-        + 'restrict to one POU. This is the IDE\'s own model, so it needs no knowledge of the '
-        + 'on-disk container format.',
+      description: 'Read the live variable model of the project open in the IDE: name, data type, section, group, description, initial value, IEC address and six native flags (retain, pdd, opc, disabled, not_on_plc, redundant) per declaration, with group read_only state. Optionally restrict to one POU. This is the IDE\'s own model, so it needs no knowledge of the on-disk container format.',
       parameters: {
         type: 'object',
         additionalProperties: false,
@@ -2544,10 +2505,7 @@ function defineTools() {
 
     {
       name: 'mw_ide_make',
-      description:
-        'Run Make in the IDE (ActiveProject.Compile(1) = adeCtMake) and report the verdict. '
-        + 'Make links the already-built parts; prefer mw_ide_build after a code change, because '
-        + 'a plain Make can reuse stale symbol data.',
+      description: 'Run Make in the IDE (ActiveProject.Compile(1) = adeCtMake) and report the verdict. Make links the already-built parts; prefer mw_ide_build after a code change, because a plain Make can reuse stale symbol data.',
       parameters: { type: 'object', additionalProperties: false, properties: {} },
       output: { schema: BUILD_SCHEMA, render: renderBuild },
       presentCall: () => ({ card: 'generic', title: 'Make in MotionWorks IEC', kind: 'execute' }),
@@ -2559,7 +2517,7 @@ function defineTools() {
 
     {
       name: 'mw_ide_build',
-      description: 'Run Compile(2), which is Build, not Rebuild. Completion requires an observed pending-to-compiled transition; otherwise reports unverified. Use the observed IDE menu for Rebuild; the API is unsupported on the tested IDE.',
+      description: 'Run Compile(2), which is Build, not Rebuild. Completion requires an observed pending-to-compiled transition; otherwise it reports unverified. Use the observed IDE menu for Rebuild; the API is unsupported on the tested IDE.',
       parameters: { type: 'object', additionalProperties: false, properties: {} },
       output: { schema: BUILD_SCHEMA, render: renderBuild },
       presentCall: () => ({ card: 'generic', title: 'Build in MotionWorks IEC', kind: 'execute' }),
@@ -2574,12 +2532,7 @@ function defineTools() {
     },
     {
       name: 'mw_ide_compile_state',
-      description:
-        'Report whether the open project is COMPILED and whether it has MODIFIED since, without '
-        + 'building anything. Cheap and side-effect free, so it is the right check before deciding '
-        + 'whether a build is needed, and after a build whose verdict looks surprising. '
-        + 'is_modified=true with is_compiled=true means there are edits that have not been '
-        + 'compiled yet.',
+      description: 'Report whether the open project is COMPILED and whether it has MODIFIED since, without building anything. Cheap and side-effect free, so it is the right check before deciding whether a build is needed, and after a build whose verdict looks surprising. is_modified=true with is_compiled=true means there are edits that have not been compiled yet.',
       parameters: { type: 'object', additionalProperties: false, properties: {} },
       output: {
         schema: {
@@ -2603,12 +2556,7 @@ function defineTools() {
     },
     {
       name: 'mw_ide_save',
-      description:
-        'Save the verified staged project already open in the IDE through ActiveProject.Save. '
-        + 'No offline source writes. Useful after visible editor changes and native task assignment. '
-        + 'Reports elapsed_s and modified/compiled flags; read saved ST/declarations back to prove '
-        + 'the intended worksheets persisted. Do not assume this equals File > Save All on every '
-        + 'IDE version. Requires a running IDE and refuses an unverified project.',
+      description: 'Save the verified staged project already open in the IDE through ActiveProject.Save. No offline source writes. Useful after visible editor changes and native task assignment. Reports elapsed_s and the modified and compiled flags; read saved Structured Text and declarations back to prove the intended worksheets persisted. Do not assume this equals File > Save All on every IDE version. Requires a running IDE and refuses an unverified project.',
       parameters: { type: 'object', additionalProperties: false, properties: {} },
       output: {
         schema: {
@@ -2632,31 +2580,19 @@ function defineTools() {
 
     {
       name: 'mw_ide_errors',
-      description:
-        'Read the IDE compiler messages AS TEXT. Call this after any build that did not compile '
-        + 'cleanly: the automation API returns the verdict but never the messages, so this reads '
-        + 'the Message Window list control through MSAA and returns each line verbatim, e.g. '
-        + '"No matching global variable found for \'x:y\' in resource \'Resource\'!". Panes: '
-        + 'Errors (default), Warnings, Build, Infos, PLC Errors, Print, Statistics, SCC. '
-        + 'Activates the exact named pane, exposes a hidden Message Window through its verified native menu command, and requires one visible list with nonzero area. '
-        + 'A minimized frame refuses before pane activation and names the exact frame to restore deliberately through the connected Windows tool; do not repeat the read until state changes. Minimized-frame failure does not disprove hidden-dock recovery. '
-        + 'Unknown panes, ambiguous controls and unreadable rows refuse instead of returning another pane or a false empty result. '
-        + 'AN EMPTY PANE IS NOT BY ITSELF A CLEAN BUILD: this tool also reads the compile state, and '
-        + 'when the pane is empty while the project is NOT compiled it says so, because that pair is '
-        + 'unverified; this alone does not establish a stall or damaged source. Set screenshot:true to also capture the '
-        + 'pane, and limit to raise the cap.',
+      description: 'Read the IDE compiler messages as text: the API returns a verdict but never the messages, so this reads the Message Window list through MSAA. Panes: Errors (default), Warnings, Build, Infos, PLC Errors, Print, Statistics, SCC. Needs one visible list of nonzero area; a hidden Message Window is exposed through its native menu command. A minimized frame refuses before pane activation and names the frame to restore; do not repeat the read until state changes. Unknown panes, ambiguous controls and unreadable rows refuse. An empty pane is not by itself a clean build: the compile state is read too, and an empty pane on an uncompiled project reports unverified. screenshot:true also captures the pane; limit raises the cap.',
       parameters: {
         type: 'object',
         additionalProperties: false,
         properties: {
           pane: {
             type: 'string',
-            description: 'Exact output pane name: Errors (default), Warnings, Build, Infos, PLC Errors, Print, Statistics, or SCC.',
+            description: 'Output pane: Errors (default), Warnings, Build, Infos, PLC Errors, Print, Statistics, or SCC.',
           },
           limit: { type: 'integer', description: 'Maximum lines to return (1-5000). Defaults to 200.' },
           screenshot: {
             type: 'boolean',
-            description: 'Also capture the pane to a PNG and return its path. Defaults to false.',
+            description: 'Also capture the pane to a PNG and return its path; defaults false.',
           },
         },
       },
@@ -2775,13 +2711,7 @@ function defineTools() {
 
     {
       name: 'mw_ide_start',
-      description:
-        'Start MotionWorks IEC visibly with the verified workspace project wrapper. '
-        + 'Resolves the exact native Use Trial prompt during initial startup or an already-running blocked startup; do not launch a second IDE. '
-        + 'Source edits happen inside the open IDE. '
-        + 'Inspect mw_ide_status afterward; continue the selected workspace project if it is already open, '
-        + 'or use mw_ide_open when no project is open. If MotionWorks '
-        + 'restores another project, it is left open until the user approves saving and closing it.',
+      description: 'Start MotionWorks IEC visibly with the verified workspace project wrapper. Resolves the exact native Use Trial prompt during initial startup or an already-running blocked startup; do not launch a second IDE. Source edits happen inside the open IDE. Inspect mw_ide_status afterward, then continue the selected workspace project if it is already open, or use mw_ide_open when no project is open. If MotionWorks restores another project it is left open until the user approves saving and closing it.',
       parameters: {
         type: 'object',
         additionalProperties: false,
@@ -2850,16 +2780,7 @@ function defineTools() {
 
     {
       name: 'mw_ide_trial',
-      description:
-        'Check for and optionally answer the MotionWorks licence/trial dialog. An '
-        + 'unlicensed build shows a modal dialog ("Use Trial" / "Activate Online" / '
-        + '"Activate by Phone") BEFORE the IDE creates any window of its own, and until '
-        + 'it is answered the IDE has no project services, so every OpenProject fails '
-        + 'with "Internal error". mw_ide_start checks it even when a blocked IDE frame exists. '
-        + 'This tool selects only mwctVerify-owned dialogs and the exact Use Trial control. '
-        + 'An attempt uses native UI Automation Invoke, or a posted native button command '
-        + 'if Invoke is unavailable, and verifies closure. Never retry an ambiguous action '
-        + 'or start another IDE while the existing process is waiting.',
+      description: 'Check for and optionally answer the MotionWorks licence or trial dialog. An unlicensed build shows a modal dialog ("Use Trial" / "Activate Online" / "Activate by Phone") BEFORE the IDE creates any window of its own, and until it is answered the IDE has no project services, so every OpenProject fails with "Internal error". mw_ide_start checks it even when a blocked IDE frame exists. Selects only mwctVerify-owned dialogs and the exact Use Trial control, using native UI Automation Invoke or a posted native button command if Invoke is unavailable, and verifies closure. Never retry an ambiguous action or start another IDE while the existing process is waiting.',
       parameters: {
         type: 'object',
         additionalProperties: false,
@@ -2903,23 +2824,14 @@ function defineTools() {
 
     {
       name: 'mw_ide_state',
-      description:
-        'Report what the IDE is ACTUALLY doing right now, including modal dialogs the '
-        + 'automation API cannot see. **Call this after every mw_ide_* step.** While a '
-        + 'dialog is up, the COM API returns nothing useful: IsProjectOpen reports false '
-        + 'or throws, so "no project open" or a bare failure must NOT be read as "the IDE '
-        + 'closed". Reports minimized/visible frame state separately from blocked. A minimized IDE must be deliberately restored through the connected Windows tool before diagnostics; not-blocked does not prove a visible frame. Returns whether the IDE is blocked, and for each dialog its exact '
-        + 'message text and button labels Ã¢â‚¬â€ read with WM_GETTEXT from the standard Win32 '
-        + 'dialog, so it is exact rather than an OCR guess. Set screenshot:true to also '
-        + 'capture the IDE when a dialog is owner-drawn and has no readable text (the .NET '
-        + 'licence dialog is one such case).',
+      description: 'Report what the IDE is actually doing now, including modal dialogs the automation API cannot see. Call this after every mw_ide_* step. While a dialog is up the COM API returns nothing useful - IsProjectOpen reports false or throws - so "no project open" or a bare failure must NOT be read as "the IDE closed". Reports minimized or visible frame state separately from blocked; a minimized IDE must be deliberately restored before diagnostics, because not-blocked does not prove a visible frame. Returns whether the IDE is blocked, and for each dialog its exact message text and button labels read with WM_GETTEXT, so they are exact rather than an OCR guess. screenshot:true also captures the IDE when a dialog has no readable text, such as the .NET licence dialog.',
       parameters: {
         type: 'object',
         additionalProperties: false,
         properties: {
           screenshot: {
             type: 'boolean',
-            description: 'Also capture the IDE to a PNG and return its path. Defaults to false.',
+            description: 'Also capture the IDE to a PNG and return its path; defaults false.',
           },
         },
       },
@@ -3016,15 +2928,7 @@ function defineTools() {
 
     {
       name: 'mw_ide_dialog',
-      description:
-        'Answer a modal dialog that MotionWorks is waiting on. The IDE asks questions '
-        + '(defragment this project?, load a project that was not closed cleanly?, licence '
-        + 'notices) in standard Win32 dialogs, and while one is up the automation API is '
-        + 'silent Ã¢â‚¬â€ which is what makes a healthy IDE look closed. Name the button to press '
-        + '("Yes", "No", "OK", ...) and it is clicked with BM_CLICK, no synthetic input. '
-        + 'mw_ide_open already answers the safe, recurring ones by itself; this is for '
-        + 'anything else. Only ever relevant to a STAGED COPY: the plugin never opens your '
-        + 'original project, so answering "Yes, load anyway" cannot endanger real work.',
+      description: 'Answer a modal dialog that MotionWorks is waiting on. The IDE asks questions (defragment this project?, load a project that was not closed cleanly?, licence notices) in standard Win32 dialogs, and while one is up the automation API is silent, which is what makes a healthy IDE look closed. Name the button to press ("Yes", "No", "OK", ...) and it is clicked with BM_CLICK, with no synthetic input. mw_ide_open already answers the safe recurring ones by itself; this is for anything else. Only ever relevant to a STAGED COPY: the plugin never opens your original project, so answering "Yes, load anyway" cannot endanger real work.',
       parameters: {
         type: 'object',
         additionalProperties: false,
@@ -3076,18 +2980,13 @@ function defineTools() {
 
     {
       name: 'mw_ide_close',
-      description:
-        'Close MotionWorks IEC gracefully for an explicitly approved persistence test or recovery. '
-        + 'Normal code editing happens inside the open IDE; closing is not a prerequisite. '
-        + 'Ask the user whether the agent may save and close MotionWorks first. Pass '
-        + 'user_approved=true and the exact open project path as expected_project. '
-        + 'If the project changed, the close is refused.',
+      description: 'Close MotionWorks IEC gracefully for an explicitly approved persistence test or recovery. Normal code editing happens inside the open IDE, so closing is not a prerequisite. Ask the user whether the agent may save and close MotionWorks first, then pass user_approved=true and the exact open project path as expected_project. If the project changed, the close is refused.',
       parameters: {
         type: 'object', additionalProperties: false,
         required: ['user_approved'],
         properties: {
           user_approved: { type: 'boolean', description: 'True only after the user approved saving and closing MotionWorks.' },
-          expected_project: { type: 'string', description: 'Exact open project path named in the approval. Omit only if no project is open.' },
+          expected_project: { type: 'string', description: 'Exact open project path named in the approval. Omit only if none is open.' },
         },
       },
       output: {
@@ -3121,12 +3020,7 @@ function defineTools() {
 
     {
       name: 'mw_code_pous',
-      description:
-        'List the POUs of a staged project with each one\'s language and body stream, read '
-        + 'straight from the project files, including body_sha256 for exact conversion preconditions. '
-        + 'has_st_body identifies readable ST text; graphical bodies use native IDE operations. '
-        + 'Defaults to the staged project. Pass reference: true with a project path to '
-        + 'read a different program, including one outside the workspace, without staging or opening it.',
+      description: 'List the POUs of a staged project with each one\'s language and body stream, read straight from the project files, including body_sha256 for exact conversion preconditions. has_st_body identifies readable ST text; graphical bodies use native IDE operations. Defaults to the staged project. Pass reference:true with a project path to read a different program, including one outside the workspace, without staging or opening it.',
       parameters: {
         type: 'object',
         additionalProperties: false,
@@ -3181,17 +3075,7 @@ function defineTools() {
     },
     {
       name: 'mw_code_types',
-      description:
-        'Read the project\'s user-defined data types (UDTs) from DT/Tyllist.typ - the member '
-        + 'names and types an agent needs to write correct Structured Text. Without this you '
-        + 'are writing code against types you cannot see: a POU here declares CamData : '
-        + 'CamSegmentStruct and CamTable : Y_MS_CAM_STRUCT, and touching either needs its '
-        + 'members. Omit name to list every type the project defines (297 in the measured '
-        + 'project, matching the file\'s own NDTE header exactly); pass name to get one type '
-        + 'in full, with members, types and array bounds. Types used by POUs but absent from '
-        + 'the list (CamGenerator, Y_CamStructSelect) come from an installed LIBRARY rather '
-        + 'than the project and are reported as not defined here - they are not missing, they '
-        + 'are elsewhere.',
+      description: 'Read the project\'s user-defined data types (UDTs) from DT/Tyllist.typ - the member names and types needed to write correct Structured Text. Omit name to list every type the project defines, matching the file\'s own NDTE header; pass name for one type in full, with members, types and array bounds. Types used by POUs but absent from the list come from an installed LIBRARY rather than the project and are reported as not defined here - they are not missing, they are elsewhere.',
       parameters: {
         type: 'object',
         additionalProperties: false,
@@ -3243,19 +3127,7 @@ function defineTools() {
     },
     {
       name: 'mw_code_library',
-      description:
-        'Read the LIBRARY side of the project: which blocks it uses, and what one block '
-        + 'offers. This is the other half of writing code against things you cannot see - a '
-        + 'POU here declares fbCamGen : CamGenerator, and calling that block needs its '
-        + 'member names. Omit name to list every block the dependency manifest names, with '
-        + 'its kind and what it calls (measured: CalcSpline <- CalcSplineMatrix, CamGenerator '
-        + '<- CalcSpline, CalcBezier, MasterIndex_Lookup, TopCutterCamSetup <- CamGenerator). '
-        + 'Pass name for one block, read from its compiled .NET assembly. IMPORTANT: the '
-        + 'identifier list does NOT record input/output DIRECTION - Execute and Done are '
-        + 'distinguishable by convention, not by evidence - so read the declaration in the '
-        + 'native function-block definition or mw_code_reference; a caller declaration alone does not establish pin direction. Compiler '
-        + 'temporaries (__temp_1..50, s1..s7) are filtered out rather than reported as part '
-        + 'of the interface.',
+      description: 'Read the library side of the project: which blocks it uses, and what one block offers. Omit name to list every block the dependency manifest names, with kind and what it calls. Pass name for one block, read from its compiled .NET assembly. The identifier list does NOT record input/output DIRECTION, so read the declaration in the native function-block definition or mw_code_reference; a caller declaration alone does not establish pin direction. Compiler temporaries (__temp_1..50, s1..s7) are filtered out rather than reported as part of the interface.',
       parameters: {
         type: 'object',
         additionalProperties: false,
@@ -3299,7 +3171,7 @@ function defineTools() {
     },
     {
       name: 'mw_code_reference',
-      description: 'Search reviewed Yaskawa programming references with document ID, revision, section and physical PDF page links. Works offline with curated guidance; synchronized official PDFs add full-page search. Omit query to list sources/topics; pass block for one reviewed FB interface. Historical signatures are advisory until installed versions match.',
+      description: 'Search reviewed Yaskawa programming references with document ID, revision, section and physical PDF page links. Works offline with curated guidance; synchronized official PDFs add full-page search. Omit query to list sources and topics; pass block for one reviewed FB interface. Historical signatures are advisory until the installed versions match.',
       parameters: { type: 'object', additionalProperties: false, properties: {
         query: { type: 'string', description: 'Search text, at most 256 characters.' }, source_id: { type: 'string' },
         block: { type: 'string', description: 'Function-block type, e.g. MC_ReadActualPosition.' },
@@ -3310,7 +3182,7 @@ function defineTools() {
     },
     {
       name: 'mw_code_reference_sync',
-      description: 'Download and index allowlisted official Yaskawa PDFs inside this workspace .motionworks/references. No project files are transmitted. Requires network access and pypdf in the plugin Python runtime. Verifies reviewed PDF hashes before using versioned page citations; changed vendor editions require catalog review. Curated references remain usable if downloads are unavailable.',
+      description: 'Download and index allowlisted official Yaskawa PDFs inside this workspace under .motionworks/references. No project files are transmitted. Requires network access and pypdf in the plugin Python runtime. Verifies reviewed PDF hashes before using versioned page citations, and changed vendor editions require catalog review. Curated references remain usable if downloads are unavailable.',
       parameters: { type: 'object', additionalProperties: false, properties: {
         source_ids: { type: 'array', description: 'Reference sources to sync; list each source at most once.', items: { type: 'string', enum: ['basics', 'plcopen', 'toolbox', 'quick'] } },
       } },
@@ -3319,12 +3191,12 @@ function defineTools() {
     },
     {
       name: 'mw_code_check_program',
-      description: 'Source-linked programming review: external/global scope and types, integer bounds, named function-block pin direction/types, and task-binding candidates. Pass pou and body to check proposed ST before writing; omit them to review existing ST POUs. installed_interfaces:true resolves exact native-bound installed declarations; unresolved/ambiguous interfaces do not fall back to historical signatures. Default is read-only. For ONE protected block selected in interface_libraries, refresh_compiler:true with baseline_saved:true runs fresh native Build/Make and complete source/native/library checks, then reviews against that current compiled contract. It does not decode protected source or prove installed-cache freshness. Project-defined interfaces take precedence. Reports coverage and provenance; no source editing or controller action.',
+      description: 'Source-linked programming review: external and global scope and types, integer bounds, named function-block pin direction and types, and task-binding candidates. Pass pou and body to check proposed ST before writing; omit them to review existing ST POUs. installed_interfaces:true resolves exact native-bound installed declarations, and unresolved or ambiguous interfaces do not fall back to historical signatures. Read-only by default. For ONE protected block selected in interface_libraries, refresh_compiler:true with baseline_saved:true runs a fresh native Build/Make with complete source/native/library checks, then reviews against that compiled contract; it does not decode protected source or prove installed-cache freshness. Project-defined interfaces take precedence.',
       parameters: { type: 'object', additionalProperties: false, properties: {
         project: { type: 'string' }, pou: { type: 'string' }, body: { type: 'string' }, installed_interfaces: { type: 'boolean' },
-        refresh_compiler: {type:'boolean',description:'Explicit fresh native Build/Make for one exact protected block/library selected in interface_libraries. Requires installed_interfaces:true and baseline_saved:true. Default review never builds.'},
+        refresh_compiler: {type:'boolean',description:'Fresh Build/Make for one protected block selected in interface_libraries. Requires installed_interfaces and baseline_saved; default review never builds.'},
         baseline_saved: {type:'boolean'},
-        interface_libraries: {type:'object',description:'Explicit type-to-library selection for duplicate installed FB names, e.g. {TON: "IEC"}. Requires installed_interfaces:true; project-defined interfaces still take precedence.',additionalProperties:true},
+        interface_libraries: {type:'object',description:'Type-to-library selection for duplicate installed FB names, e.g. {TON: "IEC"}. Requires installed_interfaces.',additionalProperties:true},
       } },
       output: { schema: WRITE_SCHEMA, render: renderProgrammingReview },
       execute: async (args) => {
@@ -3384,7 +3256,7 @@ function defineTools() {
     },
     {
       name: 'mw_code_manual',
-      description: 'Search installed MotionWorks PDF text and reviewed, versioned Yaskawa references. Omit term to list available manuals, CHM archive filenames and the reviewed catalog. Use mw_code_installed_help for actual installed CHM topic text. Installed legacy PDF extraction is heuristic and has no verified revision/page citations; prefer mw_code_reference for source-linked programming guidance. Full PDF search requires mw_code_reference_sync; curated guidance works offline.',
+      description: 'Search installed MotionWorks PDF text and reviewed, versioned Yaskawa references. Omit term to list available manuals, CHM archive filenames and the reviewed catalog. Use mw_code_installed_help for actual installed CHM topic text. Installed legacy PDF extraction is heuristic and carries no verified revision or page citations; prefer mw_code_reference for source-linked programming guidance. Full PDF search requires mw_code_reference_sync, while curated guidance works offline.',
       parameters: {
         type: 'object',
         additionalProperties: false,
@@ -3428,15 +3300,7 @@ function defineTools() {
     },
     {
       name: 'mw_code_globals',
-      description:
-        'List the project VAR_GLOBAL declarations - the tags every POU can see, with type, '
-        + 'group, IEC address, initial value and description. Read this BEFORE writing code that '
-        + 'references a shared tag, and after native IDE Save All to confirm the '
-        + 'global landed. Each consuming POU needs a matching VAR_EXTERNAL declaration. '
-        + 'The automation API exposes NO project-level variable collection '
-        + '(project.Variables, project.Globals and project.VariableGroups are all absent or '
-        + 'empty), so the live variable model cannot show globals at all - this reads them from '
-        + 'the resource declaration stream instead.',
+      description: 'List the project VAR_GLOBAL declarations - the tags every POU can see, with type, group, IEC address, initial value and description. Read this BEFORE writing code that references a shared tag, and after a native IDE Save All to confirm the global landed. Each consuming POU needs a matching VAR_EXTERNAL declaration. The automation API exposes NO project-level variable collection - project.Variables, project.Globals and project.VariableGroups are all absent or empty - so the live variable model cannot show globals at all; this reads the resource declaration stream instead.',
       parameters: {
         type: 'object',
         additionalProperties: false,
@@ -3493,10 +3357,10 @@ function defineTools() {
 
     {
       name: 'mw_code_verify_variables',
-      description: 'After native IDE Save, compare a POU or global worksheet against the COMPLETE planned final declaration list (baseline plus authorized changes). Detects overwritten existing names, renamed groups, missing/extra rows and type/usage/address/init/description changes. Read-only; cannot stop generic keyboard input and cannot certify unsaved cells or compiler acceptance. Omit pou for globals. Do not build or claim success on accepted:false.',
+      description: 'After a native IDE Save, compare a POU or global worksheet against the COMPLETE planned final declaration list (baseline plus authorized changes). Detects overwritten existing names, renamed groups, missing or extra rows, and type, usage, address, init or description changes. Read-only; it cannot stop generic keyboard input and cannot certify unsaved cells or compiler acceptance. Omit pou for globals. Do not build or claim success on accepted:false.',
       parameters: { type: 'object', additionalProperties: false, required: ['expected_variables'], properties: {
         project: { type: 'string' }, pou: { type: 'string' },
-        expected_variables: { type: 'array', items: VARIABLE_SCHEMA, description: 'Complete planned final worksheet, from the saved baseline with only authorized edits; all seven fields required, use null for absent metadata. Never construct it from already-damaged read-back.' },
+        expected_variables: { type: 'array', items: VARIABLE_SCHEMA, description: 'Complete planned final worksheet: the saved baseline with only authorized edits. All seven fields required; use null for absent metadata.' },
       } },
       output: { schema: { type: 'object', additionalProperties: false,
         required: ['accepted', 'evidence_kind', 'expected_count', 'saved_count', 'missing', 'unexpected', 'changed', 'errors'], properties: {
@@ -3516,11 +3380,7 @@ function defineTools() {
     },
     ...['st','text'].map(kind=>({
       name: 'mw_code_read_'+kind,
-      description:
-        (kind==='text'?'Read one supported ST or IL POU body, restoring native comments, plus its ':'Read one POU\'s Structured Text body, restoring native comments, plus its ')
-        + 'variable declarations. This is how the agent sees the code it is about to change. '
-        + 'Pass reference: true and a project path to read a POU from another program, including '
-        + 'one outside the workspace. That read does not stage, open, or modify it.',
+      description: kind==='text'? 'Read one supported ST or IL POU body, restoring native comments, plus its variable declarations, so the agent sees the code it is about to change. Pass reference:true and a project path to read a POU from another program, including one outside the workspace; that read does not stage, open or modify it.' : 'Read one POU\'s Structured Text body, restoring native comments, plus its variable declarations, so the agent sees the code it is about to change. Pass reference:true and a project path to read a POU from another program, including one outside the workspace; that read does not stage, open or modify it.',
       parameters: {
         type: 'object',
         additionalProperties: false,
@@ -3557,15 +3417,7 @@ function defineTools() {
     })),
     {
       name: 'mw_code_export_pou',
-      description:
-        'Export one POU to a readable file: its Structured Text body followed by its '
-        + 'declarations, with the POU name, language and source path in a short header. '
-        + 'This is the practical form of "export" for this IDE - the automation API also '
-        + 'advertises plc_open_xml_export and iec_61131-3_file_export, but those providers '
-        + 'take no arguments and are driven by IDE dialogs only, so they cannot be called '
-        + 'headlessly (see docs/import-export.md). Use this to hand a POU to the user, to '
-        + 'keep a copy before rewriting it, or to diff two versions. The inverse is '
-        + 'the native IDE editors/import dialogs; this readable export is not an import format.',
+      description: 'Export one POU to a readable file: its Structured Text body followed by its declarations, with the POU name, language and source path in a short header. This is the practical form of "export" for this IDE - the automation API also advertises plc_open_xml_export and iec_61131-3_file_export, but those providers take no arguments and are driven by IDE dialogs only, so they cannot be called headlessly. Use it to hand a POU to the user, keep a copy before rewriting, or diff two versions. The inverse is the native IDE editors and import dialogs; this readable export is not an import format.',
       parameters: {
         type: 'object',
         additionalProperties: false,
@@ -3701,18 +3553,7 @@ function defineTools() {
 
     {
       name: 'mw_code_eip_map',
-      description:
-        'Summarize the EtherNet/IP assembly map: the size each assembly DECLARES, how many words the '
-        + 'project actually USES, and how many are left - so "is there room for another status '
-        + 'value?" is one call instead of a reconstruction. Two sources, because they hold two '
-        + 'halves of the answer: the L5X module definition gives the declared assembly size '
-        + '(PrimCxnInputSize/PrimCxnOutputSize), and the project\'s own %I/%Q addresses give the used '
-        + 'range. Pass both for a full answer, or either alone for that half. '
-        + 'The assembly is treated as a WINDOW from the lowest address in each direction, so '
-        + 'addresses belonging to a different module\'s area are reported separately rather than '
-        + 'folded into the count. `next_free_word_address` is the first address past the highest one '
-        + 'in use - it is arithmetic over what was read, NOT a claim that the peer program leaves it '
-        + 'alone; confirm a new offset against the CompactLogix side before writing it. Read-only.',
+      description: 'Summarize the EtherNet/IP assembly map: the size each assembly DECLARES, how many words the project actually USES, and how many are left, so "is there room for another status value?" is one call instead of a reconstruction. Two sources hold the two halves: the L5X module definition gives the declared size (PrimCxnInputSize/PrimCxnOutputSize), and the project\'s own %I/%Q addresses give the used range; pass both or either. The assembly is treated as a window from the lowest address in each direction, so addresses belonging to another module\'s area are reported separately. next_free_word_address is arithmetic over what was read, NOT a claim the peer program leaves it free. Read-only.',
       parameters: {
         type: 'object',
         additionalProperties: false,
@@ -3723,11 +3564,11 @@ function defineTools() {
           },
           project: {
             type: 'string',
-            description: 'MotionWorks project directory; defaults to the staged project. Optional.',
+            description: 'MotionWorks project directory; defaults to the staged project.',
           },
           module_name: {
             type: 'string',
-            description: 'One module by name, e.g. TopCutter_MP2600iec. Defaults to the first generic ETHERNET-MODULE.',
+            description: 'One module by name, e.g. TopCutter_MP2600iec. Defaults to the first ETHERNET-MODULE.',
           },
         },
       },
@@ -3794,7 +3635,7 @@ function defineTools() {
 
     {
       name: 'mw_code_validate',
-      description: 'Read-only offline validation of native containers, paired declarations/grids, handles, rows, addresses and project-tree IDs/counts. Reports format refusals as errors. This is not an IDE build verdict.',
+      description: 'Read-only offline validation of native containers, paired declarations and grids, handles, rows, addresses and project-tree IDs and counts. Reports format refusals as errors. This is not an IDE build verdict.',
       parameters: { type: 'object', additionalProperties: false, properties: { project: { type: 'string' } } },
       output: { schema: WRITE_SCHEMA, render: renderWrite },
       execute: (args) => runCode('validate', { project: projectOf(args) }),
@@ -3823,10 +3664,10 @@ function defineTools() {
 
     {
       name: 'mw_ide_verify',
-      description: 'Read-only mode capture_baseline captures complete saved/native/library state after baseline_saved:true; compare_baseline requires the returned baseline_id, compares the same workspace/project and retains full evidence. No Build, Save, navigation or source edits in either baseline mode. Preservation excludes compiler output and root IDE bookkeeping and is not compile/runtime acceptance. Default acceptance mode: after native Save All and intended-change read-back, verify the exact open authorized workspace project: validation, manifests, fresh Build, Make, messages and Save. With consent, close/reopen, compare persistence, then repeat fresh Build/Make and integrity checks. Retains a JSON report on failure. Never force-closes, repairs files, downloads or commands motion. Cached Make is not fresh Build.',
+      description: 'Read-only mode capture_baseline records complete saved, native and library state after baseline_saved:true; compare_baseline needs the returned baseline_id and compares the same workspace and project. Neither baseline mode builds, saves, navigates or edits source, and preservation excludes compiler output and root IDE bookkeeping - it is not compile or runtime acceptance. Default acceptance mode, after native Save All and a read-back, verifies the exact open authorized workspace project: validation, manifests, fresh Build, Make, messages and Save. With consent it closes and reopens, compares persistence, then repeats fresh Build/Make and integrity checks. Never force-closes, repairs files, downloads or commands motion. A cached Make is not a fresh Build.',
       parameters: { type: 'object', additionalProperties: false, required: ['project'], properties: {
-        project: { type: 'string' }, mode: {type:'string',enum:['acceptance','capture_baseline','compare_baseline']}, baseline_saved:{type:'boolean',description:'Required true for baseline modes, after reconciling saved edits.'}, baseline_id:{type:'string',description:'Exact integrity-pinned receipt returned by capture_baseline. Required for compare_baseline; not a path.'}, close_reopen: { type: 'boolean', default: false },
-        user_approved: { type: 'boolean', description: 'Explicit consent to save/close/reopen this disposable or named project. Required when close_reopen is true.' },
+        project: { type: 'string' }, mode: {type:'string',enum:['acceptance','capture_baseline','compare_baseline']}, baseline_saved:{type:'boolean',description:'Required true for baseline modes, after reconciling saved edits.'}, baseline_id:{type:'string',description:'Integrity-pinned receipt from capture_baseline. Required for compare_baseline; not a path.'}, close_reopen: { type: 'boolean', default: false },
+        user_approved: { type: 'boolean', description: 'Consent to save/close/reopen this project. Required when close_reopen is true.' },
       } },
       output: { schema: { type: 'object', additionalProperties: true }, render: (_a, v) => text(`Acceptance: ${v.verdict}\nEvidence: ${v.report_path}\n${v.baseline_id ? 'Baseline ID: '+v.baseline_id+'\n' : ''}${v.error ? 'Stopped: '+v.error+'\n' : ''}${v.comparison ? Object.entries(v.comparison.checks).map(([k,ok])=>k+': '+(ok?'matched':'CHANGED')).join('\n')+'\n' : ''}${v.next_step}`) },
       presentCall:a=>({card:'generic',title:a?.mode==='capture_baseline'?'Capture complete project baseline':a?.mode==='compare_baseline'?'Compare complete project baseline':'Verify IDE acceptance',kind:a?.mode==='capture_baseline'||a?.mode==='compare_baseline'?'read':'execute'}),
@@ -3880,20 +3721,7 @@ function defineTools() {
 
     {
       name: 'mw_code_sync_back',
-      description:
-        'Copy the STAGED edit back to the real project it was staged from - the step the release '
-        + 'loop: edit in IDE -> Save All -> read back -> fresh Build/Make -> approved reopen '
-        + 'and recompile -> separately authorized source-only promotion. Do not restage over edits. '
-        + 'It carries SOURCE ONLY: the POU containers (src.st1), declaration and grid streams, the '
-        + 'project tree, the type list and the resource files. It does NOT carry the .mwt wrapper, '
-        + 'whose stored path is bound to the stage and would point the real project at a temporary '
-        + 'copy of itself, and it does NOT carry compiler output (.DLL/.pdb) or scratch files. '
-        + 'Measured on the TopCutter project: 8 files, where a blanket "everything that changed" '
-        + 'copy selected 90 and led with compiled DLLs. '
-        + 'The destination is the source directory mw_ide_stage recorded, and it is refused unless '
-        + 'that recording proves it lies inside the workspace. Every file is verified by sha256 '
-        + 'after the copy, so a non-empty `failures` means the release is NOT synced. '
-        + '**dry_run defaults to true.**',
+      description: 'Copy the STAGED edit back to the real project it was staged from, in the release loop: edit in IDE, Save All, read back, fresh Build/Make, approved reopen and recompile, then separately authorized source-only promotion. Do not restage over edits. Carries SOURCE ONLY - POU containers, declaration and grid streams, the project tree, the type list and resource files. It does NOT carry the .mwt wrapper, whose stored path is bound to the stage, nor compiler output or scratch files. The destination is the source directory mw_ide_stage recorded, refused unless that recording proves it is inside the workspace. Every file is verified by sha256 after the copy, so a non-empty failures list means the release is NOT synced. dry_run defaults to true.',
       parameters: {
         type: 'object',
         additionalProperties: false,
@@ -3940,13 +3768,7 @@ function defineTools() {
 
     {
       name: 'mw_code_wrapper_binding',
-      description:
-        'Read-only: how a staged project\'s .mwt wrapper is bound, and whether it is STALE. '
-        + 'mw_ide_open refuses a wrapper whose stored path is not the staged directory, and that '
-        + 'refusal can appear after native project metadata changes. Re-staging to '
-        + 'clear it is the wrong remedy - it overwrites the stage and takes the new POU with it - '
-        + 'so this reports which wrapper is stale and whether re-binding is enough, before anything '
-        + 'tries to open it. Omit project to check every staged project.',
+      description: 'Read-only: how a staged project\'s .mwt wrapper is bound, and whether it is STALE. mw_ide_open refuses a wrapper whose stored path is not the staged directory, and that refusal can appear after native project metadata changes. Re-staging to clear it is the wrong remedy, because it overwrites the stage and takes the new POU with it; this reports which wrapper is stale and whether re-binding is enough before anything tries to open it. Omit project to check every staged project.',
       parameters: {
         type: 'object',
         additionalProperties: false,
@@ -3983,13 +3805,7 @@ function defineTools() {
 
     {
       name: 'mw_code_rebind_wrapper',
-      description:
-        'Point a staged .mwt back at its staged directory, IN PLACE, so mw_ide_open will accept it. '
-        + 'This is the remedy for a wrapper reported stale by mw_code_wrapper_binding - and it is '
-        + 'the alternative to re-staging, which would overwrite the staged project and take any POU '
-        + 'created since with it. Idempotent and cheap when already bound: measured, an already-bound '
-        + 'wrapper reports would_change=false and the file digest is unchanged, so it is safe to call '
-        + 'unconditionally rather than working out whether it is needed. **dry_run defaults to true.**',
+      description: 'Point a staged .mwt back at its staged directory, IN PLACE, so mw_ide_open accepts it. This is the remedy for a wrapper reported stale by mw_code_wrapper_binding, and the alternative to re-staging, which would overwrite the staged project and take any POU created since with it. Idempotent and cheap when already bound: an already-bound wrapper reports would_change=false with an unchanged file digest, so it is safe to call unconditionally rather than working out whether it is needed. dry_run defaults to true.',
       parameters: {
         type: 'object',
         additionalProperties: false,
@@ -4038,16 +3854,7 @@ function defineTools() {
 
     {
       name: 'mw_code_task_create',
-      description:
-        'Create a task in the project, through the IDE\'s own object model - '
-        + 'resource.Tasks.Create(name, cycle) then Save(), so the IDE writes the project tree '
-        + 'itself and nothing here edits a file. This is the counterpart of mw_code_pou_assign: '
-        + 'assign puts a program INTO a task, and this makes the task to put it in. Measured: the '
-        + 'task survives the save, appears to mw_code_tasks (which reads the tree) and to '
-        + 'mw_code_task_model (which reads COM), and is still there after a close and reopen. '
-        + 'The cycle is the task\'s Type as the IDE reports it - this project uses DEFAULT for the '
-        + 'background task, CYCLIC for the periodic ones, and SYSTEM for Start. A task starts with '
-        + 'no programs assigned; use mw_code_pou_assign to add them. **dry_run defaults to true.**',
+      description: 'Create a task through the IDE\'s own object model - resource.Tasks.Create(name, cycle) then Save() - so the IDE writes the project tree itself and nothing here edits a file. The counterpart of mw_code_pou_assign: assign puts a program INTO a task, this makes the task to put it in. The task survives the save, appears to mw_code_tasks (which reads the tree) and mw_code_task_model (which reads COM), and persists across close and reopen. kind is the task\'s Type as the IDE reports it - DEFAULT for the background task, CYCLIC for the periodic ones, SYSTEM for Start. A task starts with no programs assigned. dry_run defaults to true.',
       parameters: {
         type: 'object',
         additionalProperties: false,
@@ -4087,11 +3894,7 @@ function defineTools() {
 
     {
       name: 'mw_code_task_delete',
-      description:
-        'Delete a task, through the IDE\'s own object model - Task.Delete() then Save(). Refuses '
-        + 'while programs are still assigned to it, and names them, because deleting a task that '
-        + 'is running code should be deliberate. Unassign first with mw_code_pou_unassign, or use '
-        + 'the IDE POU delete command to remove the programs themselves. **dry_run defaults to true.**',
+      description: 'Delete a task through the IDE\'s own object model - Task.Delete() then Save(). Refuses while programs are still assigned to it, and names them, because deleting a task that is running code should be deliberate. Unassign first with mw_code_pou_unassign, or use the IDE POU delete command to remove the programs themselves. dry_run defaults to true.',
       parameters: {
         type: 'object',
         additionalProperties: false,
@@ -4125,14 +3928,7 @@ function defineTools() {
 
     {
       name: 'mw_code_task_model',
-      description:
-        'Read every task and its assigned programs through the IDE\'s own COM object model - a '
-        + 'SECOND SOURCE OF TRUTH beside mw_code_tasks, which reads PROJECT.TRE. The tree is what '
-        + 'the IDE wrote at the last save; this is what the IDE holds in memory now, so when the '
-        + 'two agree the assignment is both made and saved. Each task reports its name, its cycle '
-        + '(DEFAULT, CYCLIC, SYSTEM) and every program instance with its instance name, program '
-        + 'type and logical name. Use it to confirm an assignment made by mw_ide_task_change. '
-        + 'Read-only.',
+      description: 'Read every task and its assigned programs through the IDE\'s own COM object model - a second source of truth beside mw_code_tasks, which reads PROJECT.TRE. The tree is what the IDE wrote at the last save; this is what the IDE holds in memory now, so when the two agree the assignment is both made and saved. Each task reports its name, its cycle (DEFAULT, CYCLIC, SYSTEM) and every program instance with its instance name, program type and logical name. Use it to confirm an assignment made by mw_ide_task_change. Read-only.',
       parameters: { type: 'object', additionalProperties: false, properties: {} },
       output: {
         schema: {
@@ -4161,7 +3957,7 @@ function defineTools() {
 
     {
       name: 'mw_code_tasks',
-      description: 'Read exact saved task ownership: PROGRAM instance names, resolved program types and native execution order, configuration/resource identity, cycle kind and task settings (interval, priority, watchdog). Validates PROJECT.TRE against LIST.POU and matching SET files; source hashes and changed-during-read guards accompany the result. unassigned lists PROGRAM types without direct saved task instances, not unmatched instance names. Indirect calls and unsaved/live state need separate review. Compare mw_code_task_model and use mw_ide_task_change for authorized native changes. Saved ownership is not runtime execution proof.',
+      description: 'Read exact saved task ownership: PROGRAM instance names, resolved program types and native execution order, configuration and resource identity, cycle kind and task settings (interval, priority, watchdog). Validates PROJECT.TRE against LIST.POU and matching SET files; source hashes and changed-during-read guards accompany the result. unassigned lists PROGRAM types without direct saved task instances, not unmatched instance names. Indirect calls and unsaved or live state need separate review. Saved ownership is not runtime execution proof.',
       parameters: {
         type: 'object',
         additionalProperties: false,
@@ -4218,17 +4014,7 @@ function defineTools() {
 
     {
       name: 'mw_code_pou_assign',
-      description:
-        'Assign a program to a task so it actually RUNS and is compile-checked. An unassigned POU '
-        + 'may be inert: nothing '
-        + 'calls it and a clean build says nothing about whether it is correct. '
-        + 'This goes through the IDE\'s own object model - task.ProgramInstances.Create then '
-        + 'Save() - so the IDE writes the project tree itself and nothing here edits a file. The '
-        + 'IDE also VALIDATES: an instance that already exists reports "ProgramInstance already '
-        + 'exists" and an unknown program type reports "Unknown Program type" rather than '
-        + 'producing something broken. Task names come from mw_code_tasks (Start, FastTsk, '
-        + 'MedTsk, SlowTsk, BG). Confirm from the tree side with mw_code_tasks and from the COM '
-        + 'side with mw_code_task_model. **dry_run defaults to true.**',
+      description: 'Assign a program to a task so it actually RUNS and is compile-checked. An unassigned POU may be inert: nothing calls it, and a clean build says nothing about whether it is correct. Goes through the IDE\'s own object model - task.ProgramInstances.Create then Save() - so the IDE writes the project tree itself and nothing here edits a file. The IDE also VALIDATES: an existing instance reports "ProgramInstance already exists" and an unknown program type reports "Unknown Program type". Task names come from mw_code_tasks (Start, FastTsk, MedTsk, SlowTsk, BG). Confirm from the tree side with mw_code_tasks and from the COM side with mw_code_task_model. dry_run defaults to true.',
       parameters: {
         type: 'object',
         additionalProperties: false,
@@ -4271,12 +4057,7 @@ function defineTools() {
 
     {
       name: 'mw_code_pou_unassign',
-      description:
-        'Remove a program\'s assignment from a task, through the IDE\'s own object model - '
-        + 'ProgramInstances.Delete() then Save() - so the IDE writes the project tree itself and '
-        + 'nothing here edits a file. The program itself is NOT deleted; it stays in Logical POUs '
-        + 'and simply stops running. Compare with the IDE POU delete command, which removes the POU. '
-        + '**dry_run defaults to true.**',
+      description: 'Remove a program\'s assignment from a task through the IDE\'s own object model - ProgramInstances.Delete() then Save() - so the IDE writes the project tree itself and nothing here edits a file. The program itself is NOT deleted; it stays in Logical POUs and simply stops running. Compare with the IDE POU delete command, which removes the POU. dry_run defaults to true.',
       parameters: {
         type: 'object',
         additionalProperties: false,
@@ -4313,7 +4094,7 @@ function defineTools() {
 
     {
       name: 'mw_code_unsupported',
-      description: 'Inspect offline-reader limitations for graphical LD/FBD and compressed declaration streams. These limits do not prohibit native IDE editing; use mw_ide_edit_guide and the companion computer tool.',
+      description: 'Inspect offline-reader limitations for graphical LD and FBD and for compressed declaration streams. These limits do not prohibit native IDE editing; use mw_ide_edit_guide and the companion computer tool.',
       parameters: {
         type: 'object',
         additionalProperties: false,
@@ -4345,17 +4126,9 @@ function defineTools() {
 
     {
       name: 'mw_ide_screenshot',
-      description:
-        'Capture the MotionWorks IDE window to a PNG and return its path, so you can see what '
-        + 'the IDE is actually showing Ã¢â‚¬â€ a dialog, the Project Tree, or the Message Window error '
-        + 'list. Capture preserves foreground and keyboard focus; minimized windows and '
-        + 'unverified screen fallback are refused. Owned inline dialogs may require a '
-        + 'companion screenshot. Set capture_cursor:true after a deliberate hover to render '
-        + 'the actual cursor glyph only when over the IDE; cursor/focus drift refuses capture. '
-        + 'Rendered glyph and coordinates are observation, not connection acceptance. Read '
-        + 'the returned path with the image-reading tool.',
+      description: 'Capture the MotionWorks IDE window to a PNG and return its path, so you can see what the IDE is showing - a dialog, the Project Tree, or the Message Window error list. Capture preserves foreground and keyboard focus; minimized windows and an unverified screen fallback are refused. Owned inline dialogs may require a companion screenshot. Set capture_cursor:true after a deliberate hover to render the actual cursor glyph only when it is over the IDE; cursor or focus drift refuses capture. The rendered glyph and coordinates are observation, not connection acceptance. Read the returned path with the image-reading tool.',
       parameters: { type: 'object', additionalProperties: false, properties: {
-        capture_cursor: {type:'boolean',description:'Opt-in cursor glyph and position observation; does not move the pointer or focus.'},
+        capture_cursor: {type:'boolean',description:'Opt-in cursor glyph and position observation; does not move pointer or focus.'},
       } },
       output: {
         schema: {
@@ -4445,7 +4218,8 @@ export function apply(ctx) {
   try {
     const skills = ctx.get?.('skills');
     if (skills?.register) {
-      const raw = readFileSync(join(HERE, 'SKILL.md'), 'utf8');
+      const skillPath = join(HERE, 'SKILL.md');
+      const raw = readFileSync(skillPath, 'utf8');
       // Drop the YAML frontmatter: those fields go through the registration instead, so leaving
       // them in `content` would show the agent a second copy of its own description.
       const body = raw.replace(/^---\r?\n[\s\S]*?\r?\n---\r?\n/, '');
@@ -4472,7 +4246,12 @@ export function apply(ctx) {
           + 'ask a question about it, because the first step is always to find which project is '
           + 'actually in the workspace.',
         content: body,
-        source: 'bundled',
+        // `custom` plus an absolute `path` is what makes the model-visibility switch
+        // available: the manager rewrites `disable-model-invocation` inside the file it
+        // is handed, so it only offers a switch for a skill file it can reach outside
+        // node_modules. A published install stays locked, which is intended.
+        path: skillPath,
+        source: 'custom',
         provider: 'dsh-motionworks-iec-use',
         invocation: { modelInvocable: true, userInvocable: true },
       });
