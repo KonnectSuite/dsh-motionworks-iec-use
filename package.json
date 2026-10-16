@@ -1,6 +1,6 @@
 {
   "name": "dsh-motionworks-iec-use",
-  "version": "0.5.6",
+  "version": "0.5.7",
   "description": "Workspace-bound MotionWorks IEC editing, versioned programming references, static review and IDE verification for AryaAI DSH.",
   "keywords": [
     "dsh",

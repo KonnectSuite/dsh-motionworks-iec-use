@@ -2,6 +2,7 @@
 name: motionworks-iec-use
 description: Operate a running Yaskawa MotionWorks IEC 3 Pro IDE and edit its code — select a workspace project, make an approved verified backup, and edit it in place; read the live object model, edit POUs and declarations, compile, and read diagnostics. START HERE: inspect mw_ide_status, then confirm the intended project with mw_project_find. Work only on a project inside the session workspace. Never downloads to a controller or commands motion.
 whenToUse: The user has MotionWorks IEC 3 Pro open or asks for work in it — a real build, a compile verdict, the live project model, reading or changing POU Structured Text or Instruction List, or reading the IDE's error list. Also use when a MotionWorks project is mentioned: inspect the open project and confirm its workspace identity before selecting it. For pure offline `.mwt` inspection without the IDE, the file-level tools alone are enough.
+disable-model-invocation: true
 ---
 
 # MotionWorks IEC workspace editing

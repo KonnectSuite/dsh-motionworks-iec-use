@@ -6,6 +6,10 @@ existing native edit-guide tool instead of guessed ASAR filesystem paths.
 
 ## Unreleased
 
+## 0.5.7 - 2026-10-16
+
+- Register the skill as user-invoked. `disable-model-invocation: true` keeps it out of model-facing catalogs and loaders while `/motionworks-iec-use` still loads it, so the Skills page owns when the model may select this engineering skill on its own.
+
 - Combine the saved-state guard and complete native declaration snapshot for
   variable edits, eliminating a separate compile-state round trip. Refuse dirty,
   unknown or drifting saved state; retain the full mutation baseline/read-back.
